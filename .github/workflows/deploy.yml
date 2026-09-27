@@ -1,0 +1,100 @@
+# Deploys only what changed on each push to main:
+#   agents/**                -> tests, then the API to Cloud Run
+#   web/**, firebase.json    -> the web app to Firebase Hosting
+#   firestore.rules          -> Firestore security rules
+# Docs-only changes deploy nothing. "Run workflow" (manual) deploys everything.
+#
+# Google credentials come from Workload Identity Federation (no stored keys);
+# see infra/setup-github-actions.sh. Service settings (env vars, secrets) are
+# kept as they are; infra/deploy.sh manages them.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.api == 'true' }}
+      web: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.web == 'true' }}
+      rules: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.rules == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'agents/**'
+            web:
+              - 'web/**'
+              - 'firebase.json'
+            rules:
+              - 'firestore.rules'
+
+  api:
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Tests
+        working-directory: agents
+        run: uv run --group dev pytest -q
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Deploy API to Cloud Run
+        run: |
+          gcloud run deploy life-after-agents --source agents \
+            --project "${{ vars.GCP_PROJECT_ID }}" --region "${{ vars.GCP_REGION }}" --quiet
+
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || needs.changes.outputs.rules == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build web app
+        if: needs.changes.outputs.web == 'true'
+        working-directory: web
+        env:
+          VITE_LIVE_URL: ${{ vars.VITE_LIVE_URL }}
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+        run: |
+          npm ci
+          npm run build
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+          create_credentials_file: true
+      - name: Deploy to Firebase
+        run: |
+          targets=""
+          [ "${{ needs.changes.outputs.web }}" = "true" ] && targets="hosting"
+          [ "${{ needs.changes.outputs.rules }}" = "true" ] && targets="${targets:+$targets,}firestore:rules"
+          echo "Deploying: $targets"
+          npx --yes firebase-tools@latest deploy --project "${{ vars.GCP_PROJECT_ID }}" --only "$targets" --non-interactive

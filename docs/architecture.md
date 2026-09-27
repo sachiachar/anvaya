@@ -24,18 +24,18 @@ Life-After is an app-based service. People talk with Saathi, an AI companion, to
 
 ```mermaid
 flowchart LR
-    Owner([Owner]) --> App
-    Family([Family / vault recipient]) --> App
-    Team([Life-After reviewers]) --> App
-    subgraph Google Cloud
-        App[Web app<br/>Firebase Hosting] -- "/api (HTTPS)" --> API[Agents service<br/>Cloud Run]
-        App -- "live call (WebSocket)" --> API
-        API --> Gemini[Gemini<br/>chat · Live · TTS]
-        API --> FS[(Firestore)]
-        API --> GCS[(Cloud Storage)]
-        API --> KMS[Cloud KMS]
+    owner(["Owner"]) --> app
+    family(["Family and vault recipient"]) --> app
+    team(["Life-After reviewers"]) --> app
+    subgraph gcp ["Google Cloud"]
+        app["Web app on Firebase Hosting"] -->|"HTTPS /api"| api["Agents service on Cloud Run"]
+        app -->|"live call WebSocket"| api
+        api --> gemini["Gemini: chat, Live, TTS"]
+        api --> fs[("Firestore")]
+        api --> gcs[("Cloud Storage")]
+        api --> kms["Cloud KMS"]
     end
-    API -. consented summary .-> Legal([Legal partner<br/>mocked])
+    api -.->|"consented summary"| legal(["Legal partner, mocked"])
 ```
 
 - The **web app** is an installable, mobile-first React app. It holds all vault cryptography, the microphone capture and the audio playback.
@@ -155,14 +155,14 @@ sequenceDiagram
     participant API as Agents service
     participant Live as Gemini Live
     participant G as Gemini (extraction)
-    Owner->>App: Tap 🎤
+    Owner->>App: Tap the microphone
     App->>API: WebSocket /live
     API->>Live: connect (Saathi persona + saved items + recent conversation)
     loop the whole call
         App->>API: mic audio (16 kHz PCM, 100 ms chunks)
         API->>Live: realtime audio
         Live-->>API: voice (24 kHz PCM) + captions
-        API-->>App: voice + captions (interrupted → stop playback)
+        API-->>App: voice + captions, stop playback if interrupted
         API->>G: after each exchange: what's worth keeping?
         API-->>App: turn + cards (moments, inventory, people)
     end
@@ -179,7 +179,7 @@ sequenceDiagram
     participant KMS as Cloud KMS
     Vikram->>API: POST vault/invite (Priya, daughter)
     Priya->>API: GET vault/invite → "Vikram has chosen you"
-    Priya->>Priya: create key pair + recovery code; back up private key encrypted with the code
+    Priya->>Priya: create key pair and recovery code, back up private key encrypted with the code
     Priya->>API: POST vault/recipient (public key + encrypted backup) → status pending_owner
     Vikram->>Vikram: compute key code from the public key
     Note over Vikram,Priya: both phones show the same code, e.g. 3F9A-12C4-77B0-E1D2
@@ -196,9 +196,9 @@ A new phone downloads the encrypted key backup and unlocks it with the recovery 
 ```mermaid
 stateDiagram-v2
     [*] --> reported: certificate uploaded, AI verdict attached
-    reported --> death_confirmed: reviewer A confirms (reason required if AI said not valid)
+    reported --> death_confirmed: a reviewer confirms, with a reason if AI said not valid
     death_confirmed --> death_confirmed: proof of authority uploaded, AI verdict attached
-    death_confirmed --> waiting: reviewer B (≠ A) confirms authority
+    death_confirmed --> waiting: a different reviewer confirms authority
     waiting --> released: waiting period ends, owner silent
     reported --> cancelled: owner taps "I'm OK"
     death_confirmed --> cancelled: owner taps "I'm OK"
