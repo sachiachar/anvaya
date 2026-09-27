@@ -1,0 +1,14 @@
+node_modules/
+web/dist/
+.venv/
+__pycache__/
+.pytest_cache/
+agents/data/
+.env
+.firebase/
+.firebaserc
+*.log
+.DS_Store
+
+# Local scratch
+*.tmp

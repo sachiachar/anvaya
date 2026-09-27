@@ -1,0 +1,281 @@
+# Life-After: Architecture
+
+*Status: working prototype for the AI Builder Cup 2026 (BFSI track). Last updated 28 September 2026.*
+
+Life-After is an app-based service. People talk with Saathi, an AI companion, to record their stories, financial inventory, family, wishes and secrets while alive. After a verified death, the right people receive them. For the plain-language version, see [concept.md](concept.md).
+
+## 1. Goals and non-goals
+
+**Goals**
+
+- Run every part of the product as an **AI-first loop** with an explicit autonomy level: Assist, Propose, or Act within limits.
+- Keep a person in control of every irreversible step: saving to the archive, sharing with a legal partner, choosing the vault recipient, confirming a death, releasing the vault.
+- Make the vault unreadable to the AI and to Life-After itself.
+- Make capture as easy as a conversation: hands-free live voice, plus typing, photos and documents.
+- Run entirely on **Google Cloud** with **Gemini**.
+
+**Non-goals**
+
+- Voice cloning, avatars or generated speech "as the owner". These will never be built.
+- Legal or financial advice. Licensed partners provide it.
+- Per-role permissions and multi-tenant access control. Only sign-in with an email allowlist is built; see section 8.
+
+## 2. System context
+
+```mermaid
+flowchart LR
+    Owner([Owner]) --> App
+    Family([Family / vault recipient]) --> App
+    Team([Life-After reviewers]) --> App
+    subgraph Google Cloud
+        App[Web app<br/>Firebase Hosting] -- "/api (HTTPS)" --> API[Agents service<br/>Cloud Run]
+        App -- "live call (WebSocket)" --> API
+        API --> Gemini[Gemini<br/>chat · Live · TTS]
+        API --> FS[(Firestore)]
+        API --> GCS[(Cloud Storage)]
+        API --> KMS[Cloud KMS]
+    end
+    API -. consented summary .-> Legal([Legal partner<br/>mocked])
+```
+
+- The **web app** is an installable, mobile-first React app. It holds all vault cryptography, the microphone capture and the audio playback.
+- The **agents service** is a Python FastAPI app on Cloud Run. It runs the Gemini steps, the live-call relay, the ADK handover agent, and the rules that keep people in control.
+- Firebase Hosting rewrites `/api/**` to Cloud Run. Firebase Hosting can't proxy WebSockets, so in production the live call connects **directly to the Cloud Run URL** (`VITE_LIVE_URL`, set by `infra/deploy.sh`).
+
+## 3. Components
+
+### 3.1 Web app (`web/`)
+
+| File | Responsibility |
+| --- | --- |
+| `src/App.tsx` | Role switcher for the demo (Vikram, Our team, Priya); "Show how the AI works" toggle for the autonomy labels |
+| `src/Conversation.tsx` | The owner's single conversation: 🎤 starts a live call; typing, 📷 photo and 📄 document; suggestion cards with Keep, Not now and Keep all; spoken replies |
+| `src/liveCall.ts` | Live call client: microphone to 16 kHz PCM over WebSocket, 24 kHz PCM playback, stops playback when interrupted |
+| `public/pcm-recorder.js` | AudioWorklet that turns microphone audio into 100 ms PCM chunks |
+| `src/Owner.tsx` | Talk / My plan tabs. My plan holds Next steps, People (access requests), review, wishes and legal handoff, and the vault (choose recipient, approve with key code, seal, add secrets). Also the "I'm OK" cancel banner |
+| `src/Team.tsx` | Case review with AI verdicts, reviewer name, override reasons, audit log; access requests after a death |
+| `src/Family.tsx` | Request access; accept the vault invitation (recovery code, key code); restore on a new phone; start the handover; unlock the vault; ask the assistant; settlement |
+| `src/vaultCrypto.ts` | All vault cryptography (Web Crypto): data key, recipient key pair, recovery-code backup (PBKDF2), key fingerprint |
+| `src/api.ts`, `src/ui.tsx` | Typed API client; shared UI and the autonomy badge context |
+
+### 3.2 Agents service (`agents/app/`)
+
+| Module | Responsibility |
+| --- | --- |
+| `main.py` | HTTP routes under `/api`, the live-call WebSocket, access gating, readable error handling for Gemini failures |
+| `loops.py` | One Gemini step per loop. Also holds the shared **Saathi persona**, the live-call instructions, and `reply_problems`, which checks every typed reply for wrong language or script, false "saved" claims and "shall I add" questions, and rewrites it once if needed |
+| `live.py` | Live-call relay between the browser and the Gemini Live API; captions; saves each exchange and extracts cards |
+| `speech.py` | Natural voice for typed replies (Gemini TTS), falling back through a list of TTS models, each with its own quota |
+| `proposals.py` | Turns AI suggestions into cards: merges repeats, turns follow-up details into updates (without losing earlier facts), creates family cards, and applies Keep |
+| `tasks.py` | Next steps from the readiness loop: rewrites the open list, merges near-duplicates, never re-adds done or dismissed steps, at most 5 |
+| `executor_agent.py` | Google ADK agent for the handover (tools: `search_archive`, `list_inventory`) with a fallback model |
+| `release.py` | Vault release state machine: two-person rule, override reasons, waiting period, owner cancel |
+| `escrow.py` | Cloud KMS wrap and unwrap of the vault key blob |
+| `gemini.py` | Shared Gemini client with retries and backoff; `generate_json` with Pydantic schemas and model fallback |
+| `schemas.py` | Pydantic models used as Gemini `response_schema` and as the API contract |
+| `store.py` | Document store: `memory` (tests), `file` (local demo, survives restarts), `firestore` (Google Cloud) |
+| `media.py`, `config.py` | Original media (Cloud Storage or local folder); settings from the environment |
+
+### 3.3 Models (all configurable in `.env`)
+
+| Use | Default | Why |
+| --- | --- | --- |
+| Chat, extraction, reasoning | `gemini-3.1-flash-lite` | Cheapest model that is served and fast (~2–3 s) |
+| Fallback when overloaded | `gemini-3.5-flash-lite` | Separate capacity; used after retries on 429/5xx |
+| Live voice call | `gemini-3.8-live` | Two-way audio, ~1.3 s response, can be interrupted |
+| Spoken replies (TTS) | `gemini-3.8-flash-lite-tts`, then `gemini-3.8-flash-tts`, then `gemini-3.1-flash-tts-preview` | Each has its own quota; tried in order |
+| Voice | `Sulafat` | A warm voice, used for both TTS and live calls |
+
+## 4. AI-first loops
+
+| Loop | Code | Input → output | Autonomy | Human checkpoint |
+| --- | --- | --- | --- | --- |
+| Conversation (typed, photo, document) | `loops.converse` | Message or file → reply + moments, inventory, people | Act within limits | Cards start as `pending` |
+| Live call | `live.call` + `loops.extract_from_exchange` | Streaming audio → spoken reply + captions; after each exchange → cards | Act within limits | Cards start as `pending` |
+| Curation | `proposals.save_*`, `proposals.approve` | Cards → merged or updated archive items | Propose | Owner taps Keep |
+| Readiness → next steps | `loops.assess_readiness` + `tasks.refresh` | Archive, vault state, closed steps → score + up to 5 actionable steps | Act within limits | Owner acts, marks done or dismisses |
+| Planning | `loops.find_legal_needs` | Wishes + inventory → legal needs | Propose | Owner consent before `legal-handoff` |
+| Activation | `loops.check_document` + `loops.review_summary` | Certificate or proof image → verdict + likelihood genuine | Assist | Two reviewers; override needs a reason |
+| Handover | `executor_agent.ask` (ADK) | Question → answer with cited sources | Act within limits | Only after release |
+| Settlement | `loops.plan_settlement` | Inventory → checklist + draft letters | Propose | Executor reviews and sends |
+
+**Rules enforced in code, not just in prompts**
+
+- *Replies* (`loops.reply_problems`): reply in the script of the owner's latest message; never claim "noted" or "saved"; never ask "shall I add". A reply that breaks a rule is regenerated once with the broken rule named. Live audio can't be regenerated, so there the rules live in the instructions only.
+- *Cards* (`proposals`): a repeat of a kept item adds nothing. A follow-up detail becomes an update card and **combines** with the saved summary instead of replacing it. The same institution and last 4 digits update the same card.
+- *Documents* (`loops.review_summary`): the wrong document type scores 0 %; the wrong person is capped at 30 %; any concern means "Needs a closer look".
+- *Next steps* (`tasks`): near-duplicates are merged, except when they name different institutions (LIC vs SBI); done or dismissed steps never come back, even reworded; at most 5 steps are open.
+- *Structured output*: every Gemini call returns a Pydantic schema, so the app never parses free text.
+
+**One companion everywhere.** `loops.persona` defines Saathi once: warm, addresses the owner as "{first name} ji", matches their language, honest about what is saved, no legal advice, and asks who unknown people are. Both the typed chat and the live call use it.
+
+## 5. Data model
+
+| Collection | Key fields | Notes |
+| --- | --- | --- |
+| `owners` | name, age, city, country, `family[]`, `language`, `readiness_score`, `vault_invite`, `vault_recipient` (name, relationship, public_key_jwk, key_backup, **status**), `vault_escrow` | The family list only grows when the owner keeps family cards |
+| `turns` | role (owner or assistant), text, heard, attachment, language, proposals {moments, inventory, people} | The conversation, from typed and live turns |
+| `moments` | kind, title, summary, quote, people, places, year, status, `updates?` | `updates` points to the kept moment an update card changes |
+| `inventory` | category, institution, product, account_hint (last 4), nominee, missing_fields, status, `updates?` | Merged by institution and last 4 digits |
+| `people` | name, relationship, status | Family cards; kept ones are added to `owners.family` |
+| `tasks` | title, why_it_matters, action (talk, legal, vault, institution, family), steps, severity, status (open, done, dismissed) | Next steps |
+| `vault_items` | category, iv, ciphertext, ai_label? | Ciphertext only |
+| `cases` | state, certificate_check, authority_check (with verdict), death_confirmed_by, wait_until, history | Release case and audit log |
+| `access_requests` | name, relationship, contact, note, status (pending_owner, pending_review, approved, declined) | Family members who weren't listed |
+| `handoffs`, `legal_documents` | Consented legal summaries; signed documents | Never contain vault data |
+
+## 6. API surface
+
+All routes are under `/api`.
+
+| Area | Routes |
+| --- | --- |
+| Conversation | `GET/POST /owners/{id}/conversation`, `POST /owners/{id}/conversation/prompt` (the companion asks from a next step), `WS /owners/{id}/live`, `POST /speech` |
+| Cards | `POST /proposals/{id}/decision` (moments, inventory, people; approve or reject) |
+| Legacy capture (older routes) | `POST /owners/{id}/capture/audio`, `POST /owners/{id}/documents`, `POST /owners/{id}/wishes`, `GET /owners/{id}/review`, `GET /owners/{id}/archive` |
+| Next steps | `POST /owners/{id}/readiness`, `GET /owners/{id}/tasks`, `POST /tasks/{id}` |
+| Legal | `POST /owners/{id}/legal-needs`, `POST /owners/{id}/legal-handoff`, `POST /owners/{id}/legal-documents` |
+| Vault | `POST/GET /owners/{id}/vault/invite`, `POST/GET /owners/{id}/vault/recipient`, `POST /owners/{id}/vault/recipient/decision`, `POST /owners/{id}/vault/escrow`, `POST/GET /owners/{id}/vault/items` |
+| Release | `POST /owners/{id}/death-report`, `POST /owners/{id}/release/authority`, `GET /owners/{id}/release`, `POST /owners/{id}/alive`, `GET /owners/{id}/vault/release-bundle` |
+| Review | `GET /admin/cases`, `POST /admin/cases/{id}/confirm-death`, `POST /admin/cases/{id}/confirm-authority` (body: `reviewer`, `override_reason?`) |
+| Access | `POST/GET /owners/{id}/access-requests`, `GET /admin/access-requests`, `POST /access-requests/{id}/decision` |
+| Handover | `POST /owners/{id}/ask`, `POST /owners/{id}/settlement` |
+| Other | `POST /demo/seed`, `GET /owners/{id}`, `GET /healthz` |
+
+`ask`, `settlement` and `vault/release-bundle` return **403** until the case is `released`. Gemini failures return readable errors: 503 for no credentials or voice unavailable, 502 for model errors.
+
+## 7. Key flows
+
+### 7.1 Live call
+
+```mermaid
+sequenceDiagram
+    actor Owner
+    participant App
+    participant API as Agents service
+    participant Live as Gemini Live
+    participant G as Gemini (extraction)
+    Owner->>App: Tap 🎤
+    App->>API: WebSocket /live
+    API->>Live: connect (Saathi persona + saved items + recent conversation)
+    loop the whole call
+        App->>API: mic audio (16 kHz PCM, 100 ms chunks)
+        API->>Live: realtime audio
+        Live-->>API: voice (24 kHz PCM) + captions
+        API-->>App: voice + captions (interrupted → stop playback)
+        API->>G: after each exchange: what's worth keeping?
+        API-->>App: turn + cards (moments, inventory, people)
+    end
+    Owner->>App: End
+```
+
+### 7.2 Choosing and approving the vault recipient
+
+```mermaid
+sequenceDiagram
+    actor Vikram as Owner app
+    actor Priya as Recipient app
+    participant API as Agents service
+    participant KMS as Cloud KMS
+    Vikram->>API: POST vault/invite (Priya, daughter)
+    Priya->>API: GET vault/invite → "Vikram has chosen you"
+    Priya->>Priya: create key pair + recovery code; back up private key encrypted with the code
+    Priya->>API: POST vault/recipient (public key + encrypted backup) → status pending_owner
+    Vikram->>Vikram: compute key code from the public key
+    Note over Vikram,Priya: both phones show the same code, e.g. 3F9A-12C4-77B0-E1D2
+    Vikram->>API: POST vault/recipient/decision (approve)
+    Vikram->>Vikram: wrap the data key with Priya's public key
+    Vikram->>API: POST vault/escrow
+    API->>KMS: encrypt (outer layer)
+```
+
+A new phone downloads the encrypted key backup and unlocks it with the recovery code. If the code is lost while the owner is alive, the recipient creates a new key, the old seal is cleared, and the owner approves and re-seals. Once a case is open, the key can't be replaced.
+
+### 7.3 Release
+
+```mermaid
+stateDiagram-v2
+    [*] --> reported: certificate uploaded, AI verdict attached
+    reported --> death_confirmed: reviewer A confirms (reason required if AI said not valid)
+    death_confirmed --> death_confirmed: proof of authority uploaded, AI verdict attached
+    death_confirmed --> waiting: reviewer B (≠ A) confirms authority
+    waiting --> released: waiting period ends, owner silent
+    reported --> cancelled: owner taps "I'm OK"
+    death_confirmed --> cancelled: owner taps "I'm OK"
+    waiting --> cancelled: owner taps "I'm OK"
+```
+
+On `released`, KMS removes the outer layer and the recipient's phone decrypts the vault locally.
+
+## 8. Security and privacy
+
+| Threat | Mitigation |
+| --- | --- |
+| Database leak exposes secrets | Secrets are ciphertext; the data key is sealed with the recipient's public key on the owner's phone |
+| Insider or AI reads the vault | No server component can open the inner layer; the ADK agent has no vault tool; the AI never asks for passwords |
+| Someone makes themselves the recipient | The owner must invite; the owner confirms a key code computed on each phone from the key itself |
+| Lost phone | Private key backed up, encrypted with a 125-bit recovery code (PBKDF2-SHA256, 600,000 iterations); Life-After never sees the code |
+| False death report | AI verdict; reason required to override "not valid"; two different reviewers; waiting period; owner cancel |
+| Sensitive numbers leak through the AI | Masking rules in prompts; last 4 digits only; never asks for full numbers |
+| Sharing without consent | `legal-handoff` needs consent; access requests go to the owner while alive; neutral replies reveal nothing to strangers |
+| Public access to storage | Firestore rules deny clients; private bucket; least-privilege service account |
+| Uninvited people using the demo | Google sign-in (Firebase Auth); the server verifies the ID token on every request (`auth.py`) and checks `ALLOWED_EMAILS` (addresses or `@domains`); the live call passes the token as `?token=` |
+
+**Known gaps before real users**
+
+1. **Sign-in, but no roles yet.** Everyone signs in with Google (Firebase Auth), and only emails or domains on `ALLOWED_EMAILS` get in. The server checks the token on every request and on the live call. But any allowed user can act as owner, recipient or reviewer; per-role permissions come next.
+2. **Keys in `localStorage`** so one browser can play every role. Production needs non-extractable keys in IndexedDB with passkeys.
+3. **KMS decrypt scope.** The API has both encrypt and decrypt; move decrypt to a separate release service.
+4. **No notifications.** The owner is alerted only inside the app during the waiting period. Add push, SMS and email.
+5. **Live calls** end after about 15 minutes (Gemini Live limit), and spoken replies can't be checked by `reply_problems`.
+6. **Handover questions** aren't stored for audit yet (ADK sessions are in memory).
+7. **Participant consent** for other voices in live calls is a notice only.
+
+## 9. Environments and configuration
+
+| Setting | Local | Google Cloud |
+| --- | --- | --- |
+| `STORE` | `file` (`agents/data/store.json`, survives restarts) | `firestore` |
+| Gemini auth | `GOOGLE_API_KEY` (AI Studio) in `agents/.env` | Same AI Studio key, stored in Secret Manager (`gemini-api-key`) and injected as `GOOGLE_API_KEY`; `GOOGLE_GENAI_USE_VERTEXAI=false` |
+| `KMS_KEY_NAME` | empty (dev mode) | vault escrow key |
+| `MEDIA_BUCKET` | empty (local folder) | private bucket |
+| `GEMINI_*_MODEL(S)`, `GEMINI_TTS_VOICE`, `GEMINI_LIVE_MODEL` | see section 3.3 | same; confirm they are served in your region |
+| `AUTH_REQUIRED`, `FIREBASE_PROJECT_ID`, `ALLOWED_EMAILS` | `true`, the project, your email | same (from `agents/.env` or `ALLOWED_EMAILS=… ./infra/deploy.sh`) |
+| `VITE_FIREBASE_*` (web) | `web/.env` (public Firebase config) | same |
+| `RELEASE_WAIT_SECONDS` | 60 | 60 for the demo; days in production |
+| `VITE_LIVE_URL` | not set (Vite proxies the WebSocket) | `wss://<cloud-run-url>` (set by `deploy.sh`) |
+
+`infra/deploy.sh` enables the APIs; creates the service account, Firestore, the private bucket, the KMS key and the `gemini-api-key` secret (from `agents/.env`); deploys Cloud Run from `agents/` with a 1-hour timeout for live calls; builds `web/` with `VITE_LIVE_URL`; and deploys Firebase Hosting. The Google Cloud project must have Firebase added first (`firebase projects:addfirebase <project>`).
+
+**Why AI Studio, not Vertex AI (for now):** the same model names work locally and on Cloud Run. On Vertex AI, `gemini-3.8-live` is only served in `us-central1` (not `global`), and the 3.8 TTS models aren't served, so switching to Vertex AI later needs region-specific model settings.
+
+**Free-tier note:** Gemini API keys on the free tier have small per-model limits (for example, 10 requests for one TTS model). Turn on billing for testing and demos.
+
+## 10. Testing
+
+35 automated tests (`agents/tests/`), with Gemini stubbed so they run without credentials:
+
+- release rules: two-person rule, override reasons, waiting period, owner cancel;
+- access gating and consent; recipient invitation, approval and key changes;
+- card merging (repeats, follow-ups that keep earlier facts, family), using real cases from test runs;
+- next-step rules (duplicates, reworded done steps, LIC vs SBI);
+- reply rules (script, false claims, "shall I add");
+- document verdict rules (wrong document scores 0).
+
+Also verified by hand: the vault and recovery round trip (Node Web Crypto), live calls through the WebSocket, and real Gemini runs of conversations and next steps.
+
+## 11. Design decisions
+
+| Decision | Choice | Why |
+| --- | --- | --- |
+| Capture | Hands-free live call (Gemini Live) as the main voice mode | Record-and-stop felt unnatural; a live call is how people actually talk |
+| One companion | Shared persona for chat and live | Consistent character, language and honesty |
+| Suggestions as cards | AI proposes, the owner keeps | AI-first, but nothing is saved without consent |
+| Rules in code | Merging, reply checks, verdicts, next steps | Light models follow prompts most of the time; code makes it always |
+| Vault crypto | On the device, sealed for one approved person, plus KMS | Life-After and the AI can never read secrets |
+| Cheaper models | Flash-Lite for most steps, with fallbacks | Low cost per family; resilient to overload and quotas |
+| Store abstraction | Memory, file or Firestore behind one interface | Tests run without the cloud; the local demo survives restarts |
+
+## 12. Roadmap
+
+Sign-in and roles · notifications · a real legal-partner integration · Vertex AI RAG Engine for archive search · email and chat import · passkey-backed keys · a separate KMS release service · session resumption for long live calls · an evaluation set in CI · a pilot with a bank or insurer.

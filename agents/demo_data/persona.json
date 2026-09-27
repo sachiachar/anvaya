@@ -1,0 +1,13 @@
+{
+  "_note": "Starting profile only. Everything else (family, stories, accounts, wishes) is learned from the conversation.",
+  "owner": {
+    "id": "owner_demo_vikram",
+    "name": "Vikram Rao",
+    "age": 58,
+    "country": "India",
+    "city": "Bengaluru",
+    "family": []
+  },
+  "moments": [],
+  "inventory": []
+}

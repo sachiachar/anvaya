@@ -1,0 +1,223 @@
+import { idToken } from "./auth";
+import type { KeyBackup } from "./vaultCrypto";
+
+export const OWNER_ID = "owner_demo_vikram";
+
+export type Autonomy = "assist" | "propose" | "act_within_limits";
+
+export type Moment = {
+  id: string;
+  kind: "story" | "advice" | "practical" | "wish";
+  title: string;
+  summary: string;
+  quote: string;
+  people: string[];
+  places: string[];
+  year: string | null;
+  language?: string;
+};
+
+export type InventoryItem = {
+  id: string;
+  category: string;
+  institution: string;
+  product: string;
+  account_hint: string;
+  nominee_or_beneficiary: string | null;
+  approximate_value: string | null;
+  missing_fields: string[];
+};
+
+export type DocumentCheck = {
+  document_type: string;
+  is_expected_type: boolean;
+  person_named: string | null;
+  matches_expected_person: boolean;
+  key_date: string | null;
+  concerns: string[];
+  /** Likelihood the document is genuine, of the right type, for the right person. */
+  confidence: number;
+  verdict: "likely_valid" | "needs_attention" | "not_valid";
+};
+
+export type Case = {
+  id: string;
+  owner_id: string;
+  state: "reported" | "death_confirmed" | "waiting" | "released" | "cancelled";
+  certificate_check: DocumentCheck;
+  authority_check: DocumentCheck | null;
+  wait_until: number | null;
+  history: { at: number; event: string }[];
+};
+
+export type Person = { id: string; name: string; relationship: string };
+
+export type Proposal = (Moment | InventoryItem | Person) & {
+  collection: "moments" | "inventory" | "people";
+  status: "pending" | "approved";
+  updates?: string;
+};
+
+export type Turn = {
+  id: string;
+  role: "owner" | "assistant";
+  text: string;
+  heard?: string;
+  attachment?: { kind: "voice" | "photo" | "document"; name: string | null } | null;
+  language?: string;
+  proposals?: Proposal[];
+};
+
+export type Task = {
+  id: string;
+  title: string;
+  why_it_matters: string;
+  action: "talk" | "legal" | "vault" | "institution" | "family";
+  question_for_owner: string;
+  steps: string[];
+  severity: "high" | "medium" | "low";
+};
+
+export type AccessRequest = { id: string; name: string; relationship: string; contact: string; note: string; at: number };
+
+export type VaultItem = { id: string; category: string; iv: string; ciphertext: string; ai_label: string | null };
+
+/** Adds the signed-in user's token; the API refuses anyone not on the demo list. */
+async function withAuth(init?: RequestInit): Promise<RequestInit> {
+  const token = await idToken();
+  if (!token) return init ?? {};
+  const headers = new Headers(init?.headers);
+  headers.set("Authorization", `Bearer ${token}`);
+  return { ...init, headers };
+}
+
+export class AuthError extends Error {}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`/api${path}`, await withAuth(init));
+  if (res.status === 401 || res.status === 403) {
+    let detail = "Please sign in.";
+    try {
+      detail = (await res.json()).detail ?? detail;
+    } catch {
+      /* not JSON */
+    }
+    throw new AuthError(detail);
+  }
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      detail = (await res.json()).detail ?? detail;
+    } catch {
+      /* not JSON */
+    }
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+  return res.json() as Promise<T>;
+}
+
+const json = (body: unknown): RequestInit => ({
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
+
+const upload = (field: string, file: Blob, name = "upload"): RequestInit => {
+  const form = new FormData();
+  form.append(field, file, name);
+  return { method: "POST", body: form };
+};
+
+const o = (path: string) => `/owners/${OWNER_ID}${path}`;
+
+export const api = {
+  me: () => request<{ email: string | null; name: string | null; auth: boolean }>("/me"),
+  seed: () => request<{ owner: Record<string, unknown> }>("/demo/seed", { method: "POST" }),
+  owner: () => request<{ name: string; family: string[] } & Record<string, unknown>>(o("")),
+  archive: () => request<{ moments: Moment[]; inventory: InventoryItem[] }>(o("/archive")),
+
+  captureAudio: (audio: Blob, name: string) =>
+    request<{ autonomy: Autonomy; language: string; transcript: string; proposals: Moment[] }>(
+      o("/capture/audio"), upload("audio", audio, name)),
+  addDocument: (image: File) =>
+    request<{ autonomy: Autonomy; proposal: InventoryItem }>(o("/documents"), upload("image", image, image.name)),
+  addWish: (text: string) => {
+    const form = new FormData();
+    form.append("text", text);
+    return request<Moment>(o("/wishes"), { method: "POST", body: form });
+  },
+
+  conversation: () => request<{ turns: Turn[] }>(o("/conversation")),
+  say: (text: string | null, file?: Blob, fileName?: string) => {
+    const form = new FormData();
+    if (text) form.append("text", text);
+    if (file) form.append("file", file, fileName ?? "upload");
+    return request<{ owner_turn: Turn; assistant_turn: Turn }>(o("/conversation"), { method: "POST", body: form });
+  },
+
+  speech: async (text: string): Promise<Blob> => {
+    const res = await fetch("/api/speech", await withAuth(json({ text })));
+    if (!res.ok) throw new Error(`speech failed: ${res.status}`);
+    return res.blob();
+  },
+
+  requestAccess: (req: { name: string; relationship: string; contact: string; note: string }) =>
+    request<{ message: string }>(o("/access-requests"), json(req)),
+  ownerAccessRequests: () =>
+    request<{ requests: AccessRequest[]; contacts: { name: string; relationship: string; contact: string }[] }>(o("/access-requests")),
+  teamAccessRequests: () => request<{ requests: AccessRequest[] }>("/admin/access-requests"),
+  decideAccess: (id: string, decision: "approve" | "decline", decided_by: "owner" | "team") =>
+    request(`/access-requests/${id}/decision`, json({ decision, decided_by })),
+
+  review: () => request<{ moments: Moment[]; inventory: InventoryItem[] }>(o("/review")),
+  decide: (id: string, collection: "moments" | "inventory" | "people", decision: "approve" | "reject") =>
+    request(`/proposals/${id}/decision`, json({ collection, decision })),
+
+  readiness: () => request<{ score: number; tasks: Task[] }>(o("/readiness"), { method: "POST" }),
+  tasks: () => request<{ score: number | null; tasks: Task[] }>(o("/tasks")),
+  updateTask: (id: string, status: "done" | "dismissed") => request<Task>(`/tasks/${id}`, json({ status })),
+  companionAsks: (text: string) => request<Turn>(o("/conversation/prompt"), json({ text })),
+  legalNeeds: () =>
+    request<{ autonomy: Autonomy; needs: { wish_excerpt: string; document_needed: string; reason_plain: string; urgency: string }[] }>(
+      o("/legal-needs"), { method: "POST" }),
+  legalHandoff: (partner: string, owner_consent: boolean, needs: unknown[]) =>
+    request<{ status: string }>(o("/legal-handoff"), json({ partner, owner_consent, needs })),
+
+  setRecipient: (name: string, relationship: string, public_key_jwk: JsonWebKey, key_backup: KeyBackup) =>
+    request(o("/vault/recipient"), json({ name, relationship, public_key_jwk, key_backup })),
+  getRecipient: () =>
+    request<{ name: string; relationship: string; public_key_jwk: JsonWebKey; key_backup: KeyBackup; vault_sealed: boolean;
+      status: "pending_owner" | "approved" }>(o("/vault/recipient")),
+  decideRecipient: (decision: "approve" | "decline") => request(o("/vault/recipient/decision"), json({ decision })),
+  inviteRecipient: (name: string, relationship: string) => request(o("/vault/invite"), json({ name, relationship })),
+  getInvite: () => request<{ name: string; relationship: string }>(o("/vault/invite")),
+  setEscrow: (recipient_wrapped_key: string) =>
+    request<{ stored: boolean; kms: boolean }>(o("/vault/escrow"), json({ recipient_wrapped_key })),
+  addVaultItem: (item: { category: string; iv: string; ciphertext: string; ai_label: string | null }) =>
+    request<VaultItem>(o("/vault/items"), json(item)),
+  vaultItems: () => request<{ items: VaultItem[] }>(o("/vault/items")),
+
+  reportDeath: (certificate: File) =>
+    request<{ case: Case }>(o("/death-report"), upload("certificate", certificate, certificate.name)),
+  submitAuthority: (proof: File) =>
+    request<{ case: Case }>(o("/release/authority"), upload("proof", proof, proof.name)),
+  releaseStatus: () => request<{ case: Case | null }>(o("/release")),
+  ownerAlive: () => request<{ case?: Case }>(o("/alive"), { method: "POST" }),
+  releaseBundle: () => request<{ recipient_wrapped_key: string; items: VaultItem[] }>(o("/vault/release-bundle")),
+
+  cases: () => request<{ cases: Case[] }>("/admin/cases"),
+  confirmDeath: (id: string, reviewer: string, override_reason?: string) =>
+    request<{ case: Case }>(`/admin/cases/${id}/confirm-death`, json({ reviewer, override_reason })),
+  confirmAuthority: (id: string, reviewer: string, override_reason?: string) =>
+    request<{ case: Case }>(`/admin/cases/${id}/confirm-authority`, json({ reviewer, override_reason })),
+
+  ask: (question: string, session_id?: string) =>
+    request<{ answer: string; sources: string[]; tools_used: string[]; session_id: string }>(
+      o("/ask"), json({ question, session_id })),
+  settlement: () =>
+    request<{
+      checklist: { institution: string; action: string; documents_needed: string[]; priority: string; source_id: string }[];
+      letters: { institution: string; subject: string; body: string }[];
+      unclaimed_asset_searches: string[];
+    }>(o("/settlement"), { method: "POST" }),
+};
