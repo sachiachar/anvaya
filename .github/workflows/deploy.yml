@@ -37,12 +37,14 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      api: ${{ inputs.target == 'all' || steps.filter.outputs.api == 'true' }}
-      web: ${{ inputs.target == 'all' || steps.filter.outputs.web == 'true' }}
-      rules: ${{ inputs.target == 'all' || steps.filter.outputs.rules == 'true' }}
+      # Manual runs follow the chosen target; pushes follow what changed.
+      api: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'all' || github.event_name == 'push' && steps.filter.outputs.api == 'true' }}
+      web: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'all' || github.event_name == 'push' && steps.filter.outputs.web == 'true' }}
+      rules: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'all' || github.event_name == 'push' && steps.filter.outputs.rules == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
+        if: github.event_name == 'push'
         id: filter
         with:
           filters: |
