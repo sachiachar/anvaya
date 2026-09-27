@@ -18,6 +18,7 @@ Built for the **AI Builder Cup 2026** · Track: **BFSI** · Google Gemini + Goog
 | [Architecture](docs/architecture.md) | How it's built, security, design decisions |
 | [Use cases](docs/use-cases.md) | Who uses it, what they do, what the AI does |
 | [Release notes](docs/release-notes.md) | What's in each version and known limitations |
+| [Demo script](docs/demo-script.md) | A timed 3-minute demo with the lines to say to Saathi |
 
 ## The problem
 
@@ -124,6 +125,9 @@ Every push to `main` deploys **only what changed** ([.github/workflows/deploy.ym
 **Actions → Deploy → Run workflow → all** deploys everything. GitHub signs in to Google Cloud with Workload Identity Federation, so no keys are stored in GitHub. One-time setup: `PROJECT_ID=… REPO=owner/repo ./infra/setup-github-actions.sh`.
 
 ## Demo in three minutes
+
+Full script with lines to say: [docs/demo-script.md](docs/demo-script.md).
+
 
 1. **Vikram:** tap 🎤 and talk about family, a first job, and an LIC policy ("make Ajay the nominee"). Keep the cards; open **My plan** to see Next steps.
 2. **Vikram → vault:** choose Priya as recipient. **Priya:** accept and save the recovery code. **Vikram:** confirm the matching code, seal, add a secret.
