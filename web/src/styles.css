@@ -201,3 +201,14 @@ details summary { cursor: pointer; color: var(--brand); margin: 6px 0; }
 .signin { min-height: 80vh; display: flex; flex-direction: column; justify-content: center; gap: 12px; }
 .signin h1 { margin: 0; color: var(--brand); font-size: 2rem; }
 .signin p { margin: 0; }
+
+/* ---- Brand --------------------------------------------------------------------- */
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand img { border-radius: 10px; flex: none; }
+.brand h1 { color: #2f7ea6; }
+.signin { align-items: center; text-align: center; }
+.signin-logo { width: min(265px, 70vw); height: auto; border-radius: 28px; margin-bottom: 4px; }
+.signin p { max-width: 360px; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .brand h1 { color: #8fd0e8; }
+}
