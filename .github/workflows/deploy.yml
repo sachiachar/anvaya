@@ -2,7 +2,12 @@
 #   agents/**                -> tests, then the API to Cloud Run
 #   web/**, firebase.json    -> the web app to Firebase Hosting
 #   firestore.rules          -> Firestore security rules
-# Docs-only changes deploy nothing. "Run workflow" (manual) deploys everything.
+# Docs-only changes deploy nothing. "Run workflow" (manual) deploys everything,
+# or only the allowlist.
+#
+# Who may use the demo lives in GitHub: environment "production" -> secret
+# ALLOWED_EMAILS (emails and/or @domains, comma-separated). Every API deploy applies
+# it; to apply a change right away: Actions -> Deploy -> Run workflow -> "allowlist".
 #
 # Google credentials come from Workload Identity Federation (no stored keys);
 # see infra/setup-github-actions.sh. Service settings (env vars, secrets) are
@@ -13,6 +18,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      target:
+        description: What to deploy
+        type: choice
+        options: [all, allowlist]
+        default: all
 
 concurrency:
   group: deploy-production
@@ -26,9 +37,9 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      api: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.api == 'true' }}
-      web: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.web == 'true' }}
-      rules: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.rules == 'true' }}
+      api: ${{ inputs.target == 'all' || steps.filter.outputs.api == 'true' }}
+      web: ${{ inputs.target == 'all' || steps.filter.outputs.web == 'true' }}
+      rules: ${{ inputs.target == 'all' || steps.filter.outputs.rules == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -47,7 +58,13 @@ jobs:
     needs: changes
     if: needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
+    environment: production
     steps:
+      - name: Check the allowlist is set
+        env:
+          ALLOWED_EMAILS: ${{ secrets.ALLOWED_EMAILS }}
+        run: '[ -n "$ALLOWED_EMAILS" ] || { echo "Set ALLOWED_EMAILS in environment production"; exit 1; }'
+
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - name: Tests
@@ -59,9 +76,32 @@ jobs:
           service_account: ${{ vars.GCP_DEPLOYER_SA }}
       - uses: google-github-actions/setup-gcloud@v2
       - name: Deploy API to Cloud Run
+        env:
+          ALLOWED_EMAILS: ${{ secrets.ALLOWED_EMAILS }}
         run: |
           gcloud run deploy life-after-agents --source agents \
-            --project "${{ vars.GCP_PROJECT_ID }}" --region "${{ vars.GCP_REGION }}" --quiet
+            --project "${{ vars.GCP_PROJECT_ID }}" --region "${{ vars.GCP_REGION }}" --quiet \
+            --update-env-vars "^;^ALLOWED_EMAILS=${ALLOWED_EMAILS}"
+
+  allowlist:
+    # Manual only: apply the allowlist without rebuilding anything.
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'allowlist'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Update the allowlist on Cloud Run
+        env:
+          ALLOWED_EMAILS: ${{ secrets.ALLOWED_EMAILS }}
+        run: |
+          [ -n "$ALLOWED_EMAILS" ] || { echo "Set ALLOWED_EMAILS in environment production"; exit 1; }
+          gcloud run services update life-after-agents \
+            --project "${{ vars.GCP_PROJECT_ID }}" --region "${{ vars.GCP_REGION }}" --quiet \
+            --update-env-vars "^;^ALLOWED_EMAILS=${ALLOWED_EMAILS}"
 
   web:
     needs: changes
