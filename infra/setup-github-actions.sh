@@ -32,11 +32,16 @@ done
 echo "== Workload Identity Federation (only $REPO)"
 gcloud iam workload-identity-pools describe "$POOL" --location global >/dev/null 2>&1 || \
   gcloud iam workload-identity-pools create "$POOL" --location global --display-name "GitHub Actions"
-gcloud iam workload-identity-pools providers describe "$PROVIDER" --location global --workload-identity-pool "$POOL" >/dev/null 2>&1 || \
+if gcloud iam workload-identity-pools providers describe "$PROVIDER" --location global --workload-identity-pool "$POOL" >/dev/null 2>&1; then
+  # Already set up: point it at this repository (for example, after renaming the repository).
+  gcloud iam workload-identity-pools providers update-oidc "$PROVIDER" --location global --workload-identity-pool "$POOL" \
+    --attribute-condition "assertion.repository == '${REPO}'" >/dev/null
+else
   gcloud iam workload-identity-pools providers create-oidc "$PROVIDER" --location global --workload-identity-pool "$POOL" \
     --issuer-uri "https://token.actions.githubusercontent.com" \
     --attribute-mapping "google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.ref=assertion.ref" \
     --attribute-condition "assertion.repository == '${REPO}'"
+fi
 gcloud iam service-accounts add-iam-policy-binding "$DEPLOYER_SA" --role roles/iam.workloadIdentityUser \
   --member "principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL}/attribute.repository/${REPO}" >/dev/null
 

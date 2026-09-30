@@ -1,7 +1,7 @@
 [project]
 name = "life-after-agents"
 version = "0.1.0"
-description = "AI-first legacy and estate-settlement agents for Life-After (AI Builder Cup 2026)"
+description = "AI-first legacy and estate-settlement agents for Anvaya (AI Builder Cup 2026)"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",

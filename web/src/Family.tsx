@@ -114,7 +114,7 @@ function AcceptRole() {
     <Card title="Vault recipient" level="act_within_limits">
       {newCode && !saved ? (
         <div className="recovery">
-          <p><strong>Save your recovery code.</strong> You need it to set up a new or replacement phone. Life-After cannot see it or reset it.</p>
+          <p><strong>Save your recovery code.</strong> You need it to set up a new or replacement phone. Anvaya cannot see it or reset it.</p>
           <p className="code">{newCode}</p>
           <label className="check">
             <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />

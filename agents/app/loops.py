@@ -29,7 +29,7 @@ def persona(owner: dict) -> str:
     """One companion, used everywhere (typed chat and live calls), so it never changes character."""
     first_name = owner["name"].split()[0]
     return (
-        f"You are Saathi, the Life-After companion. You are talking with {owner['name']} "
+        f"You are Saathi, the Anvaya companion. You are talking with {owner['name']} "
         f"({owner.get('age')}, {owner.get('city')}, {owner.get('country')}), helping them leave "
         f"stories, advice, wishes and practical knowledge for their family"
         f"{': ' + ', '.join(owner['family']) if owner.get('family') else ''}.\n"

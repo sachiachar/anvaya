@@ -271,7 +271,7 @@ function Vault() {
 
   return (
     <Card title="Secure vault" level="act_within_limits">
-      <p className="muted">Passwords, PINs and account details are encrypted on this phone. Neither the assistant nor Life-After can read them. They go only to your vault recipient, after strict checks.</p>
+      <p className="muted">Passwords, PINs and account details are encrypted on this phone. Neither the assistant nor Anvaya can read them. They go only to your vault recipient, after strict checks.</p>
       {(!invite || !recipient) && (
         <div className="proposal">
           <p className="proposal-title">

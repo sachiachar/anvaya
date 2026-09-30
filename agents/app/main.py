@@ -1,4 +1,4 @@
-"""HTTP API for the Life-After app. Every route is under /api so Firebase Hosting
+"""HTTP API for the Anvaya app. Every route is under /api so Firebase Hosting
 can proxy it to Cloud Run on the same origin as the web app.
 
 Autonomy level of each action is returned as `autonomy` so the UI can show it.
@@ -23,7 +23,7 @@ from .config import settings
 from .executor_agent import ask
 from .store import new_id, store
 
-app = FastAPI(title="Life-After agents", version="0.1.0")
+app = FastAPI(title="Anvaya agents", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
@@ -645,7 +645,7 @@ async def settlement(owner_id: str) -> dict:
 # team checks proof of relationship. Either way, access covers the archive and the
 # handover assistant; the vault still needs the legal-authority release.
 
-NEUTRAL_REPLY = "Thank you. If this person uses Life-After, your request has been passed on and you'll hear back."
+NEUTRAL_REPLY = "Thank you. If this person uses Anvaya, your request has been passed on and you'll hear back."
 
 
 class AccessRequest(BaseModel):

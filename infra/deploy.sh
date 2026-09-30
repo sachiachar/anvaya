@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy Life-After to Google Cloud: agents on Cloud Run, web app on Firebase Hosting.
+# Deploy Anvaya to Google Cloud: agents on Cloud Run, web app on Firebase Hosting.
 # Usage: PROJECT_ID=my-project [ALLOWED_EMAILS=a@x.com,@team.com] ./infra/deploy.sh
 set -euo pipefail
 
@@ -24,7 +24,7 @@ gcloud services enable run.googleapis.com aiplatform.googleapis.com firestore.go
 
 echo "== Service account (least privilege)"
 gcloud iam service-accounts describe "$SA" >/dev/null 2>&1 || \
-  gcloud iam service-accounts create life-after-agents --display-name "Life-After agents"
+  gcloud iam service-accounts create life-after-agents --display-name "Anvaya agents"
 for role in roles/aiplatform.user roles/datastore.user; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "serviceAccount:$SA" --role "$role" --condition=None >/dev/null
 done

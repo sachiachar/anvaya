@@ -53,7 +53,7 @@ def verify(token: str | None) -> User:
     if not email or not claims.get("email_verified"):
         raise HTTPException(403, "This account has no verified email address.")
     if not allowed(email):
-        raise HTTPException(403, f"{email} isn't on the list for this demo. Ask the Life-After team for access.")
+        raise HTTPException(403, f"{email} isn't on the list for this demo. Ask the Anvaya team for access.")
     return User(uid=claims["sub"], email=email, name=claims.get("name"))
 
 

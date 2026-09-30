@@ -53,7 +53,7 @@ export default function App() {
     return (
       <div className="app">
         <div className="signin">
-          <img className="signin-logo" src="/logo.webp" alt="Life-After, powered by Saathi" width={265} height={271} />
+          <img className="signin-logo" src="/logo.webp" alt="Anvaya" width={265} height={262} />
           <p className="muted">Demo · synthetic data</p>
           {session === "denied" ? (
             <>
@@ -78,7 +78,7 @@ export default function App() {
         <div className="brand">
           <img src="/icon-192.png" alt="" width={40} height={40} />
           <div>
-            <h1>Life-After</h1>
+            <h1>Anvaya</h1>
             <p className="muted">Powered by Saathi · demo</p>
           </div>
         </div>

@@ -7,7 +7,7 @@
 //     derived from a recovery code (PBKDF2-SHA256, 600,000 iterations) and the
 //     encrypted backup is stored on the server.
 //   - A new or replacement phone downloads the backup and unlocks it with the code.
-//   - Life-After never sees the code, so it can never open the backup.
+//   - Anvaya never sees the code, so it can never open the backup.
 //
 // Demo simplification: keys are cached in localStorage. Production keeps them as
 // non-extractable keys in IndexedDB and can add a passkey as a second unlock.
