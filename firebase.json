@@ -1,11 +1,21 @@
 {
-  "hosting": {
-    "public": "web/dist",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [
-      { "source": "/api/**", "run": { "serviceId": "life-after-agents", "region": "asia-southeast1" } },
-      { "source": "**", "destination": "/index.html" }
-    ]
-  },
+  "hosting": [
+    {
+      "site": "anvaya-saathi",
+      "public": "web/dist",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "rewrites": [
+        { "source": "/api/**", "run": { "serviceId": "life-after-agents", "region": "asia-southeast1" } },
+        { "source": "**", "destination": "/index.html" }
+      ]
+    },
+    {
+      "site": "life-after-509907",
+      "public": "web/redirect",
+      "redirects": [
+        { "source": "/:path*", "destination": "https://anvaya-saathi.web.app/:path", "type": 301 }
+      ]
+    }
+  ],
   "firestore": { "rules": "firestore.rules" }
 }

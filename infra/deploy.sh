@@ -70,4 +70,4 @@ RUN_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --format 'v
 (cd web && npm ci && VITE_LIVE_URL="${RUN_URL/https:/wss:}" npm run build)
 firebase deploy --project "$PROJECT_ID" --only hosting,firestore:rules
 
-echo "Done. Open https://${PROJECT_ID}.web.app"
+echo "Done. Open https://anvaya-saathi.web.app (the ${PROJECT_ID}.web.app address redirects there)"

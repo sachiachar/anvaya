@@ -117,6 +117,8 @@ Needs `gcloud` and the Firebase CLI, with Firebase added to the project and Goog
 PROJECT_ID=your-project ALLOWED_EMAILS="you@example.com,@yourteam.com" ./infra/deploy.sh
 ```
 
+The app is live at **https://anvaya-saathi.web.app**; the old address, life-after-509907.web.app, redirects there. `firebase.json` names both Hosting sites, so a new project needs its own site IDs there.
+
 This sets up the service account, Firestore, a private bucket, a KMS key and the Gemini key in Secret Manager; deploys the API to Cloud Run in `asia-southeast1` (Singapore); and deploys the web app to Firebase Hosting.
 
 ### Automatic deploys (GitHub Actions)
