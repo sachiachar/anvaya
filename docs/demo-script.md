@@ -1,4 +1,4 @@
-# Life-After: Demo Script
+# Anvaya: Demo Script
 
 *A 3-minute demo video, with the lines to say to Saathi. Say them as written; natural pauses are fine.*
 
@@ -17,7 +17,7 @@
 
 ## Scene 1: The problem (0:00–0:15)
 
-**Narration:** "When someone dies suddenly, their family can't find the money. In India alone, over ₹72,000 crore sits in unclaimed bank deposits. Nobody knew the accounts existed, or who the nominee was. Life-After fixes that by letting you just talk."
+**Narration:** "When someone dies suddenly, their family can't find the money. In India alone, over ₹72,000 crore sits in unclaimed bank deposits. Nobody knew the accounts existed, or who the nominee was. Anvaya fixes that by letting you just talk."
 
 [Show the sign-in screen with the logo, then sign in.]
 
@@ -70,7 +70,7 @@
 
 [Back to Vikram → the approval card shows a key code → show that it matches Priya's screen → **Approve** → **Seal vault**. Add a secret: label "Email login", secret "demo-only" → **Encrypt and save**.]
 
-**Narration:** "Passwords are locked on Vikram's phone. Only Priya can open them, and only after careful checks. Not even Life-After or the AI can read them."
+**Narration:** "Passwords are locked on Vikram's phone. Only Priya can open them, and only after careful checks. Not even Anvaya or the AI can read them."
 
 ---
 
@@ -106,7 +106,7 @@
 
 [Show the logo.]
 
-**Narration:** "Life-After, powered by Saathi. Your stories, your wishes, and everything your family will need. Built on Gemini and Google Cloud."
+**Narration:** "Anvaya, powered by Saathi. Your stories, your wishes, and everything your family will need. Built on Gemini and Google Cloud."
 
 ---
 

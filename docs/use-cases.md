@@ -1,8 +1,8 @@
-# Life-After: Use Cases
+# Anvaya: Use Cases
 
 *Team Saathi · updated 28 September 2026 · companion to [concept.md](concept.md) and [architecture.md](architecture.md)*
 
-This document lists who uses Life-After, what each person does, and what the AI does for them. The service is **AI-first**: it runs as loops the AI operates, while people set the goals and make every decision that matters. It is app-based (iOS and Android; a web app for the prototype).
+This document lists who uses Anvaya, what each person does, and what the AI does for them. The service is **AI-first**: it runs as loops the AI operates, while people set the goals and make every decision that matters. It is app-based (iOS and Android; a web app for the prototype).
 
 **Status:** ✅ built in the prototype · 🔜 planned.
 
@@ -15,7 +15,7 @@ This document lists who uses Life-After, what each person does, and what the AI 
 | **Owner** | The person creating the legacy (demo: Vikram, 58, Bengaluru) | During their lifetime | ✅ |
 | **Vault recipient** | The family member the owner chooses to receive the vault (demo: Priya, daughter) | Invited while the owner is alive; receives after release | ✅ |
 | **Family member** | Anyone in the family, listed or not | Can request access at any time | ✅ |
-| **Our team** | Life-After reviewers | When a death is reported, or a request arrives after a death | ✅ |
+| **Our team** | Anvaya reviewers | When a death is reported, or a request arrives after a death | ✅ |
 | **Legal partner** | A licensed will or estate service | When the owner consents to share a summary | ✅ (mocked) |
 | **Participant** | Anyone else heard in a conversation | During a live call | 🔜 consent tools |
 | **Gift buyer, helper** | Adult child who pays or helps set up | Setup | 🔜 |
@@ -104,7 +104,7 @@ flowchart LR
 
 | # | Use case | What they do | What the AI or system does | Status |
 | --- | --- | --- | --- | --- |
-| F1 | Request access | Sends name, relationship and contact | Same neutral reply whether or not the person uses Life-After; routes to the owner while alive, to our team after a death | ✅ |
+| F1 | Request access | Sends name, relationship and contact | Same neutral reply whether or not the person uses Anvaya; routes to the owner while alive, to our team after a death | ✅ |
 | F2 | Browse and ask after release | Opens the family archive | Read-only access to stories and answers; never the vault | 🔜 per-person access |
 
 ---
@@ -137,7 +137,7 @@ flowchart LR
 - It never invents answers, clones a voice, or speaks as the owner.
 - It never gives legal or financial advice, and never asks for passwords or full account numbers.
 - Only the person the owner invites can become the vault recipient, and only after the owner confirms the key code.
-- Neither the AI nor Life-After can read the vault.
+- Neither the AI nor Anvaya can read the vault.
 - A death is confirmed by a person; legal authority by a **different** person; overriding the AI's "not valid" needs a written reason.
 - Nothing is released before the waiting period ends, and the owner can cancel.
 - Family access while alive is the owner's decision only.

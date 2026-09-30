@@ -1,4 +1,4 @@
-# Life-After: Release Notes
+# Anvaya: Release Notes
 
 ## Prototype 0.1 · 28 September 2026 (AI Builder Cup 2026)
 
@@ -25,7 +25,7 @@ The first working prototype, built on Google Gemini and Google Cloud. See [archi
 - Flags wishes that need a legal document; sends a pre-filled summary to a legal partner (mocked) with the owner's consent.
 
 **Secure vault**
-- Secrets encrypted on the owner's phone; neither Life-After nor the AI can read them.
+- Secrets encrypted on the owner's phone; neither Anvaya nor the AI can read them.
 - The owner chooses and invites the recipient; the recipient accepts; the owner confirms a matching key code before sealing.
 - Recovery code for new or lost phones; a new key can be issued while the owner is alive.
 
@@ -49,4 +49,4 @@ The first working prototype, built on Google Gemini and Google Cloud. See [archi
 - Free-tier Gemini keys run out quickly; turn on billing for demos.
 
 ### Next
-Sign-in and roles · notifications and reminders · a real legal partner · email and chat import · sealed letters for future dates · per-person family access to the archive · a pilot with a bank or insurer.
+Sign-in and roles · notifications and reminders · a real legal partner · email and chat import · keeping the real recording of a story (opt-in) · voice letters and sealed letters for future dates · per-person family access to the archive · a pilot with a bank or insurer.

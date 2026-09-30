@@ -1,8 +1,8 @@
-# Life-After: Architecture
+# Anvaya: Architecture
 
 *Status: working prototype for the AI Builder Cup 2026 (BFSI track). Last updated 28 September 2026.*
 
-Life-After is an app-based service. People talk with Saathi, an AI companion, to record their stories, financial inventory, family, wishes and secrets while alive. After a verified death, the right people receive them. For the plain-language version, see [concept.md](concept.md).
+Anvaya is an app-based service. People talk with Saathi, an AI companion, to record their stories, financial inventory, family, wishes and secrets while alive. After a verified death, the right people receive them. For the plain-language version, see [concept.md](concept.md).
 
 ## 1. Goals and non-goals
 
@@ -10,7 +10,7 @@ Life-After is an app-based service. People talk with Saathi, an AI companion, to
 
 - Run every part of the product as an **AI-first loop** with an explicit autonomy level: Assist, Propose, or Act within limits.
 - Keep a person in control of every irreversible step: saving to the archive, sharing with a legal partner, choosing the vault recipient, confirming a death, releasing the vault.
-- Make the vault unreadable to the AI and to Life-After itself.
+- Make the vault unreadable to the AI and to Anvaya itself.
 - Make capture as easy as a conversation: hands-free live voice, plus typing, photos and documents.
 - Run entirely on **Google Cloud** with **Gemini**.
 
@@ -26,7 +26,7 @@ Life-After is an app-based service. People talk with Saathi, an AI companion, to
 flowchart LR
     owner(["Owner"]) --> app
     family(["Family and vault recipient"]) --> app
-    team(["Life-After reviewers"]) --> app
+    team(["Anvaya reviewers"]) --> app
     subgraph gcp ["Google Cloud"]
         app["Web app on Firebase Hosting"] -->|"HTTPS /api"| api["Agents service on Cloud Run"]
         app -->|"live call WebSocket"| api
@@ -214,7 +214,7 @@ On `released`, KMS removes the outer layer and the recipient's phone decrypts th
 | Database leak exposes secrets | Secrets are ciphertext; the data key is sealed with the recipient's public key on the owner's phone |
 | Insider or AI reads the vault | No server component can open the inner layer; the ADK agent has no vault tool; the AI never asks for passwords |
 | Someone makes themselves the recipient | The owner must invite; the owner confirms a key code computed on each phone from the key itself |
-| Lost phone | Private key backed up, encrypted with a 125-bit recovery code (PBKDF2-SHA256, 600,000 iterations); Life-After never sees the code |
+| Lost phone | Private key backed up, encrypted with a 125-bit recovery code (PBKDF2-SHA256, 600,000 iterations); Anvaya never sees the code |
 | False death report | AI verdict; reason required to override "not valid"; two different reviewers; waiting period; owner cancel |
 | Sensitive numbers leak through the AI | Masking rules in prompts; last 4 digits only; never asks for full numbers |
 | Sharing without consent | `legal-handoff` needs consent; access requests go to the owner while alive; neutral replies reveal nothing to strangers |
@@ -272,7 +272,7 @@ Also verified by hand: the vault and recovery round trip (Node Web Crypto), live
 | One companion | Shared persona for chat and live | Consistent character, language and honesty |
 | Suggestions as cards | AI proposes, the owner keeps | AI-first, but nothing is saved without consent |
 | Rules in code | Merging, reply checks, verdicts, next steps | Light models follow prompts most of the time; code makes it always |
-| Vault crypto | On the device, sealed for one approved person, plus KMS | Life-After and the AI can never read secrets |
+| Vault crypto | On the device, sealed for one approved person, plus KMS | Anvaya and the AI can never read secrets |
 | Cheaper models | Flash-Lite for most steps, with fallbacks | Low cost per family; resilient to overload and quotas |
 | Store abstraction | Memory, file or Firestore behind one interface | Tests run without the cloud; the local demo survives restarts |
 

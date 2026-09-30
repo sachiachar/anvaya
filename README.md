@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="web/public/logo.webp" alt="Life-After, powered by Saathi" width="240">
+  <img src="docs/assets/anvaya-logo.png" alt="Anvaya" width="200">
 </p>
 
 <p align="center"><strong>Your stories, your wishes, and everything your family will need.</strong></p>
 
-**When someone dies suddenly, their family can't find the money.** Life-After is an app with a friendly AI companion, **Saathi**. People talk to Saathi about their stories, money matters, family and wishes while they are alive. When they pass away, everything is handed over safely to the right person.
+**When someone dies suddenly, their family can't find the money.** Anvaya is an app with a friendly AI companion, **Saathi**. People talk to Saathi about their stories, money matters, family and wishes while they are alive. When they pass away, everything is handed over safely to the right person.
 
 Built for the **AI Builder Cup 2026** · Track: **BFSI** · Google Gemini + Google Cloud.
 
@@ -15,16 +15,26 @@ Built for the **AI Builder Cup 2026** · Track: **BFSI** · Google Gemini + Goog
 | Document | What it covers |
 | --- | --- |
 | [Concept](docs/concept.md) | The idea in plain language (start here) |
+| [Pitch: individuals](docs/pitch-individuals.md) | Why a person and their family would use Anvaya |
+| [Pitch: banks and insurers](docs/pitch-institutions.md) | Why an institution would offer Anvaya to its customers |
+| [Business model](docs/business-model.md) | Revenue, costs, margins and the assumptions behind them |
 | [Architecture](docs/architecture.md) | How it's built, security, design decisions |
 | [Use cases](docs/use-cases.md) | Who uses it, what they do, what the AI does |
 | [Release notes](docs/release-notes.md) | What's in each version and known limitations |
 | [Demo script](docs/demo-script.md) | A timed 3-minute demo with the lines to say to Saathi |
+| [Brand](docs/brand.md) | The name, taglines by country and language, and the companion's name in each language |
 
 ## The problem
 
-- **India:** about ₹72,000 crore in unclaimed bank deposits, plus about ₹9,000 crore in unclaimed insurance.
-- **Australia:** about A$21.2 billion in lost and unclaimed superannuation.
+- **India:** ₹72,454 crore in unclaimed bank deposits (January 2026), plus ₹8,974 crore in unclaimed insurance (February 2026).
+- **Japan:** a record ¥129.2 billion in estates went to the national treasury in financial year 2024 because no heir came forward.
+- **South Korea:** more than ₩10 trillion in unclaimed insurance money (2026).
+- **Malaysia:** RM13.3 billion in unclaimed money (April 2025).
+- **Australia:** A$21.2 billion in lost and unclaimed superannuation (June 2026).
+- **Singapore:** 2 in 5 CPF members lost before 65 had no nominee (2023).
 - Most people never write down their accounts, policies, passwords or wishes.
+
+Sources and dates are in [docs/concept.md](docs/concept.md#sources).
 
 ## How it works
 
