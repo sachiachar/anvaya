@@ -93,9 +93,10 @@ def ensure() -> str:
     return copy_id
 
 
-def reset() -> dict:
-    """Restore the caller's own copy to the starting point. Never touches another copy (PR-1.5)."""
-    oid = owner_id()
+def reset(copy_id: str | None = None) -> dict:
+    """Restore a copy to the starting point: the caller's own (PR-1.5), or one a platform admin
+    chose in the portal (PR-12.6). Never touches any other copy."""
+    oid = owner_id_for(copy_id) if copy_id else owner_id()
     for collection in OWNED:
         for doc in store.list(collection, owner_id=oid):
             store.delete(collection, doc["id"])
@@ -152,3 +153,24 @@ def mine(collection: str, doc_id: str) -> dict | None:
     """A document by ID, only if it belongs to the caller's copy."""
     doc = store.get(collection, doc_id)
     return doc if doc and doc.get("owner_id") == owner_id() else None
+
+
+NICKNAME_MAX = 30
+
+
+def clean_nickname(value: str | None) -> str | None:
+    """One line of plain text, at most 30 characters; empty means none."""
+    text = " ".join("".join(ch for ch in (value or "") if ch.isprintable()).split())[:NICKNAME_MAX]
+    return text or None
+
+
+def set_nickname(value: str | None) -> str | None:
+    """The optional name a visitor gives their own copy. Only platform admins see it, in the
+    portal's demo list; it's never logged. Asked once: skipping also counts as answered."""
+    nickname = clean_nickname(value)
+    store.update("demo_copies", ensure(), {"nickname": nickname, "nickname_asked": True})
+    return nickname
+
+
+def copy_record() -> dict:
+    return store.get("demo_copies", current()) or {}

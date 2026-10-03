@@ -75,7 +75,9 @@ export type Guide = { id: string; title: string; version: number; trust_tier: st
   signals: number; researched_at: number; status: "current" | "research_requested" };
 
 export type DemoCopy = { id: string; user_key: string; created_at: number; last_used_at: number;
-  allowance_used: number; status: string; reset_at?: number };
+  allowance_used: number; status: string; reset_at?: number | null; is_you: boolean;
+  /** Only for platform admins: the visitor's optional nickname. */
+  nickname?: string | null };
 
 export type AuditEntry = { id: string; at: number; actor: string; role: string; action: string; target: string;
   reason: string | null };
@@ -96,7 +98,7 @@ export const platform = {
   decideScenario: (id: string, decision: "approve" | "discard", reason: string) =>
     request<Scenario>(p(`/fraud/scenarios/${id}/decision`), json({ decision, reason })),
   researchNow: (id: string) => request<{ status: string; message: string }>(p(`/fraud/guides/${id}/research`), { method: "POST" }),
-  demos: () => request<{ copies: DemoCopy[]; cleanup_after_days: number }>(p("/demos")),
+  demos: () => request<{ copies: DemoCopy[]; cleanup_after_days: number; nicknames_visible: boolean }>(p("/demos")),
   resetDemo: (id: string, reason: string) => request<DemoCopy>(p(`/demos/${id}/reset`), json({ reason })),
   setKillSwitch: (state: KillSwitchState, reason: string) =>
     request<{ kill_switch: KillSwitchState }>(p("/kill-switch"), json({ state, reason })),

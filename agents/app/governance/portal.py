@@ -13,9 +13,10 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from .. import demo
 from ..store import store
 from . import billing, core
-from .core import Actor, actor, audit, need, platform_settings, registry, small
+from .core import Actor, actor, allowances, audit, need, platform_settings, registry, small
 from .seed import ensure_current
 
 # ---- Read models ----------------------------------------------------------------
@@ -207,11 +208,26 @@ def research_now(guide_id: str, who: Actor = Depends(need("review_fraud"))) -> d
             "message": "Research requested. The research agent (PR-2.5) picks this up when it runs."}
 
 
+def _allowance_used(key: str) -> float:
+    """Share of today's owner token allowance this copy has used (PR-10.4)."""
+    limit = allowances().get("owner", {}).get("tokens_per_day") or 0
+    used = (store.get("user_usage", f"{core._today()}:{key}") or {}).get("owner", {}).get("tokens", 0)
+    return round(min(1.0, used / limit), 4) if limit else 0.0
+
+
 @router.get("/demos")
-def get_demos(_: Actor = Depends(actor)) -> dict:
+def get_demos(who: Actor = Depends(actor)) -> dict:
+    """Every private demo copy, without names. A visitor's optional nickname is shown only to
+    platform admins; the viewer's own copy is marked."""
     ensure_current()
-    return {"copies": sorted(store.list("demo_copies"), key=lambda d: -d["last_used_at"]),
-            "cleanup_after_days": 30}
+    copies = []
+    for d in sorted(store.list("demo_copies"), key=lambda d: -d.get("last_used_at", 0)):
+        row = {k: d.get(k) for k in ("id", "user_key", "created_at", "last_used_at", "status", "reset_at")}
+        row |= {"allowance_used": _allowance_used(d["id"]), "is_you": d["id"] == who.key}
+        if who.role == "platform_admin":
+            row["nickname"] = d.get("nickname")
+        copies.append(row)
+    return {"copies": copies, "cleanup_after_days": 30, "nicknames_visible": who.role == "platform_admin"}
 
 
 class Reason(BaseModel):
@@ -224,7 +240,8 @@ def reset_demo(copy_id: str, body: Reason, who: Actor = Depends(need("manage_dem
     if not copy:
         raise HTTPException(404, "demo copy not found")
     audit(who, "demo.reset", copy_id, body.reason)
-    return store.update("demo_copies", copy_id, {"allowance_used": 0.0, "reset_at": time.time()})
+    demo.reset(copy_id)  # the copy's demo data back to the start; never another copy's
+    return store.update("demo_copies", copy_id, {"reset_at": time.time()})
 
 
 class KillSwitch(BaseModel):

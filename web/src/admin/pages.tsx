@@ -484,21 +484,27 @@ export function DemosPage({ me }: { me: Me }) {
   if (!data) return <Loading error={error} />;
   return (
     <>
-      <p className="pa-lede">Each judge gets a private copy of the demo. Unused copies are removed after {data.cleanup_after_days} days. Per-judge copies arrive with PR-1; until then these are seeded examples.</p>
-      <Section title="Judges' demo copies">
-        <table>
-          <thead><tr><th>Judge</th><th>Created</th><th>Last used</th><th>Allowance used</th><th></th></tr></thead>
+      <p className="pa-lede">Everyone who signs in gets their own private copy of the demo, shown here without names.
+        {data.nicknames_visible ? " A nickname appears when the visitor chose one." : ""} Unused copies are removed after {data.cleanup_after_days} days.</p>
+      <Section title={`Demo copies (${data.copies.length})`}>
+        {data.copies.length === 0 ? <Empty>Nobody has opened the demo yet.</Empty> : <table>
+          <thead><tr><th>Copy</th><th>Created</th><th>Last used</th><th className="num">Allowance used today</th><th></th></tr></thead>
           <tbody>{data.copies.map((c: DemoCopy) => (
             <tr key={c.id}>
-              <td className="pa-mono">{c.user_key}</td><td>{fmt.when(c.created_at)}</td><td>{fmt.when(c.last_used_at)}</td>
-              <td>{fmt.pct(c.allowance_used)}</td>
+              <td>
+                {c.nickname ? <strong>{c.nickname}</strong> : <span className="pa-mono">{c.user_key}</span>}
+                {c.is_you && <span className="pa-tag">You</span>}
+                {c.nickname && <div className="pa-sub pa-mono">{c.user_key}</div>}
+              </td>
+              <td>{fmt.when(c.created_at)}</td><td>{fmt.when(c.last_used_at)}</td>
+              <td className="num">{fmt.pct(c.allowance_used)}</td>
               <td>{can(me, "manage_demos") && (resetting === c.id ? (
-                <DecisionForm actions={[{ value: "reset", label: "Reset this copy", tone: "danger" }]}
+                <DecisionForm actions={[{ value: "reset", label: "Restore this copy to the start", tone: "danger" }]}
                   onDecide={(_, reason) => platform.resetDemo(c.id, reason).then(() => { setResetting(null); reload(); })} />
               ) : <button className="pa-small" onClick={() => setResetting(c.id)}>Reset…</button>)}</td>
             </tr>
           ))}</tbody>
-        </table>
+        </table>}
       </Section>
     </>
   );
