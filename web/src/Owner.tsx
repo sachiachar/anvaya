@@ -63,14 +63,16 @@ const KEPT_GROUPS = [
 ] as const;
 
 /** Everything kept, with Remove for anything recorded wrongly. Removing deletes it, and every
- * earlier version, for good: the family never sees it. */
+ * earlier version, from the kept knowledge for good: the family never sees it. The conversation
+ * it came from stays in the chat. */
 function WhatYouKept() {
   const [items, setItems] = useState<KeptItem[] | null>(null);
   const { error, run } = useAction();
   useEffect(() => { run(async () => setItems((await api.kept()).items)); }, []);
+  if (error && !items) return <ErrorLine error={error} />;
   if (!items || items.length === 0) return null;
   const remove = (item: KeptItem) => {
-    if (!window.confirm(`Remove "${item.title}"? It will be deleted for good, and your family won't see it.`)) return;
+    if (!window.confirm(`Remove "${item.title}"? It's removed for good from what your family receives.`)) return;
     run(async () => setItems((await api.removeKept(item.id)).items));
   };
   return (

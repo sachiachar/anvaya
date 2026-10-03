@@ -88,3 +88,42 @@ def test_the_kept_list_shows_current_items_to_the_owner_only(client):
     assert any(i["title"] == STORY["title"] for i in items)
     assert client.get(f"/api/owners/{OWNER}/kept", headers=PRIYA).status_code == 403
     assert client.delete(f"/api/owners/{OWNER}/kept/m_nothing").status_code == 404
+
+
+def test_a_waiting_update_card_is_deleted_with_the_item(client):
+    kept = _keep("inventory", POLICY)
+    card = proposals.save_inventory(OWNER, {**POLICY, "nominee_or_beneficiary": "Wrongname"}, {})
+    assert card["updates"] == kept["id"]
+    client.delete(f"/api/owners/{OWNER}/kept/{kept['id']}")
+    assert store.get("inventory", card["id"]) is None
+
+
+def test_an_update_to_a_removed_item_cant_bring_it_back(client):
+    kept = _keep("inventory", POLICY)
+    card = proposals.save_inventory(OWNER, {**POLICY, "nominee_or_beneficiary": "Wrongname"}, {})
+    knowledge.remove(OWNER, kept["id"])
+    store.put("inventory", card)  # a card that slipped through, e.g. from another tab
+    with pytest.raises(knowledge.Removed):
+        proposals.approve("inventory", card)
+    assert knowledge.items(OWNER, "inventory") == [] and "Wrongname" not in bundle_text()
+
+
+def test_a_remove_during_a_keep_leaves_nothing_behind(client, monkeypatch):
+    kept = _keep("inventory", POLICY)
+    card = proposals.save_inventory(OWNER, {**POLICY, "nominee_or_beneficiary": "Wrongname"}, {})
+    real = knowledge._change_catalog
+    raced = []
+
+    def remove_first(owner_id, change):  # the owner taps Remove while this Keep is being written
+        if not raced:
+            raced.append(1)
+            knowledge.remove(owner_id, kept["id"])
+        return real(owner_id, change)
+
+    monkeypatch.setattr(knowledge, "_change_catalog", remove_first)
+    with pytest.raises(knowledge.Removed):
+        proposals.approve("inventory", card)
+    monkeypatch.undo()
+    assert knowledge.items(OWNER, "inventory") == []
+    assert "Wrongname" not in bundle_text() and "Term life" not in bundle_text()
+    assert not any(v["collection"] == "inventory" for v in knowledge.rebuild(OWNER)["concepts"].values())

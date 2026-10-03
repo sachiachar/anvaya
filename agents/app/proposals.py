@@ -169,6 +169,9 @@ def approve(collection: str, doc: dict) -> dict:
     # Follow "superseded by": a second update card for the same item builds on the latest
     # version, never on one already replaced, so there's only ever one current version.
     previous = knowledge.current(doc["owner_id"], doc["updates"]) if doc.get("updates") else None
+    if doc.get("updates") and not previous:
+        store.delete(collection, doc["id"])
+        raise knowledge.Removed(doc["updates"])  # it updates something the owner removed
     if previous:  # the new version keeps what was known and adds what the card says
         fresh = {k: v for k, v in doc.items() if v not in (None, "", [])}
         doc = {**{k: v for k, v in previous.items() if k not in ("concept", "okf_status")}, **fresh}

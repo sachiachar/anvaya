@@ -49,7 +49,7 @@
 
 **Removing something recorded wrongly**
 - "What you've kept" on My plan lists every story, wish, account, policy and person Vikram has kept, with Remove. The knowledge map's side panel has the same button.
-- Removing deletes the item and every earlier version of it for good: the family and their assistant never see it. The record of changes keeps only "An item was removed by the owner".
+- Removing deletes the item and every earlier version of it from the kept knowledge for good, along with any update cards waiting for it: the family and their assistant never see it. The record of changes keeps only "An item was removed by the owner". The conversation it came from stays in the chat.
 - Nothing can be removed while a handover is being reviewed, and the person who receives the vault can't be removed until Vikram chooses someone else.
 
 **Governance and the admin portal**

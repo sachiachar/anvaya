@@ -298,7 +298,10 @@ def decide(doc_id: str, body: Decision) -> dict:
                   if k not in ("id", "owner_id", "status", "updates", "recording", "document")}
     if safe_edits:
         doc = store.update(body.collection, doc_id, safe_edits)
-    return proposals.approve(body.collection, doc)
+    try:
+        return proposals.approve(body.collection, doc)
+    except knowledge.Removed as e:
+        raise HTTPException(409, "You removed the item this card updates, so it can't be kept.") from e
 
 
 @api.get("/owners/{owner_id}/archive")

@@ -35,6 +35,7 @@ import yaml
 
 from . import media
 from .config import settings
+from .store import store
 
 ROOT = "kept"
 CATALOG = f"{ROOT}/.catalog.json"
@@ -360,6 +361,8 @@ def commit(collection: str, item: dict, owner_id: str, *, replaces: str | None =
     """Keep: write the item as a concept, mark the version it replaces deprecated, and rebuild
     the index and log. Returns the kept item, as readers see it."""
     at = at or time.time()
+    if replaces and replaces not in _load(owner_id)[0]["concepts"]:
+        raise Removed(replaces)
     front, body = concept(collection, item, owner_id, at=at, generated_by=generated_by, verified=verified,
                           cat=catalog(owner_id))
     path = _write(owner_id, front, body)
@@ -375,16 +378,34 @@ def commit(collection: str, item: dict, owner_id: str, *, replaces: str | None =
             events.append(_event(owner_id, at, "Deprecation", old_front, old["path"]))
 
     def change(cat: dict) -> None:
+        if replaces and replaces not in cat["concepts"]:
+            raise Removed(replaces)  # removed while this Keep was being written
         cat["concepts"][front["id"]] = _entry(front, path)
         if old_front and replaces in cat["concepts"]:
             cat["concepts"][replaces] = _entry(old_front, cat["concepts"][replaces]["path"])
         cat["events"] = (cat.get("events", []) + events)[-MAX_EVENTS:]
 
-    _change_catalog(owner_id, change)
+    try:
+        _change_catalog(owner_id, change)
+    except Removed:
+        # Undo what this Keep wrote: the new version, its history, and the old file it rewrote.
+        media.delete(owner_id, f"{ROOT}/{path}")
+        if old_front:
+            media.delete(owner_id, f"{ROOT}/{catalog_path(old_front)}")
+        for name in media.names(owner_id, f"{ROOT}/.events/"):
+            if f"-{front['id']}-" in name or (replaces and f"-{replaces}-" in name):
+                media.delete(owner_id, name)
+        raise
     if collection == "people":
         relink(owner_id)  # items that name this person (or an earlier version of them) link to it now
     write_indexes(owner_id)
     return as_item(front["id"], _entry(front, path), owner_id)
+
+
+def catalog_path(front: dict) -> str:
+    """Where a concept's file lives in the bundle."""
+    _, folder = kind_of(front["collection"], front["record"])
+    return f"{folder}/{front['id']}.md"
 
 
 def relink(owner_id: str) -> int:
@@ -428,38 +449,54 @@ def relink(owner_id: str) -> int:
 REMOVED_TITLE = "An item was removed by the owner"
 
 
-def versions(owner_id: str, cid: str) -> list[str]:
-    """Every version of a kept item: the current one and each earlier one it replaced."""
-    concepts = catalog(owner_id)["concepts"]
-    found = {cid}
+class Removed(LookupError):
+    """The item an update would replace has been removed by the owner."""
+
+
+def _versions_in(cat: dict, cid: str) -> set[str]:
+    """Every version of an item in this catalog: earlier ones it replaced and later ones that
+    replaced it."""
+    concepts = cat["concepts"]
+    found = {cid} if cid in concepts else set()
     while True:
-        more = {k for k, e in concepts.items() if e.get("superseded_by") in found and k not in found}
+        more = {k for k, e in concepts.items() if k not in found
+                and (e.get("superseded_by") in found or any(concepts[f].get("superseded_by") == k for f in found))}
         if not more:
-            return sorted(found)
+            return found
         found |= more
 
 
+def versions(owner_id: str, cid: str) -> list[str]:
+    """Every version of a kept item: the current one and each earlier one it replaced."""
+    return sorted(_versions_in(catalog(owner_id), cid))
+
+
 def remove(owner_id: str, cid: str) -> int:
-    """The owner removed something wrongly recorded: delete it and every earlier version from the
-    bundle, with their history files, so it never reaches the family or their assistant. The log
-    keeps one line, with no title or content. Other items' links are worked out again, so nothing
-    points at it. Returns how many versions were deleted."""
-    gone = versions(owner_id, cid)
-    paths = [catalog(owner_id)["concepts"][v]["path"] for v in gone]
-    for path in paths:
+    """The owner removed something wrongly recorded: take it and every version out of the catalog
+    first (what the family's assistant reads), then delete their files and history, so it never
+    reaches the family. Waiting update cards for it are deleted too, so it can't come back. The
+    log keeps one line, with no title or content. Returns how many versions were removed."""
+    event = {"at": _iso(time.time()), "action": "Removal", "id": new_removal_id(), "title": REMOVED_TITLE, "path": ""}
+    gone: dict[str, str] = {}
+
+    def change(cat: dict) -> None:
+        gone.clear()
+        for v in _versions_in(cat, cid):
+            gone[v] = cat["concepts"].pop(v)["path"]
+        cat["events"] = [e for e in cat.get("events", []) if e["id"] not in gone][-MAX_EVENTS + 1:] + [event]
+
+    _change_catalog(owner_id, change)
+    for path in gone.values():
         media.delete(owner_id, f"{ROOT}/{path}")
     for name in media.names(owner_id, f"{ROOT}/.events/"):
         if any(f"-{v}-" in name.rsplit("/", 1)[-1] for v in gone):
             media.delete(owner_id, name)
-    at = time.time()
-    event = _event(owner_id, at, "Removal", {"id": new_removal_id(), "title": REMOVED_TITLE}, "")
-
-    def change(cat: dict) -> None:
-        for v in gone:
-            cat["concepts"].pop(v, None)
-        cat["events"] = [e for e in cat.get("events", []) if e["id"] not in gone][-MAX_EVENTS + 1:] + [event]
-
-    _change_catalog(owner_id, change)
+    media.save(owner_id, f"{ROOT}/.events/{event['at'].replace(':', '')}-{event['id']}-removal.json",
+               json.dumps(event, ensure_ascii=False).encode(), "application/json")
+    for collection in COLLECTIONS:  # update cards still waiting for Keep
+        for draft in store.list(collection, owner_id=owner_id):
+            if draft.get("updates") in gone:
+                store.delete(collection, draft["id"])
     relink(owner_id)
     write_indexes(owner_id)
     return len(gone)
