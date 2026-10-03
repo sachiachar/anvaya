@@ -103,7 +103,7 @@ agents:
     role: Answers the family's questions from kept knowledge, citing sources
     autonomy: act_within_limits
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
-    tools: [read_bundle_index, read_concept, list_accounts]
+    tools: [search_archive, list_inventory]   # PR-7.5 replaces these with read_bundle_index and read_concept
     limits: {max_input_tokens: 60000, max_output_tokens: 1500, max_model_calls_per_run: 6, max_retries: 2}
     budget_class: family
     safety_critical: false
