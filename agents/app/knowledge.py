@@ -569,9 +569,16 @@ def rebuild(owner_id: str) -> dict:
 # ---- Reading ----------------------------------------------------------------------------------------
 
 
+# List fields a card always has; a kept item has them too (empty when there's nothing), so the
+# screens never meet a card without one. missing_fields itself stays out of the bundle: it's
+# workflow, not knowledge.
+CARD_LISTS = {"inventory": ("missing_fields",), "moments": ("people", "places", "intended_for")}
+
+
 def as_item(cid: str, entry: dict, owner_id: str) -> dict:
     """A kept concept in the shape the rest of the app uses for cards."""
-    return {**entry["record"], "id": cid, "owner_id": owner_id, "status": "approved",
+    lists = {f: [] for f in CARD_LISTS.get(entry["collection"], ()) if not entry["record"].get(f)}
+    return {**entry["record"], **lists, "id": cid, "owner_id": owner_id, "status": "approved",
             "concept": entry["path"], "okf_status": entry["graph"]["status"]}
 
 
