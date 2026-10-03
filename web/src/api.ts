@@ -1,7 +1,9 @@
 import { idToken } from "./auth";
 import type { KeyBackup } from "./vaultCrypto";
 
-export const OWNER_ID = "owner_demo_vikram";
+// The owner in the signed-in person's own demo copy (PR-1). The server decides it, at sign-in.
+let ownerId = "";
+export const currentOwnerId = () => ownerId;
 
 export type Autonomy = "assist" | "propose" | "act_within_limits";
 
@@ -131,10 +133,14 @@ const upload = (field: string, file: Blob, name = "upload"): RequestInit => {
   return { method: "POST", body: form };
 };
 
-const o = (path: string) => `/owners/${OWNER_ID}${path}`;
+const o = (path: string) => `/owners/${ownerId}${path}`;
 
 export const api = {
-  me: () => request<{ email: string | null; name: string | null; auth: boolean }>("/me"),
+  me: () =>
+    request<{ email: string | null; name: string | null; auth: boolean; owner_id: string }>("/me").then((m) => {
+      ownerId = m.owner_id;
+      return m;
+    }),
   /** Today's use against the signed-in person's daily allowance (PR-10.4). */
   allowance: () => request<Allowance>("/allowance"),
   seed: () => request<{ owner: Record<string, unknown> }>("/demo/seed", { method: "POST" }),

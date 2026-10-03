@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import pathlib
 import time
 from typing import Literal
 
@@ -19,7 +18,7 @@ from google.auth.exceptions import DefaultCredentialsError
 from google.genai import errors as genai_errors
 from pydantic import BaseModel, ValidationError
 
-from . import auth, escrow, live, loops, media, proposals, release, speech, tasks
+from . import auth, demo, escrow, live, loops, media, proposals, release, speech, tasks
 from .config import settings
 from .executor_agent import ask
 from .governance import core as governance_core
@@ -33,9 +32,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# Every HTTP route needs a signed-in, allowed user (when AUTH_REQUIRED=true).
-# The live-call WebSocket checks its own token (see live_call); /healthz stays open.
-api = APIRouter(prefix="/api", dependencies=[Depends(auth.require_user)])
+# Every HTTP route needs a signed-in, allowed user (when AUTH_REQUIRED=true), and works only
+# on that user's own demo copy (PR-1.6): an owner in the path must be theirs, and documents
+# looked up by ID are checked with demo.mine. The live-call WebSocket checks its own token
+# and owner (see live_call); /healthz stays open.
+api = APIRouter(prefix="/api", dependencies=[Depends(auth.require_user), Depends(demo.guard)])
 
 
 # ---- Gemini failures: readable errors instead of a bare 500 --------------------
@@ -92,20 +93,9 @@ def require_handover(owner_id: str) -> None:
 
 @api.post("/demo/seed")
 def seed_demo() -> dict:
-    """Load the synthetic demo persona. Never use real personal data in demos."""
-    path = pathlib.Path(__file__).resolve().parents[1] / "demo_data" / "persona.json"
-    data = json.loads(path.read_text())
-    owner = data["owner"]
-    for collection in ("moments", "inventory", "people", "vault_items", "cases", "legal_documents", "turns",
-                       "access_requests", "handoffs", "tasks", "loop_cache"):
-        for doc in store.list(collection, owner_id=owner["id"]):
-            store.delete(collection, doc["id"])
-    store.put("owners", {**owner, "readiness_score": None})
-    for m in data["moments"]:
-        store.put("moments", {**m, "owner_id": owner["id"], "status": "approved"})
-    for item in data["inventory"]:
-        store.put("inventory", {**item, "owner_id": owner["id"], "status": "approved"})
-    return {"owner": owner}
+    """Reset the caller's own demo copy to the synthetic persona (PR-1.5). Never touches another
+    copy. Never use real personal data in demos."""
+    return {"owner": demo.reset()}
 
 
 @api.get("/owners/{owner_id}")
@@ -212,10 +202,12 @@ async def live_call(ws: WebSocket, owner_id: str, token: str | None = None) -> N
             await ws.close(code=4401 if e.status_code == 401 else 4403, reason=e.detail[:120])
             return
         governance_core.set_current_user(governance_core.user_key(user.uid))
+        demo.begin(user.uid)
     else:
-        governance_core.set_current_user(governance_core.user_key("local"))
+        governance_core.set_current_user(governance_core.user_key(demo.LOCAL))
+        demo.begin(demo.LOCAL)
     owner = store.get("owners", owner_id)
-    if not owner:
+    if not owner or owner_id != demo.owner_id():  # only the caller's own copy
         await ws.close(code=4404)
         return
     await live.call(ws, owner, _expand)
@@ -233,7 +225,7 @@ async def speech_audio(body: Speech) -> Response:
     saved and reused for the same words, so replaying a reply, or a reply that repeats
     earlier words, costs nothing.
     """
-    turn = store.get("turns", body.turn_id)
+    turn = demo.mine("turns", body.turn_id)
     if not turn or turn.get("role") != "assistant" or not (turn.get("text") or "").strip():
         raise HTTPException(404, "reply not found")
     key = hashlib.sha256(f"{settings.tts_voice}:{turn['text']}".encode()).hexdigest()[:32]
@@ -288,7 +280,7 @@ class Decision(BaseModel):
 
 @api.post("/proposals/{doc_id}/decision")
 def decide(doc_id: str, body: Decision) -> dict:
-    doc = store.get(body.collection, doc_id)
+    doc = demo.mine(body.collection, doc_id)
     if not doc or doc["status"] != "pending":
         raise HTTPException(404, "no pending proposal with that id")
     if body.decision == "reject":
@@ -373,7 +365,7 @@ class TaskUpdate(BaseModel):
 
 @api.post("/tasks/{task_id}")
 def update_task(task_id: str, body: TaskUpdate) -> dict:
-    if not store.get("tasks", task_id):
+    if not demo.mine("tasks", task_id):
         raise HTTPException(404, "task not found")
     return store.update("tasks", task_id, {"status": body.status, "closed_at": time.time()})
 
@@ -604,7 +596,7 @@ async def submit_authority(owner_id: str, proof: UploadFile = File(...)) -> dict
 
 @api.get("/admin/cases")
 def list_cases() -> dict:
-    cases = [release.refresh(c) for c in store.list("cases")]
+    cases = [release.refresh(c) for c in store.list("cases", owner_id=demo.owner_id())]
     for c in cases:
         store.put("cases", c)
     return {"cases": cases}
@@ -635,7 +627,7 @@ def owner_alive(owner_id: str) -> dict:
 
 
 def _transition(case_id: str, step) -> dict:
-    case = store.get("cases", case_id)
+    case = demo.mine("cases", case_id)
     if not case:
         raise HTTPException(404, "case not found")
     try:
@@ -711,8 +703,10 @@ class AccessRequest(BaseModel):
 
 @api.post("/owners/{owner_id}/access-requests")
 def request_access(owner_id: str, body: AccessRequest) -> dict:
-    owner = store.get("owners", owner_id)
-    if owner:  # same reply either way, so a stranger learns nothing about who uses the service
+    # Same reply either way, so a stranger learns nothing about who uses the service. In the demo
+    # a request is kept only for the caller's own copy (PR-1.6).
+    owner = store.get("owners", owner_id) if owner_id == demo.owner_id() else None
+    if owner:
         after_death = open_case(owner_id) is not None
         store.put("access_requests", {
             "id": new_id("req"), "owner_id": owner_id, "at": time.time(), **body.model_dump(),
@@ -730,7 +724,7 @@ def owner_access_requests(owner_id: str) -> dict:
 
 @api.get("/admin/access-requests")
 def team_access_requests() -> dict:
-    return {"requests": store.list("access_requests", status="pending_review")}
+    return {"requests": store.list("access_requests", owner_id=demo.owner_id(), status="pending_review")}
 
 
 class AccessDecision(BaseModel):
@@ -740,7 +734,7 @@ class AccessDecision(BaseModel):
 
 @api.post("/access-requests/{request_id}/decision")
 def decide_access(request_id: str, body: AccessDecision) -> dict:
-    req = store.get("access_requests", request_id)
+    req = demo.mine("access_requests", request_id)
     expected = {"owner": "pending_owner", "team": "pending_review"}[body.decided_by]
     if not req or req["status"] != expected:
         raise HTTPException(404, "no request waiting for this decision")
@@ -767,10 +761,11 @@ def my_allowance() -> dict:
 
 @api.get("/me")
 def me(request: Request) -> dict:
-    """Who is signed in (the app calls this to check the allowlist right after sign-in)."""
+    """Who is signed in, and the owner in their own demo copy (the app calls this right after
+    sign-in, which also creates the copy on first use)."""
     user = getattr(request.state, "user", None)
     return {"email": user.email if user else None, "name": user.name if user else None,
-            "auth": settings.auth_required}
+            "auth": settings.auth_required, "owner_id": demo.owner_id()}
 
 
 api.include_router(portal.router)

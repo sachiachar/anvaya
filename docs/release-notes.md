@@ -13,6 +13,7 @@
 - Readiness, legal needs and the claims checklist are worked out again only when the owner's information has changed; otherwise the last result comes back straight away.
 
 **Access**
+- Each person who signs in gets their own private copy of the demo. Nobody else can see or change it, and "Reset my demo" restores only your own copy, including its recordings.
 - The app is now called Anvaya, at https://anvaya-saathi.web.app, with a new logo, icons and navy theme. The old address redirects there.
 
 **Governance and the admin portal**
@@ -47,7 +48,7 @@
 - A business model with costs and margins, a brand guide, a proposal for governing the agents, and the guardian layer and storage design in the architecture document.
 
 ### Known limitations
-- No per-role permissions in the app yet; one signed-in browser plays every role in the demo. Anyone signed in can see the demo family's data until private demos per person arrive. The admin portal has its own roles.
+- No per-role permissions inside a demo copy yet; one signed-in browser plays every role in its own copy. Switching between people with their own identities comes next. The admin portal has its own roles.
 - No notifications (push, SMS, email); the owner sees alerts only inside the app.
 - The legal partner is mocked.
 - Live calls end after about 15 minutes (Gemini Live limit), and spoken replies can't be rule-checked like typed ones.
@@ -57,7 +58,7 @@
 - Spend can't yet be split by agent or tenant on the bill; those show use instead.
 
 ### Next
-A private demo for each judge · guardian checks at every step · a claim file and bank view · accounts checked at the source · kept knowledge with gentle questions about what's missing · measured AI quality.
+Switching between the people in your demo · guardian checks at every step · a claim file and bank view · accounts checked at the source · kept knowledge with gentle questions about what's missing · measured AI quality.
 
 ## Prototype 0.1 · 28 September 2026 (AI Builder Cup 2026)
 
