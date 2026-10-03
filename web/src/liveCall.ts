@@ -95,7 +95,7 @@ export class LiveCall {
 
   private cleanup() {
     this.stopPlayback();
-    this.stream?.getTracks().forEach((t) => t.stop());
+    this.stream?.getTracks().forEach((t) => { t.stop(); });
     this.micCtx?.close().catch(() => {});
     this.speakerCtx?.close().catch(() => {});
     this.stream = null;

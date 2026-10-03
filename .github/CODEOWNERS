@@ -1,11 +1,11 @@
-# Who must review changes. The last matching line wins.
-# To make this required, turn on "Require review from Code Owners" for main
-# (Settings → Rules → Rulesets, or Settings → Branches).
+# These paths need the owner's review: deploys, access, security, governance and
+# the rules agents follow. Everything else can be reviewed by any collaborator.
+# The last matching line wins.
+#
+# If you make code-owner review required (Settings → Rules → Rulesets), add the
+# owner to the ruleset's bypass list too: GitHub doesn't let you approve your own
+# pull request, so otherwise the owner's own changes to these paths can't merge.
 
-# Everything
-*                               @sachiachar
-
-# Areas the PR template marks as needing an owner's review
 /agents/app/governance/         @sachiachar
 /agents/registry.yaml           @sachiachar
 /agents/app/release.py          @sachiachar
@@ -20,3 +20,5 @@
 /.github/                       @sachiachar
 /.claude/                       @sachiachar
 /.githooks/                     @sachiachar
+/AGENTS.md                      @sachiachar
+/CLAUDE.md                      @sachiachar

@@ -175,7 +175,7 @@ export default function Conversation() {
       {error && <p className="error" role="alert">{error}</p>}
 
       {inCall ? (
-        <div className="composer call-panel" role="region" aria-label="Live conversation">
+        <section className="composer call-panel" aria-label="Live conversation">
           <div className={`call-orb ${callState}`} aria-hidden="true" />
           <p className="call-status">
             {callState === "connecting" ? "Connecting…"
@@ -183,7 +183,7 @@ export default function Conversation() {
               : "Listening… talk whenever you're ready"}
           </p>
           <button className="danger end-call" onClick={endCall}>End</button>
-        </div>
+        </section>
       ) : (
         <div className="composer">
           <label className={`icon-btn${thinking ? " disabled" : ""}`} title="Share a photo" aria-label="Share a photo">

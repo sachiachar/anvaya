@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    "includes": ["src/**/*.ts", "src/**/*.tsx"]
+  },
+  "formatter": { "enabled": false },
+  "assist": { "enabled": false },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "a11y": {
+        "useButtonType": "off" // no <form> in the app, so the default type never submits anything
+      },
+      "correctness": {
+        "useExhaustiveDependencies": "off" // effects deliberately run on mount or on new turns only
+      },
+      "suspicious": {
+        "noArrayIndexKey": "off" // lists are append-only or replaced whole, never reordered
+      },
+      "style": {
+        "noNonNullAssertion": "off" // style only; tsc checks types
+      }
+    }
+  }
+}
