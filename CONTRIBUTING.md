@@ -4,8 +4,8 @@ This is how we work together on GitHub, with or without a coding agent. The rule
 
 ## Set up
 
-- **API** (`agents/`): Python 3.12+ and [uv](https://docs.astral.sh/uv/). Run `cd agents && uv sync --group dev`.
-- **Web app and admin portal** (`web/`): Node 20.19+ (CI uses 22). Run `cd web && npm ci`.
+- **API** (`agents/`): Python 3.14 (`agents/.python-version`) and [uv](https://docs.astral.sh/uv/). Run `cd agents && uv sync --group dev`.
+- **Web app and admin portal** (`web/`): Node 24 LTS (`web/.nvmrc`). Run `cd web && npm ci`.
 - **Git hooks**, once per clone: `git config core.hooksPath .githooks`. They stop commits and pushes on `main`, for people and agents alike.
 
 Then follow "Run it locally" in the [README](README.md).
@@ -55,6 +55,7 @@ Any agent is fine (Claude Code, Codex, Cursor, Copilot, Gemini CLI). You're resp
 - **Read the whole diff before you commit.** Watch for code the agent deleted or "simplified", tests that were weakened to pass, new dependencies, and changes to files you didn't ask about.
 - **Say what the agent did** in the PR description, and add a `Co-Authored-By:` trailer when it wrote a substantial part.
 - **Don't paste secrets or real personal data** into an agent: no `.env` contents, no keys, no real family or account details. The demo data is synthetic, so keep it that way.
+- **Use the latest stable versions.** The rules are in AGENTS.md ("Dependencies and versions"), and the inventory is [docs/dependencies.md](docs/dependencies.md).
 - **Agents never deploy** or change cloud resources and GitHub settings. A person does that.
 
 ## Reviewing

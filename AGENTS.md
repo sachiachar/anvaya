@@ -8,7 +8,7 @@ Anvaya is an app with an AI companion, Saathi, for capturing a person's stories,
 
 | Area | Path |
 | --- | --- |
-| API, loops, live call (Python 3.12, FastAPI, Gemini) | `agents/app/` |
+| API, loops, live call (Python 3.14, FastAPI, Gemini) | `agents/app/` |
 | Governance layer: registry, gateway checks, ledger, guardian events, roles, audit, admin API | `agents/app/governance/`, `agents/registry.yaml` |
 | Customer web app (React 19, TypeScript, Vite) | `web/src/` (`index.html`) |
 | Platform admin portal | `web/src/admin/` (`admin.html`, built to `web/dist-admin/`, served as `anvaya-admin`) |
@@ -67,7 +67,28 @@ Don't run these yourself; ask the person you're working with:
 - deploying: `gcloud run deploy`, `firebase deploy`, `infra/*.sh`. Deploys happen when a person merges to `main`, or through Actions → Deploy;
 - changing GitHub settings, secrets or environments (`ALLOWED_EMAILS`, `PLATFORM_ROLES`);
 - changing cloud resources (IAM, KMS, buckets, Firestore data);
-- adding a dependency: say why in the PR, and commit the lockfile (`agents/uv.lock`, `web/package-lock.json`).
+- adding a new dependency or Google service: ask first, then follow "Dependencies and versions" below.
+
+## Dependencies and versions
+
+Use the **latest stable release** of every library, runtime, tool, container image and GitHub Action. Check the registry, not your memory: what you learned in training is out of date.
+
+```bash
+cd agents && uv pip list --outdated            # Python; or: uv tree --outdated --depth 1
+cd web && npm outdated && npm audit            # npm
+gh api repos/<owner>/<action>/releases/latest --jq .tag_name   # a GitHub Action
+```
+
+- **Stable only.** Don't use pre-releases (alpha, beta, rc, preview, `next`, `canary`) or runtimes past their end of life.
+- **Runtimes are pinned in one place each.** Python is in `agents/.python-version` (also `requires-python` and the Dockerfile). Node is in `web/.nvmrc`, the current Active LTS (also `engines`; workflows read the file). Move them only to a newer stable or LTS release, in every place at once. A test checks that they agree.
+- **Pin what you ship.** Commit the lockfiles (`agents/uv.lock`, `web/package-lock.json`). Pin container images to a version, never `latest`. Use GitHub Actions at their latest major tag.
+- **Set version floors to what you tested.** In `pyproject.toml`, use `>=` the locked version. In `package.json`, use `^` the installed version.
+- **Read the release notes before a major upgrade.** List the breaking changes that apply in the PR, or say that none do. Then run every check.
+- **When you can't use the latest version,** because another package caps it, don't force it or add an override. Record the package and what holds it back in [docs/dependencies.md](docs/dependencies.md).
+- **Use permissive licences only:** MIT, Apache-2.0, BSD, ISC, PSF or 0BSD. For an "A OR B" licence, every option must be on that list. Ask before adding anything else. Weak copyleft (MPL) needs a reviewed exception in `agents/tests/test_dependencies.py`; strong copyleft (GPL, AGPL, LGPL) and unknown licences are not allowed.
+- **Import only what you declare.** If code imports a package directly, list it as a direct dependency, even if something else already installs it.
+- **Keep [docs/dependencies.md](docs/dependencies.md) current in the same PR.** It records each library's version, licence and purpose, and each Google service and what it's for. A test fails if a direct dependency is missing from it, or if any installed package has a licence that isn't allowed.
+- **Leave Dependabot's PRs to people.** They arrive weekly. Don't open your own PRs for the same upgrades.
 
 ## Files that need the owner's review
 
