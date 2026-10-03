@@ -112,7 +112,7 @@ def test_portal_never_returns_conversation_text_or_names(client):
 
 
 def test_small_counts_are_hidden(client):
-    tenants = client.get("/api/platform/overview", headers=h("admin")).json()["by_tenant"]
+    tenants = client.get("/api/platform/overview", headers=h("admin")).json()["usage"]["by_tenant"]
     for t in tenants.values():
         assert t["active_users_today"] is None or t["active_users_today"] >= core.SMALL_COUNT
     assert core.small(4) is None and core.small(5) == 5
@@ -155,15 +155,16 @@ def test_generate_json_names_its_agent_and_records_usage(client, monkeypatch):
     asyncio.run(gemini.generate_json(model="gemini-3.1-flash-lite", schema=DocumentCheck, prompt="p",
                                      agent="activation.checker"))
     row = store.get("usage_days", day)["agents"]["activation.checker"]
-    assert row["calls"] == calls_before + 1 and row["tokens_in"] >= 1000 and row["cost_usd"] > 0
+    assert row["calls"] == calls_before + 1 and row["tokens_in"] >= 1000 and "cost_usd" not in row
 
 
-def test_portal_reports_in_us_dollars_and_reseeds_old_rupee_data(client):
+def test_portal_shows_usage_not_estimates_and_reseeds_old_cost_data(client):
     from app.governance import seed as seeding
 
     o = client.get("/api/platform/overview", headers=h("admin")).json()
-    assert o["currency"] == "USD" and o["budget_usd"] == settings.monthly_budget_usd
-    assert 0 < o["month_to_date_usd"] < o["budget_usd"]  # dollars, not rupees
-    store.update("platform_settings", "settings", {"data_version": 1})  # data written in rupees
+    assert o["spend"]["available"] is False  # no billing export in tests: no guessing
+    assert o["usage"]["by_agent"]["saathi.chat"]["calls"] > 0
+    assert "usd" not in str(o["usage"]).lower()
+    store.update("platform_settings", "settings", {"data_version": 2})  # data with estimated costs
     seeding.ensure_seeded()
     assert core.platform_settings()["data_version"] == seeding.DATA_VERSION

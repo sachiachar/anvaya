@@ -7,16 +7,14 @@ anyone's name: users appear as hashed keys, and counts under 5 are hidden.
 
 from __future__ import annotations
 
-import calendar
 import time
-from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from ..config import settings
 from ..store import store
+from . import billing
 from .core import Actor, actor, audit, need, platform_settings, registry, small
 from .seed import TENANTS, ensure_seeded, seed
 
@@ -27,40 +25,36 @@ def _days(n: int = 30) -> list[dict]:
     return sorted(store.list("usage_days"), key=lambda d: d["day"])[-n:]
 
 
+def _use(rows: list[dict]) -> dict:
+    return {"calls": sum(r.get("calls", 0) for r in rows),
+            "tokens": sum(r.get("tokens", r.get("tokens_in", 0) + r.get("tokens_out", 0)) for r in rows),
+            "minutes": round(sum(r.get("minutes", 0.0) for r in rows), 1)}
+
+
+def _by(days: list[dict], key: str) -> dict[str, dict]:
+    names = {k for d in days for k in d.get(key, {})}
+    out = {k: _use([d[key][k] for d in days if k in d.get(key, {})]) for k in names}
+    return dict(sorted(out.items(), key=lambda kv: (-kv[1]["tokens"], -kv[1]["minutes"], kv[0])))
+
+
 def overview() -> dict:
+    """Actual spend from Google Cloud billing; usage (not dollars) per agent, model and tenant."""
     days = _days()
-    today = datetime.now(timezone.utc)
-    month = today.strftime("%Y-%m")
-    month_days = [d for d in days if d["day"].startswith(month)]
-    mtd = sum(a.get("cost_usd", 0.0) for d in month_days for a in d["agents"].values())
-    days_in_month = calendar.monthrange(today.year, today.month)[1]
-    forecast = mtd / max(len(month_days), 1) * days_in_month
-
-    def total(key: str) -> dict[str, float]:
-        out: dict[str, float] = {}
-        for d in days:
-            for k, v in d[key].items():
-                out[k] = out.get(k, 0.0) + (v.get("cost_usd", 0.0) if isinstance(v, dict) else v)
-        return {k: round(v, 2) for k, v in sorted(out.items(), key=lambda kv: -kv[1])}
-
     tenants = {}
     for t in TENANTS:
         latest = next((d["tenants"][t] for d in reversed(days) if t in d["tenants"]), {"active_users": 0})
-        tenants[t] = {"cost_usd_30d": round(sum(d["tenants"].get(t, {}).get("cost_usd", 0) for d in days), 2),
+        tenants[t] = {**_use([d["tenants"][t] for d in days if t in d["tenants"]]),
                       "active_users_today": small(latest.get("active_users", 0))}
     s = platform_settings()
     return {
         "seeded": bool(s.get("seeded_at")),
-        "currency": "USD",
-        "budget_usd": settings.monthly_budget_usd,
-        "month_to_date_usd": round(mtd, 2),
-        "forecast_usd": round(forecast, 2),
-        "days_counted": len(month_days),
-        "daily": [{"day": d["day"], "cost_usd": round(sum(a.get("cost_usd", 0.0) for a in d["agents"].values()), 2)}
-                  for d in days],
-        "by_agent": total("agents"),
-        "by_model": total("models"),
-        "by_tenant": tenants,
+        "spend": billing.spend(),
+        "usage": {
+            "daily": [{"day": d["day"], **_use(list(d["agents"].values()))} for d in days],
+            "by_agent": _by(days, "agents"),
+            "by_model": _by(days, "model_use"),
+            "by_tenant": tenants,
+        },
         "kill_switch": s.get("kill_switch", "off"),
         "quota": s.get("quota"),
         "pending_approvals": len(store.list("budget_requests", status="pending")),
@@ -81,7 +75,6 @@ def agents_view() -> list[dict]:
             "tokens_in": sum(r["tokens_in"] for r in rows),
             "tokens_out": sum(r["tokens_out"] for r in rows),
             "minutes": round(sum(r["minutes"] for r in rows), 1),
-            "cost_usd": round(sum(r.get("cost_usd", 0.0) for r in rows), 2),
             "error_rate": round(sum(r["errors"] for r in rows) / calls, 4) if calls else 0.0,
             "blocked": sum(1 for b in blocked if b["agent"] == a["id"]),
         }})

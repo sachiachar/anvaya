@@ -120,25 +120,6 @@ def platform_settings() -> dict:
     return store.get("platform_settings", "settings") or {}
 
 
-# ---- Prices ------------------------------------------------------------------
-
-# Model prices in US dollars, as Google publishes them (Gemini API pricing): per million
-# tokens in and out, or per minute of live audio. A dated, versioned price file replaces
-# this table in #44 (F-10.1).
-PRICE = {
-    "gemini-3.1-flash-lite": (0.25, 1.50),
-    "gemini-3.5-flash-lite": (0.25, 1.50),
-    "gemini-3.8-flash": (0.75, 3.75),
-    "gemini-3.8-flash-lite-tts": (0.50, 6.00),
-}
-LIVE_USD_PER_MINUTE = 0.03
-
-
-def cost_usd(model: str, tokens_in: int, tokens_out: int) -> float:
-    p_in, p_out = PRICE.get(model, PRICE["gemini-3.1-flash-lite"])
-    return tokens_in / 1e6 * p_in + tokens_out / 1e6 * p_out
-
-
 # ---- Gateway checks ------------------------------------------------------------
 
 
@@ -316,18 +297,20 @@ def _today() -> str:
 
 
 def record_usage(agent: str, model: str, tenant: str, *, tokens_in: int = 0, tokens_out: int = 0,
-                 minutes: float = 0.0, cost_usd: float = 0.0, error: bool = False) -> None:
+                 minutes: float = 0.0, error: bool = False) -> None:
     """Add one model call to today's ledger (the gateway calls this after every call).
 
     An atomic increment, so calls that finish at the same time (on several server instances)
-    never overwrite each other's counts in the portal's spend figures.
+    never overwrite each other's counts in the portal's usage figures. Dollars come only
+    from Google Cloud billing (billing.py), never from the ledger.
     """
     day_id = _today()
     store.increment("usage_days", day_id, {
         "agents": {agent: {"calls": 1, "tokens_in": tokens_in, "tokens_out": tokens_out, "minutes": minutes,
-                           "cost_usd": cost_usd, "errors": int(error)}},
-        "models": {model: cost_usd},
-        "tenants": {tenant: {"cost_usd": cost_usd}},
+                           "errors": int(error)}},
+        # "model_use", not "models": older days hold a dollar figure per model there.
+        "model_use": {model: {"calls": 1, "tokens": tokens_in + tokens_out, "minutes": minutes}},
+        "tenants": {tenant: {"calls": 1, "tokens": tokens_in + tokens_out, "minutes": minutes}},
     }, {"day": day_id})
     if not error:
         count_for_user(agent, tokens=tokens_in + tokens_out, minutes=minutes)

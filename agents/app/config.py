@@ -56,10 +56,14 @@ class Settings:
         k.strip().lower(): v.strip() for k, v in (
             e.split(":", 1) for e in os.getenv("PLATFORM_ROLES", "").split(",") if ":" in e)})
     platform_default_role: str = os.getenv("PLATFORM_DEFAULT_ROLE", "viewer")
-    # Monthly model budget the portal compares spend against (US dollars), and the salt used
+    # Monthly budget the portal compares actual spend against (US dollars), and the salt used
     # to turn user IDs into keys the portal can show without naming anyone.
     monthly_budget_usd: float = float(os.getenv("MONTHLY_BUDGET_USD", "300"))
     user_key_salt: str = os.getenv("USER_KEY_SALT", "anvaya-demo")
+    # Cloud Billing export to BigQuery, the only source of the portal's dollar figures:
+    # project.dataset (the detailed usage cost table is found there) or project.dataset.table.
+    # Empty means the portal says billing data isn't available yet.
+    billing_export_table: str = os.getenv("BILLING_EXPORT_TABLE", "")
 
     # Comma-separated origins allowed to call the API directly (local dev only;
     # in production Firebase Hosting proxies /api to Cloud Run on the same origin).

@@ -11,10 +11,11 @@ import time
 from datetime import datetime, timezone
 
 from ..store import new_id, store
-from .core import LIVE_USD_PER_MINUTE, PRICE, platform_settings, registry, user_key
+from .core import platform_settings, registry, user_key
 
-# Version of the seeded data's format; version 2 keeps all costs in US dollars.
-DATA_VERSION = 2
+# Version of the seeded data's format. Version 3 holds usage only: dollars come from
+# Google Cloud billing (billing.py) and are never seeded.
+DATA_VERSION = 3
 # Demo tenants and their number of users.
 TENANTS = {"direct": 20, "demo-bank": 18, "judges": 8}
 # Typical daily calls per active user, and tokens per call (in, out).
@@ -45,12 +46,12 @@ def seed(now: float | None = None) -> None:
 
     for back in range(29, -1, -1):
         ts = now - back * 86400
-        day = {"id": _day(ts), "day": _day(ts), "seeded": True, "agents": {}, "tenants": {}, "models": {}}
+        day = {"id": _day(ts), "day": _day(ts), "seeded": True, "agents": {}, "tenants": {}, "model_use": {}}
         for tenant, keys in users.items():
             active = max(0, int(len(keys) * rng.uniform(0.35, 0.7)))
             if tenant == "judges" and back > 10:
                 active = 0  # judges arrive in the last ten days
-            tenant_cost = 0.0
+            tenant_use = {"calls": 0, "tokens": 0, "minutes": 0.0}
             for agent_id, (per_user, tin, tout) in USE.items():
                 a = agents[agent_id]
                 expected = active * per_user * rng.uniform(0.6, 1.4)
@@ -59,29 +60,31 @@ def seed(now: float | None = None) -> None:
                     continue
                 model = a["models"]["primary"]
                 row = day["agents"].setdefault(agent_id, {"calls": 0, "tokens_in": 0, "tokens_out": 0,
-                                                          "minutes": 0.0, "cost_usd": 0.0, "errors": 0})
+                                                          "minutes": 0.0, "errors": 0})
+                minutes, tokens = 0.0, 0
                 if agent_id == "saathi.voice":
-                    minutes = calls * rng.uniform(4, 11)
-                    cost = minutes * LIVE_USD_PER_MINUTE
+                    minutes = round(calls * rng.uniform(4, 11), 1)
                     row["minutes"] = round(row["minutes"] + minutes, 1)
                 else:
-                    t_in, t_out = calls * tin, calls * tout
-                    p_in, p_out = PRICE.get(model, PRICE["gemini-3.1-flash-lite"])
-                    cost = t_in / 1e6 * p_in + t_out / 1e6 * p_out
-                    row["tokens_in"] += t_in
-                    row["tokens_out"] += t_out
+                    row["tokens_in"] += calls * tin
+                    row["tokens_out"] += calls * tout
+                    tokens = calls * (tin + tout)
                 row["calls"] += calls
                 row["errors"] += sum(1 for _ in range(calls) if rng.random() < 0.012)
-                row["cost_usd"] = round(row["cost_usd"] + cost, 4)
-                day["models"][model] = round(day["models"].get(model, 0.0) + cost, 4)
-                tenant_cost += cost
-            day["tenants"][tenant] = {"cost_usd": round(tenant_cost, 4), "active_users": active}
+                use = day["model_use"].setdefault(model, {"calls": 0, "tokens": 0, "minutes": 0.0})
+                for u in (use, tenant_use):
+                    u["calls"] += calls
+                    u["tokens"] += tokens
+                    u["minutes"] = round(u["minutes"] + minutes, 1)
+            day["tenants"][tenant] = {**tenant_use, "active_users": active}
         if back % 7 == 3:  # the weekly fraud research and dreaming runs
             for agent_id in ("fraud.researcher", "fraud.dreamer"):
-                cost = rng.uniform(0.2, 0.45)
-                day["agents"][agent_id] = {"calls": rng.randint(8, 16), "tokens_in": 0, "tokens_out": 0,
-                                           "minutes": 0.0, "cost_usd": round(cost, 4), "errors": 0}
-                day["models"]["gemini-3.8-flash"] = round(day["models"].get("gemini-3.8-flash", 0) + cost, 2)
+                calls, t_in, t_out = rng.randint(8, 16), rng.randint(60_000, 120_000), rng.randint(8_000, 16_000)
+                day["agents"][agent_id] = {"calls": calls, "tokens_in": t_in, "tokens_out": t_out,
+                                           "minutes": 0.0, "errors": 0}
+                use = day["model_use"].setdefault("gemini-3.8-flash", {"calls": 0, "tokens": 0, "minutes": 0.0})
+                use["calls"] += calls
+                use["tokens"] += t_in + t_out
         store.put("usage_days", day)
 
     blocked = [
@@ -178,7 +181,7 @@ def seed(now: float | None = None) -> None:
 
 
 def ensure_seeded() -> None:
-    """Seed on first use, and re-seed data written in an older format (version 1 was in rupees)."""
+    """Seed on first use, and re-seed data written in an older format (versions 1 and 2 held estimated costs)."""
     if platform_settings().get("data_version") != DATA_VERSION:
         seed()
 

@@ -132,7 +132,8 @@ flowchart LR
 | **Governance** | A Guardian page shows every intervention with its reason. People confirm or reverse each one, and the decision is logged. It also shows false-alarm rates, reviewer pattern analytics, and the dreaming agent's safeguard coverage map. |
 
 **How it's built** (`agents/app/governance/`, one layer shared by the gateway, the guardian and the portal):
-- `core.py`: the registry, roles and permissions, the audit log, the gateway's `check_call` (registry and kill switch), `record_usage` (daily ledger with tokens and cost), `record_blocked` and `record_intervention`;
+- `core.py`: the registry, roles and permissions, the audit log, the gateway's `check_call` (registry and kill switch), `record_usage` (daily ledger with calls, tokens and minutes; never dollars), `record_blocked` and `record_intervention`;
+- `billing.py`: actual spend from the Cloud Billing export to BigQuery (PR-10.9), the only source of dollar figures. Cached for an hour, up to yesterday; the portal says "not available yet" rather than estimating;
 - `portal.py`: the platform admin portal API under `/api/platform` (PR-12), with roles checked on the server;
 - `seed.py`: clearly labelled seeded data until real events accumulate.
 

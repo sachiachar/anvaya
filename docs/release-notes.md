@@ -17,8 +17,9 @@
 
 **Governance and the admin portal**
 - A separate platform admin portal for the Anvaya team, at https://anvaya-admin.web.app. It shows:
-  - spend against the monthly budget, with a forecast, in US dollars;
-  - spend by agent, model and tenant;
+  - actual spend against the monthly budget, with a forecast, in US dollars, read from Google Cloud billing (up to yesterday);
+  - spend by Google Cloud service and the largest items on the bill;
+  - use by agent, model and tenant (calls, tokens and voice minutes);
   - the register of agents, with each one's role, allowed models and tools, and use;
   - calls that were refused;
   - budget requests to approve or reject;
@@ -28,7 +29,7 @@
   - an audit log of every decision.
 - Roles in the portal (platform admin, budget approver, risk reviewer, viewer) are checked on the server. Anyone else who signs in can only view.
 - The portal never shows conversation text or names. People appear as anonymous keys, and counts under 5 are hidden.
-- Every call to Gemini is checked against the register of agents: the agent must be registered and the model allowed. Refused calls are recorded, and each call's tokens and cost are counted.
+- Every call to Gemini is checked against the register of agents: the agent must be registered and the model allowed. Refused calls are recorded, and each call's tokens are counted.
 - A kill switch in the portal pauses voice and spoken replies first, then everything except certificate checks and the guardian.
 - Limits for each agent:
   - oversized requests are refused before anything is spent;
@@ -51,7 +52,8 @@
 - The legal partner is mocked.
 - Live calls end after about 15 minutes (Gemini Live limit), and spoken replies can't be rule-checked like typed ones.
 - Free-tier Gemini keys run out quickly; turn on billing for demos.
-- The admin portal shows clearly labelled sample data until enough real use is recorded. Its costs are estimates from published prices.
+- The admin portal shows clearly labelled sample usage until enough real use is recorded. Spend appears only once Google Cloud billing has data; until then the portal says it isn't available yet.
+- Spend can't yet be split by agent or tenant on the bill; those show use instead.
 
 ### Next
 A private demo for each judge · guardian checks at every step · a claim file and bank view · accounts checked at the source · kept knowledge with gentle questions about what's missing · measured AI quality.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   fmt, platform, type Agent, type AuditEntry, type Blocked, type BudgetRequest, type DemoCopy, type GuardianEvent,
-  type Guide, type KillSwitchState, type Me, type Overview, type Permission, type Scenario,
+  type Guide, type KillSwitchState, type Me, type Permission, type Scenario, type Spend, type Use,
 } from "./api";
 
 // ---- Shared pieces --------------------------------------------------------------
@@ -25,7 +25,7 @@ function Loading({ error }: { error: string | null }) {
 function SeededNote() {
   return (
     <p className="pa-note">
-      Seeded demo data, clearly synthetic. Real usage appears here as the agent gateway and the guardian record it.
+      Seeded demo data, clearly synthetic. Real usage appears here as the agent gateway and the guardian record it. Spend is never seeded: it comes only from Google Cloud billing.
     </p>
   );
 }
@@ -95,7 +95,7 @@ function Bar({ value, max, label }: { value: number; max: number; label: string 
   );
 }
 
-function DailyChart({ daily, budgetPerDay }: { daily: Overview["daily"]; budgetPerDay: number }) {
+function DailyChart({ daily, budgetPerDay }: { daily: { day: string; cost_usd: number }[]; budgetPerDay: number }) {
   const max = Math.max(budgetPerDay * 1.2, ...daily.map((d) => d.cost_usd));
   const w = 720, h = 180, gap = 4;
   const bw = (w - gap * (daily.length - 1)) / daily.length;
@@ -104,7 +104,7 @@ function DailyChart({ daily, budgetPerDay }: { daily: Overview["daily"]; budgetP
   return (
     <figure className="pa-chart">
       <svg viewBox={`0 0 ${w} ${h + 24}`} role="img"
-        aria-label={`Daily model spend for the last ${daily.length} days, ${fmt.usd(total)} in total, against a daily budget of ${fmt.usd(budgetPerDay)}.`}>
+        aria-label={`Daily spend from Google Cloud billing for the last ${daily.length} days, ${fmt.usd(total)} in total, against a daily budget of ${fmt.usd(budgetPerDay)}.`}>
         {daily.map((d, i) => (
           <rect key={d.day} x={i * (bw + gap)} y={y(d.cost_usd)} width={bw} height={h - y(d.cost_usd)}
             className={d.cost_usd > budgetPerDay ? "over" : "under"} rx={2}>
@@ -127,29 +127,81 @@ const KILL_LABELS: Record<KillSwitchState, string> = {
   all_paused: "All non-safety agents paused",
 };
 
+function describeUse(u: Use) {
+  return [`${fmt.num(u.calls)} calls`, u.tokens ? `${fmt.num(u.tokens)} tokens` : "", u.minutes ? `${fmt.num(u.minutes)} min` : ""]
+    .filter(Boolean).join(", ");
+}
+
+function SpendSection({ spend }: { spend: Spend }) {
+  if (!spend.available) {
+    return (
+      <Section title="Actual spend, from Google Cloud billing">
+        <p><strong>Billing data not available yet.</strong> {spend.message}</p>
+        <p className="pa-muted">The portal never estimates costs. Usage below is counted by the agent gateway.</p>
+      </Section>
+    );
+  }
+  return (
+    <>
+      <Section title="Actual spend, from Google Cloud billing">
+        <p className="pa-muted">Up to {spend.through}; Google's billing export runs about a day behind, so the latest day may still be filling up. Checked {fmt.when(spend.fetched_at)}.</p>
+        <DailyChart daily={spend.daily} budgetPerDay={spend.budget_usd / 30} />
+      </Section>
+      <div className="pa-grid2">
+        <Section title={`Spend by service, last ${spend.daily.length} days`}>
+          <table>
+            <thead><tr><th>Service</th><th className="num">Spend</th></tr></thead>
+            <tbody>{Object.entries(spend.by_service).map(([s, c]) => <tr key={s}><td>{s}</td><td className="num">{fmt.usd(c)}</td></tr>)}</tbody>
+          </table>
+        </Section>
+        <Section title="Largest items">
+          <table>
+            <thead><tr><th>Item</th><th className="num">Spend</th></tr></thead>
+            <tbody>{spend.top_skus.map((k) => (
+              <tr key={`${k.service}/${k.sku}`}><td>{k.sku}<div className="pa-muted">{k.service}</div></td><td className="num">{fmt.usd(k.cost_usd)}</td></tr>
+            ))}</tbody>
+          </table>
+        </Section>
+      </div>
+    </>
+  );
+}
+
 export function OverviewPage({ me }: { me: Me }) {
   const load = useCallback(() => platform.overview(), []);
   const { data: o, error, reload } = useLoad(load);
   const [switchTo, setSwitchTo] = useState<KillSwitchState>("off");
   if (!o) return <Loading error={error} />;
-  const used = o.month_to_date_usd / o.budget_usd;
-  const forecastPct = o.forecast_usd / o.budget_usd;
-  const agentMax = Math.max(...Object.values(o.by_agent));
+  const spend = o.spend;
+  const used = spend.available ? spend.month_to_date_usd / spend.budget_usd : 0;
+  const forecastPct = spend.available ? spend.forecast_usd / spend.budget_usd : 0;
+  const u = o.usage;
+  const agentMax = Math.max(1, ...Object.values(u.by_agent).map((a) => a.tokens));
   return (
     <>
       {o.seeded && <SeededNote />}
       <div className="pa-kpis">
-        <div className="pa-kpi">
-          <span>Spend this month</span>
-          <strong>{fmt.usd(o.month_to_date_usd)}</strong>
-          <Bar value={o.month_to_date_usd} max={o.budget_usd} label={`${fmt.pct(used)} of the monthly budget`} />
-          <em>{fmt.pct(used)} of {fmt.usd(o.budget_usd)} budget</em>
-        </div>
-        <div className="pa-kpi">
-          <span>Forecast for the month</span>
-          <strong>{fmt.usd(o.forecast_usd)}</strong>
-          <em className={forecastPct > 1 ? "pa-warn" : ""}>{forecastPct > 1 ? `Over budget by ${fmt.pct(forecastPct - 1)}` : `${fmt.pct(forecastPct)} of budget`}</em>
-        </div>
+        {spend.available ? (
+          <>
+            <div className="pa-kpi">
+              <span>Spend this month, up to {spend.through}</span>
+              <strong>{fmt.usd(spend.month_to_date_usd)}</strong>
+              <Bar value={spend.month_to_date_usd} max={spend.budget_usd} label={`${fmt.pct(used)} of the monthly budget`} />
+              <em>{fmt.pct(used)} of {fmt.usd(spend.budget_usd)} budget</em>
+            </div>
+            <div className="pa-kpi">
+              <span>Forecast for the month</span>
+              <strong>{fmt.usd(spend.forecast_usd)}</strong>
+              <em className={forecastPct > 1 ? "pa-warn" : ""}>{forecastPct > 1 ? `Over budget by ${fmt.pct(forecastPct - 1)}` : `${fmt.pct(forecastPct)} of budget`}</em>
+            </div>
+          </>
+        ) : (
+          <div className="pa-kpi">
+            <span>Spend this month</span>
+            <strong>Not available yet</strong>
+            <em>Waiting for Google Cloud billing</em>
+          </div>
+        )}
         <a className="pa-kpi" href="#/approvals"><span>Budget requests waiting</span><strong>{o.pending_approvals}</strong><em>Review in Approvals</em></a>
         <a className="pa-kpi" href="#/guardian"><span>Open interventions</span><strong>{o.open_interventions}</strong><em>Review in Guardian</em></a>
         <a className="pa-kpi" href="#/agents"><span>Blocked calls, 30 days</span><strong>{o.blocked_30d}</strong><em>Not allowed by the registry or a limit</em></a>
@@ -171,34 +223,36 @@ export function OverviewPage({ me }: { me: Me }) {
         ) : <p className="pa-muted">Only a platform admin can change the kill switch.</p>}
       </Section>
 
-      <Section title="Daily model spend, last 30 days">
-        <DailyChart daily={o.daily} budgetPerDay={o.budget_usd / 30} />
-      </Section>
+      <SpendSection spend={spend} />
 
       <div className="pa-grid2">
-        <Section title="Spend by agent, 30 days">
+        <Section title="Use by agent, 30 days">
           <ul className="pa-bars">
-            {Object.entries(o.by_agent).map(([agent, cost]) => (
+            {Object.entries(u.by_agent).map(([agent, a]) => (
               <li key={agent}>
                 <span className="pa-mono">{agent}</span>
-                <Bar value={cost} max={agentMax} label={`${agent}: ${fmt.usd(cost)}`} />
-                <span>{fmt.usd(cost)}</span>
+                <Bar value={a.tokens} max={agentMax} label={`${agent}: ${describeUse(a)}`} />
+                <span>{a.tokens ? fmt.num(a.tokens) : `${fmt.num(a.minutes)} min`}</span>
               </li>
             ))}
           </ul>
+          <p className="pa-muted">Tokens counted by the agent gateway (live calls in minutes). Dollars come only from Google Cloud billing, above.</p>
         </Section>
         <div>
-          <Section title="Spend by model, 30 days">
+          <Section title="Use by model, 30 days">
             <table>
-              <thead><tr><th>Model</th><th className="num">Spend</th></tr></thead>
-              <tbody>{Object.entries(o.by_model).map(([m, c]) => <tr key={m}><td className="pa-mono">{m}</td><td className="num">{fmt.usd(c)}</td></tr>)}</tbody>
+              <thead><tr><th>Model</th><th className="num">Calls</th><th className="num">Tokens</th></tr></thead>
+              <tbody>{Object.entries(u.by_model).map(([m, v]) => (
+                <tr key={m}><td className="pa-mono">{m}</td><td className="num">{fmt.num(v.calls)}</td>
+                  <td className="num">{v.tokens ? fmt.num(v.tokens) : `${fmt.num(v.minutes)} min`}</td></tr>
+              ))}</tbody>
             </table>
           </Section>
           <Section title="Tenants">
             <table>
-              <thead><tr><th>Tenant</th><th className="num">Spend, 30 days</th><th className="num">Active today</th></tr></thead>
-              <tbody>{Object.entries(o.by_tenant).map(([t, v]) => (
-                <tr key={t}><td>{fmt.label(t)}</td><td className="num">{fmt.usd(v.cost_usd_30d)}</td>
+              <thead><tr><th>Tenant</th><th className="num">Calls, 30 days</th><th className="num">Tokens, 30 days</th><th className="num">Active today</th></tr></thead>
+              <tbody>{Object.entries(u.by_tenant).map(([t, v]) => (
+                <tr key={t}><td>{fmt.label(t)}</td><td className="num">{fmt.num(v.calls)}</td><td className="num">{fmt.num(v.tokens)}</td>
                   <td className="num">{v.active_users_today ?? "fewer than 5"}</td></tr>
               ))}</tbody>
             </table>
@@ -233,7 +287,7 @@ export function AgentsPage() {
         <div className="pa-scroll">
           <table>
             <thead><tr><th>Agent</th><th>Role</th><th>Autonomy</th><th>Models</th><th>Tools</th><th>Pool</th>
-              <th className="num">Calls</th><th className="num">Spend</th><th className="num">Errors</th><th className="num">Blocked</th></tr></thead>
+              <th className="num">Calls</th><th className="num">Tokens</th><th className="num">Errors</th><th className="num">Blocked</th></tr></thead>
             <tbody>{data.agents.map((a: Agent) => (
               <tr key={a.id}>
                 <td className="pa-mono">{a.id}{a.safety_critical && <span className="pa-tag">Safety</span>}</td>
@@ -243,7 +297,7 @@ export function AgentsPage() {
                 <td className="pa-mono pa-nowrap">{a.tools.length ? a.tools.map((x) => <div key={x}>{x}</div>) : "none"}</td>
                 <td>{fmt.label(a.budget_class)}</td>
                 <td className="num">{fmt.num(a.usage_30d.calls)}{a.usage_30d.minutes ? ` (${fmt.num(a.usage_30d.minutes)} min)` : ""}</td>
-                <td className="num">{fmt.usd(a.usage_30d.cost_usd)}</td>
+                <td className="num">{fmt.num(a.usage_30d.tokens_in + a.usage_30d.tokens_out)}</td>
                 <td className="num">{fmt.pct(a.usage_30d.error_rate)}</td>
                 <td className="num">{a.usage_30d.blocked}</td>
               </tr>

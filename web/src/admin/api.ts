@@ -8,17 +8,35 @@ export type KillSwitchState = "off" | "optional_paused" | "all_paused";
 
 export type Me = { email: string | null; key: string; role: Role; permissions: Permission[] };
 
+export type Use = { calls: number; tokens: number; minutes: number };
+
+// Actual spend from the Cloud Billing export; never estimated.
+export type Spend =
+  | {
+      available: true;
+      source: string;
+      through: string;
+      fetched_at: number;
+      currency: "USD";
+      budget_usd: number;
+      month_to_date_usd: number;
+      forecast_usd: number;
+      days_counted: number;
+      daily: { day: string; cost_usd: number }[];
+      by_service: Record<string, number>;
+      top_skus: { service: string; sku: string; cost_usd: number }[];
+    }
+  | { available: false; reason: "not_configured" | "no_data" | "error"; message: string };
+
 export type Overview = {
   seeded: boolean;
-  currency: "USD";
-  budget_usd: number;
-  month_to_date_usd: number;
-  forecast_usd: number;
-  days_counted: number;
-  daily: { day: string; cost_usd: number }[];
-  by_agent: Record<string, number>;
-  by_model: Record<string, number>;
-  by_tenant: Record<string, { cost_usd_30d: number; active_users_today: number | null }>;
+  spend: Spend;
+  usage: {
+    daily: ({ day: string } & Use)[];
+    by_agent: Record<string, Use>;
+    by_model: Record<string, Use>;
+    by_tenant: Record<string, Use & { active_users_today: number | null }>;
+  };
   kill_switch: KillSwitchState;
   quota: { rpm_limit: number; rpm_peak: number; tpm_limit: number; tpm_peak: number } | null;
   pending_approvals: number;
@@ -35,7 +53,7 @@ export type Agent = {
   limits: Record<string, number>;
   budget_class: string;
   safety_critical: boolean;
-  usage_30d: { calls: number; tokens_in: number; tokens_out: number; minutes: number; cost_usd: number;
+  usage_30d: { calls: number; tokens_in: number; tokens_out: number; minutes: number;
     error_rate: number; blocked: number };
 };
 
