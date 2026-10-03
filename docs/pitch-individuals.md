@@ -1,6 +1,6 @@
 # Anvaya, for you and your family
 
-*Team Saathi · Revision 1, 30 September 2026 · the full picture is in [concept.md](concept.md); the pitch to banks and insurers is in [pitch-institutions.md](pitch-institutions.md)*
+*Team Saathi · Revision 2, 3 October 2026 · the full picture is in [concept.md](concept.md); the pitch to banks and insurers is in [pitch-institutions.md](pitch-institutions.md)*
 
 ---
 
@@ -33,10 +33,11 @@ No forms. No lawyer's office. Just a conversation, in your own language, wheneve
 
 - **Tap the microphone and just talk.** It feels like a phone call with an old family friend. Saathi answers out loud, in your language, and you can interrupt any time.
 - **Or type, or share a photo.** Snap your insurance policy and Saathi reads it for you.
-- **You decide what is kept.** Small cards appear as you talk: a story, a piece of advice, a bank account, a family member. You tap **Keep** or **Not now**. Nothing is saved until you say so.
+- **You decide what is kept.** Small cards appear as you talk: a story, a piece of advice, a bank account, a family member. You tap **Keep** or **Not now**. Only what you keep becomes part of what your family will one day receive.
+- **Your conversation stays private.** It's held only so Saathi can follow along, with account and card numbers hidden. It's never handed over, and you can delete it whenever you like.
 - **Keep your real voice.** For any story, you can keep the recording of you telling it, so one day your family hears it from you, not about you.
 - **Leave voice letters.** Record a message for someone special or a moment you may not be there for: *"For Priya, on her wedding day."* It stays sealed until the time comes, and reaches only the person you chose.
-- **Saathi notices what's missing.** "No nominee on this policy." "No will for the flat." You get simple next steps, each with a button.
+- **Saathi notices what's missing.** "No nominee on this policy." "No will for the flat." You get simple next steps, each with a button. And when the moment is right, Saathi gently asks about the one thing that matters most: *"Who should receive the LIC policy?"* Say "skip", and it won't ask again.
 - **Your secrets stay yours.** Passwords and account details are locked on your own phone. Nobody else can read them: not Anvaya, not your bank, not Saathi.
 - **You choose who receives them**, usually a son, daughter or spouse. They accept in their own app, and you confirm a matching code.
 
@@ -97,7 +98,8 @@ Something this precious needs watching over, not just at the end, but all along 
 
 ## Our promises to you
 
-- **You decide.** Nothing is saved until you tap Keep, and nothing is shared with a partner until you agree.
+- **You decide.** Only what you keep reaches your family, and nothing is shared with a partner until you agree. You can delete your conversation at any time.
+- **Yours to take with you.** What you keep is stored in an open, standard format, so it never depends on us alone.
 - **No made-up answers.** If you never said it, Saathi says so.
 - **Your real voice, never a copy.** Your family hears the recordings you chose to keep and the letters you left. We never clone your voice or build an avatar of you.
 - **No advice we aren't licensed to give.** Legal and financial advice comes only from licensed partners.

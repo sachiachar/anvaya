@@ -1,6 +1,6 @@
 # Anvaya
 
-*Team Saathi · BFSI track · Revision 4, 30 September 2026*
+*Team Saathi · BFSI track · Revision 5, 3 October 2026*
 
 *The full picture. The focused pitches are [pitch-individuals.md](pitch-individuals.md) and [pitch-institutions.md](pitch-institutions.md); costs and margins are in [business-model.md](business-model.md); how it is built is in [architecture.md](architecture.md); what is available in each version is in [release-notes.md](release-notes.md).*
 
@@ -84,7 +84,7 @@ A complete, pre-checked claim file is exactly what these rules reward. The detai
 
 Anvaya makes getting your affairs in order as easy as **talking to someone you trust**, and it connects everything that follows.
 
-1. **Talk with Saathi.** No forms. You talk with a warm companion the way you would with an old family friend, and Saathi quietly gathers everything your family will one day need. Nothing is kept until you say so.
+1. **Talk with Saathi.** No forms. You talk with a warm companion the way you would with an old family friend, and Saathi quietly gathers everything your family will one day need. Only what you choose to keep becomes part of the handover.
 2. **Close the gaps with trusted partners.** When something is missing, such as a will, a nominee or a safe place for original papers, Saathi points you to vetted partners in a **marketplace**, and you choose.
 3. **A careful, fraud-resistant handover.** When the time comes, automated checks and two human reviewers confirm the official certificate and the family member's authority. The family gets their answers, and the bank or insurer receives a claim that has already been checked.
 
@@ -115,6 +115,7 @@ flowchart LR
 - **Keep your real voice.** For any story, you can choose to keep the recording of you telling it, so your family can one day hear it from you. Each recording is kept only if you say so.
 - **Voice letters.** Record a message for a particular person or moment, such as "for Priya's wedding" or "for Ajay when he turns 18". It stays sealed until the handover, and then reaches only the person you chose.
 - **Next steps.** Saathi notices what your family would still be missing, such as "no nominee on this policy" or "no will for the flat", and offers simple next steps, each with a button.
+- **Gentle questions about what matters most.** Saathi knows how the pieces fit together: each policy should have a nominee, each property its papers and the person it's meant for. When the moment is right, it asks about the most important missing piece, one at a time. "Skip" is always respected, and never asked again. Your readiness shows as how complete the picture is, for example "14 of 19 pieces in place".
 - **A secure vault.** Passwords and account details are locked on your own phone. Nobody else can read them: not Anvaya, not your bank, not Saathi.
 - **You choose who receives the vault**, usually a son, daughter or spouse. They accept in their own app, and you confirm a matching code.
 
@@ -268,7 +269,8 @@ For costs, margins and the assumptions behind them, see [business-model.md](busi
 
 ## Our promises
 
-- **You decide.** Nothing is saved until you tap Keep, and nothing is shared with a partner until you agree.
+- **You decide.** Only what you keep reaches your family, and nothing is shared with a partner until you agree. You can delete your conversation at any time.
+- **Yours to take with you.** What you keep is stored in an open, standard format (Google Cloud's Open Knowledge Format), so it never depends on us alone.
 - **No made-up answers.** If you never said it, Saathi says so.
 - **No legal or financial advice from Saathi.** Licensed partners provide it.
 - **No paid influence.** Partners can't buy a better place or a recommendation.
@@ -282,10 +284,12 @@ For costs, margins and the assumptions behind them, see [business-model.md](busi
 | Data | Where it lives | Who can read it |
 | --- | --- | --- |
 | Passwords and secrets (the vault) | Encrypted on the customer's phone | Only the customer, and after a verified handover, the one person they chose |
-| Conversation records: accounts, nominees, family, wishes | Encrypted in the cloud, in-country where required (India regions for Indian institutions) | The customer; Anvaya's service, to answer and prepare the handover; after a verified handover, the chosen family member |
+| What the customer kept: accounts, nominees, family, wishes, stories | In an open, standard format (Google Cloud's Open Knowledge Format), in the customer's own folder, in-country where required (India regions for Indian institutions) | The customer; after a verified handover, the chosen family member |
+| The conversation itself | Account and card numbers hidden before storage; kept only while useful; never handed over; deleted on request | Only the customer, and Anvaya's service so Saathi can follow along |
 | Voice recordings the customer chose to keep | Encrypted cloud storage | Released only to the verified recipient |
 | Claim files | Sent to each participating institution | That institution's claims team, for its own products only |
 
+- **Each customer's data has its own key,** so it can be erased completely. Each bank or insurer can have its own store, encrypted with its own key, in the right region.
 - **Institutions see only their own products.** Accounts held elsewhere go on the family's checklist, never to another institution, unless the customer agrees.
 - **Built for regulated partners.** In India, Anvaya is designed to be engaged under the RBI's rules on outsourcing technology services, with audit rights, and to meet the DPDP Act's consent requirements.
 - **Honest about where we are.** Anvaya is not yet certified. An independent penetration test comes before any live customer data, and ISO 27001 and SOC 2 are on the roadmap.
@@ -307,6 +311,17 @@ Fraud can enter anywhere in the journey, not only with a forged certificate at t
 
 The guardian can **continue, add a check, reduce what Saathi may do on its own, pause for a reviewer, or block**. It never approves or rejects anything itself: people decide, and every intervention is explained, logged and reversible. It also red-teams itself, regularly imagining new ways around each safeguard and showing which safeguard catches each one.
 
+## Governed by design
+
+Every part of Saathi that acts on its own is an **agent with a name, one job, and only the tools and models it's allowed**. They all work within budgets.
+
+- **Identified and limited.** Each agent is registered with its role, its permitted tools and models, and its limits. Anything else is refused and recorded.
+- **Fair for everyone.** Each person has a daily allowance, so no one can use up the service for others. **Safety always comes first:** cancelling a false report and checking certificates keep working even when an allowance runs out.
+- **No runaway costs.** Limits on each request, budgets per agent, customer and bank, alerts, an automatic switch that pauses optional features, and a hard ceiling at Google Cloud.
+- **More only with approval.** Extra allowance is a purchase for direct customers, the bank's decision for its customers, and needs two people for anything larger. Every grant is time-limited and logged.
+- **Visible.** A governance dashboard for our team, and one for each bank showing its own customers: use against budget, which agents act on its customers, approvals, fraud flags and outcomes.
+- **Measured.** The quality of each automated step is measured on a test set, and the results are published with each release.
+
 ## What Saathi does, and what stays with people
 
 Saathi is not a set of screens. It is a companion with clear limits on what it may do by itself:
@@ -315,6 +330,7 @@ Saathi is not a set of screens. It is a companion with clear limits on what it m
 | --- | --- |
 | Listens, transcribes, reads documents, suggests cards | Saathi, within fixed rules |
 | Finds gaps and matches them to kinds of partners | Saathi suggests; **you choose** |
+| Asks about the most important missing piece | Saathi asks once; **you can skip** |
 | Anything that gets saved or shared | Saathi suggests; **you decide** |
 | Checks certificates and legal proof for forgery | The checks assist; **a person decides** |
 | Watches every step for misuse (the guardian) | Adds checks, pauses or blocks; **people review and can reverse** |
@@ -322,9 +338,11 @@ Saathi is not a set of screens. It is a companion with clear limits on what it m
 
 ## Where we are today
 
-The prototype already covers the conversation, next steps, the vault, the two-reviewer verification and waiting period, and the family's questions and letters. The marketplace is shown with one mocked legal partner.
+| Live now | Coming in the prototype release (18 October 2026) | Later (finale and bank pilot) |
+| --- | --- | --- |
+| Voice and typed conversation, photos and documents; Keep cards; next steps; the vault; two-reviewer verification and waiting period; the family's questions with sources; claims checklist and letters; one mocked legal partner | A private demo for each judge; the guardian's core checks (two real reviewers, owner alert with cancel, fraud reference guides, fixed checks); the bank's claim file and view; playback of real recordings; owner-only access to the conversation with numbers hidden; kept knowledge in the open format with gentle gap questions; governed agents with allowances and a governance view; published quality measures | Voice letters; signs of pressure with a private check-in; cooling-off for recipient changes; cloned-voice signals; insider-pattern checks; a key per owner and per-bank stores; export; bank budgets and audit export; trigger-moment prompts; single sign-on and in-app embedding; India data residency; the full partner catalogue |
 
-**Not yet built:** the guardian layer across every step (in progress for the prototype release), prompts at trigger moments and notifications, real recordings and voice letters, the claims connection and claim-file format, single sign-on and in-app embedding, per-role permissions, India data residency, and the full partner catalogue. See [release-notes.md](release-notes.md).
+See [release-notes.md](release-notes.md) and the [release plan](https://github.com/sachiachar/anvaya/milestone/1).
 
 
 ## Sources

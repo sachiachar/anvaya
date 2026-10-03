@@ -1,6 +1,6 @@
 # Anvaya, for banks and insurers
 
-*Team Saathi · BFSI track · Revision 2, 30 September 2026 · the full picture is in [concept.md](concept.md); the pitch to individuals is in [pitch-individuals.md](pitch-individuals.md); costs and margins are in [business-model.md](business-model.md); how it is built is in [architecture.md](architecture.md)*
+*Team Saathi · BFSI track · Revision 3, 3 October 2026 · the full picture is in [concept.md](concept.md); the pitch to individuals is in [pitch-individuals.md](pitch-individuals.md); costs and margins are in [business-model.md](business-model.md); how it is built is in [architecture.md](architecture.md)*
 
 ---
 
@@ -103,13 +103,14 @@ Fraud doesn't only arrive with a forged certificate at the end. It can enter at 
 
 | What you want | How Anvaya delivers it | What a pilot measures |
 | --- | --- | --- |
-| **More complete nominations** | Saathi notices missing or outdated nominees and takes the customer straight into your own nominee-update journey | Share of pilot customers with a complete nomination, before and after |
+| **More complete nominations** | Saathi knows each policy should have a nominee, gently asks about a missing one when the moment is right, and takes the customer straight into your own nominee-update journey | Share of pilot customers with a complete nomination, before and after |
 | **Faster settlement** | Complete, pre-checked files mean the settlement clock (15 days in India) starts sooner and finishes on time | Days from first contact to complete file; share settled within the regulatory deadline |
 | **Fewer rejected or reopened claims** | Documents and authority are checked before the file reaches you | Share of files needing more documents |
 | **Less fraud, at every step** | A guardian watches every step of the journey, not only the claim: forgery checks, two independent reviewers, owner alerts, protection against pressure on elderly customers, cloned voices and insider collusion | Suspect cases caught before reaching you; guardian interventions and false-alarm rate |
 | **Fewer unclaimed balances** | Every account the customer mentions lands on the family's checklist | Accounts claimed that the family didn't know about |
 | **The next generation** | The heir's first real experience of your institution is a kind and helpful one | Heir retention after settlement |
 | **Engaged customers** | A warm, useful reason to open your app, in the customer's own language | Sign-up and repeat use |
+| **Control and transparency** | Governed agents, budgets you can see and approve, and a governance dashboard for your institution | Cost per active customer within budget; approvals handled |
 
 ## How it works
 
@@ -145,7 +146,8 @@ We expect your risk, security and compliance teams to test every line of this se
 | Data | Where it lives | Who can read it |
 | --- | --- | --- |
 | Passwords and secrets (the vault) | Encrypted on the customer's phone | Only the customer, and after a verified handover, the one person they chose. Not Anvaya, not you |
-| Conversation records: accounts, nominees, family, wishes | Encrypted on Google Cloud. The prototype runs in Singapore; for Indian institutions, production data is kept in Google Cloud's India regions | The customer; Anvaya's service, to answer and prepare the handover; and, after a verified handover, the chosen family member |
+| What the customer kept: accounts, nominees, family, wishes, stories | In an open, standard format (Google Cloud's Open Knowledge Format) in the customer's own folder. **Pilot design:** a store per region and **one per bank, encrypted with your own key**; a key per customer so their data can be erased completely. The prototype runs in Singapore; for Indian institutions, production data is kept in Google Cloud's India regions | The customer; after a verified handover, the chosen family member |
+| The conversation itself | Account and card numbers hidden before storage; kept only while useful; never handed over; deleted on request | Only the customer, and Anvaya's service so Saathi can follow along. Never you, never the family |
 | Voice recordings the customer chose to keep | Encrypted cloud storage | Released only to the verified recipient; never used to copy anyone's voice |
 | What you receive | The claim packet for your own products only | Your claims team |
 
@@ -155,8 +157,16 @@ We expect your risk, security and compliance teams to test every line of this se
 
 **Regulation.** *(India shown; for other countries we map the equivalent rules during due diligence.)*
 - Anvaya is designed to be engaged as a technology service provider under the **RBI Master Direction on Outsourcing of IT Services**,[^rbi-outsourcing] including your right to audit, and access for the regulator.
-- Consent is built in at every step, in line with the **DPDP Act and Rules**:[^dpdp] nothing is saved without the customer's Keep, and nothing is shared with a partner without their agreement.
+- Consent is built in at every step, in line with the **DPDP Act and Rules**:[^dpdp] nothing reaches the family without the customer's Keep, nothing is shared with a partner without their agreement, and the customer can delete their conversation.
 - Automated checks are governed to the standard of the **RBI's August 2025 framework for responsible automated decision-making**:[^rbi-free] a person decides every outcome that affects a claim, overrides need a written reason, every step is logged, and check accuracy is tested and reported.
+
+**Governed automation.** Every part of the service that acts on its own is an **agent with an identity, one role, and only the tools and models it's permitted**. Anything else is refused and recorded.
+- **Budgets at every level:** per request, per agent, per customer and per institution. A daily allowance per customer means no one can use up capacity meant for others. **Safety work is never starved:** certificate checks and cancelling a false report draw on reserved capacity.
+- **No cost overruns:** request limits, budget alerts, an automatic switch that pauses optional features first, and a hard ceiling at Google Cloud.
+- **Extra budget needs approval.** **You approve your own customers' requests**; larger increases need two people on our side; every grant is time-limited and logged.
+- **Your governance dashboard:** use against your licence, which agents act on your customers (role, autonomy, models, version), approvals, fraud flags on your claims, and your pilot outcomes. Small counts are hidden, and conversations are never shown. **An audit report you can download** for your regulator follows in the pilot.
+- **Measured quality:** each automated step is measured on a test set (for example, certificate-check accuracy and how often family answers cite the right source), and published with each release.
+- **On Google Cloud's own controls:** Model Armor screens messages and documents for hidden instructions and sensitive data. For the pilot, **Apigee** enforces token quotas with one API product per institution, matching your licence, and **Agent Gateway** gives every agent a verifiable identity, with access denied by default.
 
 **Certification.** Anvaya is at prototype stage and is not yet certified. Before any pilot with live customer data, we will complete an independent penetration test; ISO 27001 and SOC 2 Type II are on the roadmap.
 
@@ -169,7 +179,7 @@ We expect your risk, security and compliance teams to test every line of this se
 
 **Continuity.** A succession service must outlast its vendor. Our commitments:
 - **Escrow** of the software and the keys needed for release, with an independent escrow agent, so a verified handover can still happen if Anvaya ceases to operate.
-- **Export** of your customers' records at any time, in an open format.
+- **Export** of your customers' records at any time, in an open standard (Google Cloud's Open Knowledge Format).
 - **Exit support**, with a defined transition period if you end the licence.
 
 ## Commercial model
@@ -217,6 +227,7 @@ Which law applies, and in what order, stays with licensed lawyers.
 | **Integration** | Branded app plus the claims connection; no core-system changes |
 | **Success measures** | Guardian interventions and false-alarm rate, uptake at each trigger moment, nomination completeness, days to complete file, share settled within the regulatory deadline, files needing more documents, sign-up and repeat use, customer satisfaction |
 | **Before live data** | Your security review, an independent penetration test, and data kept in-country where required (India regions for Indian institutions) |
+| **Governance** | Your governance dashboard from day one; you set your customers' allowance within the licence and approve requests for more |
 | **Pricing** | A fixed pilot fee, credited against the first year's licence if you continue |
 
 ## One story, from your side
@@ -231,9 +242,11 @@ Which law applies, and in what order, stays with licensed lawyers.
 
 ## Where we are today
 
-The working prototype covers the conversation, next steps, the vault, the two-reviewer verification and waiting period, and the family's questions and letters. The marketplace is shown with one mocked legal partner.
+| Live now | Coming in the prototype release (18 October 2026) | For the pilot |
+| --- | --- | --- |
+| Voice and typed conversation; reading policy photos; Keep cards; next steps; the vault on the phone; two-reviewer verification with a waiting period; the family's questions with sources; claims checklist and letters | The guardian's core checks (two real reviewers, owner alert with cancel, fraud reference guides, fixed checks and a reviewer trace); **the claim file and your Bank view**; owner-only access to conversations with numbers hidden; kept knowledge in the open format with gentle gap questions; governed agents with allowances and **your governance dashboard**; published quality measures | Per-bank stores with your own key; your budgets and the audit export; Apigee and Agent Gateway; pressure, cloned-voice and insider-pattern checks; trigger-moment prompts; single sign-on and in-app embedding; India data residency; the full partner catalogue |
 
-**Not yet built:** the guardian layer across every step (in progress for the prototype release), prompts at trigger moments and notifications, the claims connection and packet format, single sign-on and in-app embedding, per-role permissions, India data residency, real recordings and voice letters, and the full partner catalogue. See [release-notes.md](release-notes.md).
+See [release-notes.md](release-notes.md).
 
 ## Let's talk
 
