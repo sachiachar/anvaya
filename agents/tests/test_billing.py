@@ -26,12 +26,20 @@ def fresh(monkeypatch):
 def test_month_to_date_forecast_and_breakdowns():
     s = billing.summarise(ROWS, date(2026, 10, 3), 300.0)
     assert s["available"] and s["through"] == "2026-10-02" and s["currency"] == "USD"
-    assert s["month_to_date_usd"] == 3.75 and s["days_counted"] == 2
-    assert s["forecast_usd"] == round(3.75 / 2 * 31, 2)
+    assert s["month_to_date_usd"] == 3.75
+    # The latest loaded day (2 Oct) may still be filling up: the forecast uses 1 Oct only.
+    assert s["days_counted"] == 1 and s["forecast_usd"] == round(1.75 * 31, 2)
     assert s["daily"] == [{"day": "2026-09-30", "cost_usd": 4.0}, {"day": "2026-10-01", "cost_usd": 1.75},
                           {"day": "2026-10-02", "cost_usd": 2.0}]
     assert list(s["by_service"]) == ["Gemini API", "Cloud Run"] and s["by_service"]["Gemini API"] == 7.25
     assert s["top_skus"][0] == {"service": "Gemini API", "sku": "TTS output", "cost_usd": 4.0}
+
+
+def test_service_totals_cover_the_same_30_days_as_the_chart():
+    old = [{"day": f"2026-09-{d:02d}", "service": "Cloud Run", "sku": "CPU", "usd": 1.0} for d in range(1, 31)]
+    s = billing.summarise([*old, *ROWS], date(2026, 10, 3), 300.0)
+    assert [d["day"] for d in s["daily"]][0] == "2026-09-03" and len(s["daily"]) == 30
+    assert s["by_service"]["Cloud Run"] == 28 + 0.5  # 3 to 30 September, and 1 October
 
 
 def test_first_day_of_the_month_has_no_forecast_yet():

@@ -144,7 +144,7 @@ function SpendSection({ spend }: { spend: Spend }) {
   return (
     <>
       <Section title="Actual spend, from Google Cloud billing">
-        <p className="pa-muted">Up to {spend.through}. Google loads the billing export once a day; checked {fmt.when(spend.fetched_at)}.</p>
+        <p className="pa-muted">Up to {spend.through}; Google's billing export runs about a day behind, so the latest day may still be filling up. Checked {fmt.when(spend.fetched_at)}.</p>
         <DailyChart daily={spend.daily} budgetPerDay={spend.budget_usd / 30} />
       </Section>
       <div className="pa-grid2">
