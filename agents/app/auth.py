@@ -19,6 +19,7 @@ from fastapi import HTTPException, Request
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 
+from . import demo
 from .config import settings
 from .governance import core as governance
 
@@ -60,13 +61,16 @@ def verify(token: str | None) -> User:
 
 async def require_user(request: Request) -> User | None:
     """FastAPI dependency for every /api route (HTTP). It also tells the governance gateway
-    who is asking, so each person's daily allowance is counted (PR-10.4)."""
+    who is asking, so each person's daily allowance is counted (PR-10.4), and finds or creates
+    the person's own demo copy (PR-1)."""
     if not settings.auth_required:
-        governance.set_current_user(governance.user_key("local"))
+        governance.set_current_user(governance.user_key(demo.LOCAL))
+        demo.begin(demo.LOCAL)
         return None
     header = request.headers.get("authorization", "")
     token = header[7:] if header.lower().startswith("bearer ") else None
     user = verify(token)
     request.state.user = user
     governance.set_current_user(governance.user_key(user.uid))
+    demo.begin(user.uid)
     return user

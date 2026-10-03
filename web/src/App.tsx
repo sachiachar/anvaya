@@ -35,6 +35,7 @@ export default function App() {
     if (!authEnabled) return;
     setEmail(user?.email ?? null);
     setSession(user ? "checking" : "signed-out");
+    setReady(false); // a different account has a different demo copy: load its owner first
   }), []);
 
   useEffect(() => {
@@ -84,7 +85,8 @@ export default function App() {
         </div>
         <div className="top-links">
           <button className="link" onClick={toggleAi} aria-pressed={showAi}>{showAi ? "Hide AI labels" : "Show how the AI works"}</button>
-          <button className="link" onClick={() => api.seed().then(() => location.reload())}>Reset demo</button>
+          <button className="link" onClick={() => api.seed().then(() => location.reload())}
+            title="Restores your own copy of the demo to the start. Nobody else's is affected.">Reset my demo</button>
           {authEnabled && email && (
             <button className="link" onClick={() => signOutUser()} title={email}>Sign out</button>
           )}

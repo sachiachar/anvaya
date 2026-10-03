@@ -131,8 +131,18 @@ _session_service = InMemorySessionService()
 _runner = Runner(app_name=APP_NAME, agent=build_agent(), session_service=_session_service)
 
 
+class UnknownSession(LookupError):
+    """A session that isn't this person's, for this owner."""
+
+
 async def ask(owner: dict, user_id: str, question: str, session_id: str | None = None) -> dict:
-    if session_id is None:
+    """user_id names who is asking, within one demo copy; a session continues only for the same
+    person and owner, so a session ID from another copy is refused (PR-1.6)."""
+    if session_id is not None:
+        session = await _session_service.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
+        if session is None or session.state.get("owner_id") != owner["id"]:
+            raise UnknownSession(session_id)
+    else:
         session = await _session_service.create_session(
             app_name=APP_NAME,
             user_id=user_id,

@@ -1,6 +1,6 @@
 // A live voice call with the companion (Gemini Live API, relayed by our server).
 // Microphone: 16 kHz 16-bit PCM in 100 ms chunks. Voice back: 24 kHz 16-bit PCM.
-import { OWNER_ID, type Turn } from "./api";
+import { currentOwnerId, type Turn } from "./api";
 import { idToken } from "./auth";
 
 export type CallEvent =
@@ -36,7 +36,7 @@ export class LiveCall {
 
     // Browsers can't send headers on a WebSocket, so the sign-in token goes in the URL.
     const token = await idToken();
-    const ws = new WebSocket(`${BASE}/api/owners/${OWNER_ID}/live${token ? `?token=${encodeURIComponent(token)}` : ""}`);
+    const ws = new WebSocket(`${BASE}/api/owners/${currentOwnerId()}/live${token ? `?token=${encodeURIComponent(token)}` : ""}`);
     ws.binaryType = "arraybuffer";
     this.ws = ws;
     ws.onmessage = (m) => {
