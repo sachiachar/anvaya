@@ -129,9 +129,16 @@ def spend(now: float | None = None, *, fresh: bool = False) -> dict:
         rows = _fetch_rows()
         result = summarise(rows, datetime.fromtimestamp(now, timezone.utc).date(), settings.monthly_budget_usd)
         ttl = CACHE_SECONDS
-    except Exception:
-        log.exception("Reading the billing export failed")
-        result = {"available": False, "reason": "error", "message": NOT_AVAILABLE["error"]}
+    except Exception as e:
+        if DETAILED_PREFIX in str(e) and "does not match any table" in str(e):
+            # Google creates the export table with its first load; until then BigQuery answers
+            # 400 "...gcp_billing_export_resource_v1_* does not match any table". A wrong dataset
+            # or project gives a different error and is still reported as one, below.
+            log.warning("The billing export table doesn't exist yet: %s", e)
+            result = {"available": False, "reason": "no_data", "message": NOT_AVAILABLE["no_data"]}
+        else:
+            log.exception("Reading the billing export failed")
+            result = {"available": False, "reason": "error", "message": NOT_AVAILABLE["error"]}
         ttl = RETRY_SECONDS
     result["fetched_at"] = now
     store.put("billing_cache", {"id": "spend", "table": settings.billing_export_table,
