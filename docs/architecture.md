@@ -178,8 +178,8 @@ The portal is a separate entry point (`web/admin.html`), served by its own Fireb
   - an `index.md` that is regenerated after each Keep, and a history log per date.
   - **Keep is the commit:** only owner-confirmed knowledge enters the bundle. The draft leaves Firestore; an update writes a new version and marks the old one `deprecated`.
   - each concept keeps its **graph part** (`type`, `status`, typed links) apart from its content, so fixed-code readers (the gap check, and the anonymous fraud cues in `docs/proposals/fraud-foresight.md` §5) never read text or sources;
-  - a machine copy (`.catalog.json`, rebuildable from the files) is written with conditional writes, and each change is a separate event file, so overlapping Keeps never collide;
-  - long numbers are masked to their last 4 digits, and the vault can't enter.
+  - a machine copy (`.catalog.json`, rebuildable from the concept and event files) is written with conditional writes, and `index.md` and `log.md` are rewritten from it the same way, so overlapping Keeps never lose an item and an older Keep never overwrites a newer index. Each request reads the catalog once;
+  - identifiers (9 or more digits, any separators, and PAN) keep only their last 4 characters; dates and amounts are left alone. The vault can't enter, and only the demo's own seeding may add something the owner didn't confirm, labelled as such.
 - **Firestore holds workflow data only:** pending cards, cases and reviews, guardian events, next steps and access requests.
 - **The conversation:**
   - sensitive details are masked before storage (Sensitive Data Protection);

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import threading
 import time
 from contextvars import ContextVar
 
@@ -91,12 +92,27 @@ def ensure() -> str:
                                   "status": "active"})
     elif now - doc.get("last_used_at", 0) > TOUCH_SECONDS:
         store.update("demo_copies", copy_id, {"last_used_at": now})
-    if not store.get("owners", owner_id_for(copy_id)) or (doc or {}).get("knowledge") != KNOWLEDGE_VERSION:
-        # A new copy, one whose data was cleared, or one from before kept knowledge moved to the
-        # OKF bundle (its kept items were in Firestore): start it again from the persona.
-        reset(copy_id)
-        store.update("demo_copies", copy_id, {"knowledge": KNOWLEDGE_VERSION})
+    if _needs_start(copy_id, doc):
+        with _start_lock(copy_id):  # two first requests at once must not both start the copy
+            if _needs_start(copy_id, store.get("demo_copies", copy_id)):
+                # A new copy, one whose data was cleared, or one from before kept knowledge moved to
+                # the OKF bundle (its kept items were in Firestore): start it again from the persona.
+                reset(copy_id)
+                store.update("demo_copies", copy_id, {"knowledge": KNOWLEDGE_VERSION})
     return copy_id
+
+
+def _needs_start(copy_id: str, doc: dict | None) -> bool:
+    return not store.get("owners", owner_id_for(copy_id)) or (doc or {}).get("knowledge") != KNOWLEDGE_VERSION
+
+
+_start_locks: dict[str, threading.Lock] = {}
+_locks_guard = threading.Lock()
+
+
+def _start_lock(copy_id: str) -> threading.Lock:
+    with _locks_guard:
+        return _start_locks.setdefault(copy_id, threading.Lock())
 
 
 def reset(copy_id: str | None = None) -> dict:
@@ -150,11 +166,13 @@ def only(*roles: str):
 
 
 async def guard(request: Request) -> None:
-    """Router dependency: who is acting (from the switcher), and a route with an owner in its path
+    """Router dependency: who is acting (from the switcher), a fresh per-request cache of kept
+    knowledge, and a route with an owner in its path
     only works for the caller's own copy. Async on purpose: it runs in the request's own context,
     so the acting person it sets reaches the route (a sync dependency runs in a worker thread,
     whose changes would be lost)."""
     act_as(request.headers.get(ACTING_HEADER))
+    knowledge.start_request()
     requested = request.path_params.get("owner_id")
     route = request.scope.get("route")
     if route is not None and route.name in NEUTRAL_ROUTES:

@@ -27,6 +27,7 @@ import json
 import random
 import re
 import time
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from typing import Any
 
@@ -40,6 +41,7 @@ CATALOG = f"{ROOT}/.catalog.json"
 OKF_VERSION = "0.2"
 STALE_AFTER_DAYS = 365  # accounts and policies ask to be re-confirmed after a year (PR-7.6)
 RETRIES = 20  # conditional writes retry with a short random pause when Keeps overlap
+MAX_EVENTS = 2000  # changes kept in the catalog for log.md; every change also has its own event file
 
 # collection -> how each kept item becomes a concept: OKF type and folder.
 MOMENT_TYPES = {"story": ("Story", "stories"), "advice": ("Advice", "advice"),
@@ -67,16 +69,25 @@ class NotKnowledge(ValueError):
 
 # ---- Masking -----------------------------------------------------------------------
 
-_LONG_NUMBER = re.compile(r"\d[\d\s-]{4,}\d")
+# Identifiers, not amounts or dates: 9 or more digits, possibly split by spaces, dashes, dots or
+# slashes (account, card, policy and Aadhaar numbers), and PAN (5 letters, 4 digits, 1 letter).
+# Dates ("12-05-1951") and amounts ("1500000", "15,00,000") have fewer digits or use commas.
+_NUMBER_RUN = re.compile(r"\d(?:[\s./-]?\d){8,}")
+_PAN = re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b")
+
+
+def _last4(m: re.Match) -> str:
+    return "••" + re.sub(r"\W", "", m.group())[-4:]
 
 
 def mask(value: Any) -> Any:
-    """Account, card, policy and ID numbers keep only their last 4 digits, anywhere in a value."""
+    """Account, card, policy and ID numbers keep only their last 4 characters, anywhere in a value."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return mask(str(value)) if len(str(abs(value))) >= 9 else value
     if isinstance(value, str):
-        def last4(m: re.Match) -> str:
-            digits = re.sub(r"\D", "", m.group())
-            return "••" + digits[-4:] if len(digits) >= 6 else m.group()
-        return _LONG_NUMBER.sub(last4, value)
+        return _PAN.sub(_last4, _NUMBER_RUN.sub(_last4, value))
     if isinstance(value, list):
         return [mask(v) for v in value]
     if isinstance(value, dict):
@@ -138,6 +149,10 @@ def concept(collection: str, item: dict, owner_id: str, *, at: float,
     """The concept for a kept item: (frontmatter, Markdown body). Content is masked."""
     if collection not in COLLECTIONS:
         raise NotKnowledge(collection)
+    if not verified and not (generated_by or "").startswith("process:"):
+        # Only the owner's Keep confirms knowledge; the demo's own seeding is the one exception,
+        # and it's labelled as unconfirmed in the bundle and the index.
+        raise NotKnowledge("only knowledge the owner confirmed can be kept")
     # Content is masked; ids and file paths (which can contain long digit runs) are not.
     record = {k: v if k in UNMASKED else mask(v) for k, v in item.items() if k not in WORKFLOW_FIELDS}
     okf_type, _ = kind_of(collection, record)
@@ -190,41 +205,73 @@ def _entry(front: dict, path: str) -> dict:
         "title": front.get("title", ""),
         "description": front.get("description", ""),
         "record": front.get("record", {}),
-        "kept_at": front.get("verified", {}).get("at") or front.get("generated", {}).get("at"),
+        "verified": bool(front.get("verified")),
+        "kept_at": (front.get("verified") or {}).get("at") or front.get("generated", {}).get("at"),
         "superseded_by": front.get("superseded_by"),
     }
 
 
 def _empty() -> dict:
-    return {"okf_version": OKF_VERSION, "concepts": {}}
+    return {"okf_version": OKF_VERSION, "concepts": {}, "events": []}
+
+
+# One read of each owner's catalog per request: the API's guard and the live call start a fresh
+# cache; anything else (tests, scripts) reads storage every time.
+_cache: ContextVar[dict | None] = ContextVar("knowledge_cache", default=None)
+
+
+def start_request() -> None:
+    _cache.set({})
+
+
+def _load(owner_id: str) -> tuple[dict, int]:
+    data, version = media.load_versioned(owner_id, CATALOG)
+    return (json.loads(data) if data else _empty()), version
 
 
 def catalog(owner_id: str) -> dict:
-    data, _ = media.load_versioned(owner_id, CATALOG)
-    return json.loads(data) if data else _empty()
+    cache = _cache.get()
+    if cache is not None and owner_id in cache:
+        return cache[owner_id]
+    cat, _ = _load(owner_id)
+    if cache is not None:
+        cache[owner_id] = cat
+    return cat
 
 
-def _change_catalog(owner_id: str, change) -> dict:
-    """Apply a change to the catalog with a conditional write, retrying if someone else wrote."""
+def _retry(attempt) -> Any:
+    """Run a conditional write, retrying with a short random pause when someone else wrote first."""
     for _ in range(RETRIES):
-        data, version = media.load_versioned(owner_id, CATALOG)
-        cat = json.loads(data) if data else _empty()
-        change(cat)
         try:
-            media.save_if(owner_id, CATALOG, json.dumps(cat, ensure_ascii=False).encode(), "application/json", version)
-            return cat
+            return attempt()
         except media.Changed:
             time.sleep(random.uniform(0.01, 0.08))
     raise RuntimeError("the kept knowledge is busy; try again")
 
 
+def _change_catalog(owner_id: str, change) -> dict:
+    def attempt() -> dict:
+        cat, version = _load(owner_id)
+        change(cat)
+        media.save_if(owner_id, CATALOG, json.dumps(cat, ensure_ascii=False).encode(), "application/json", version)
+        return cat
+
+    cat = _retry(attempt)
+    cache = _cache.get()
+    if cache is not None:
+        cache[owner_id] = cat
+    return cat
+
+
 # ---- Writing: Keep is the commit --------------------------------------------------------------
 
 
-def _event(owner_id: str, at: float, action: str, front: dict, path: str) -> None:
-    name = f"{ROOT}/.events/{_iso(at).replace(':', '')}-{front['id']}-{action.lower()}.json"
+def _event(owner_id: str, at: float, action: str, front: dict, path: str) -> dict:
+    """A change, also saved as its own file: the durable history a rebuild reads."""
     event = {"at": _iso(at), "action": action, "id": front["id"], "title": front.get("title", ""), "path": path}
+    name = f"{ROOT}/.events/{_iso(at).replace(':', '')}-{front['id']}-{action.lower()}.json"
     media.save(owner_id, name, json.dumps(event, ensure_ascii=False).encode(), "application/json")
+    return event
 
 
 def _write(owner_id: str, front: dict, body: str) -> str:
@@ -241,24 +288,25 @@ def commit(collection: str, item: dict, owner_id: str, *, replaces: str | None =
     at = at or time.time()
     front, body = concept(collection, item, owner_id, at=at, generated_by=generated_by, verified=verified)
     path = _write(owner_id, front, body)
-    _event(owner_id, at, "Update" if replaces else "Creation", front, path)
+    events = [_event(owner_id, at, "Update" if replaces else "Creation", front, path)]
     old_front: dict | None = None
     if replaces:
         old = catalog(owner_id)["concepts"].get(replaces)
-        if old:
-            text = media.load(owner_id, f"{ROOT}/{old['path']}")
-            if text:
-                old_front, old_body = parse(text.decode())
-                old_front |= {"status": "deprecated", "superseded_by": front["id"]}
-                media.save(owner_id, f"{ROOT}/{old['path']}", render(old_front, old_body).encode(), "text/markdown")
-                _event(owner_id, at, "Deprecation", old_front, old["path"])
+        text = media.load(owner_id, f"{ROOT}/{old['path']}") if old else None
+        if text:
+            old_front, old_body = parse(text.decode())
+            old_front |= {"status": "deprecated", "superseded_by": front["id"]}
+            media.save(owner_id, f"{ROOT}/{old['path']}", render(old_front, old_body).encode(), "text/markdown")
+            events.append(_event(owner_id, at, "Deprecation", old_front, old["path"]))
 
     def change(cat: dict) -> None:
         cat["concepts"][front["id"]] = _entry(front, path)
         if old_front and replaces in cat["concepts"]:
             cat["concepts"][replaces] = _entry(old_front, cat["concepts"][replaces]["path"])
+        cat["events"] = (cat.get("events", []) + events)[-MAX_EVENTS:]
 
-    write_indexes(owner_id, _change_catalog(owner_id, change))
+    _change_catalog(owner_id, change)
+    write_indexes(owner_id)
     return as_item(front["id"], _entry(front, path), owner_id)
 
 
@@ -267,47 +315,54 @@ def commit(collection: str, item: dict, owner_id: str, *, replaces: str | None =
 
 def _index(cat: dict) -> str:
     lines = ["---", f'okf_version: "{OKF_VERSION}"', "---", "", "# Kept knowledge", "",
-             "What the owner chose to keep for their family. Each item was confirmed by the owner.", ""]
-    stable = [(cid, c) for cid, c in cat["concepts"].items() if c["graph"]["status"] == "stable"]
+             "What the owner chose to keep for their family, each confirmed with Keep. "
+             "Anything not confirmed by the owner says so.", ""]
+    stable = [c for c in cat["concepts"].values() if c["graph"]["status"] == "stable"]
     for folder, heading in SECTIONS:
-        items = sorted((c for _, c in stable if c["path"].startswith(f"{folder}/")), key=lambda c: c["title"].lower())
-        if items:
-            lines += [f"# {heading}", *[f"* [{c['title']}](/{c['path']}) - {c['description']}" for c in items], ""]
+        entries = sorted((c for c in stable if c["path"].startswith(f"{folder}/")), key=lambda c: c["title"].lower())
+        if entries:
+            lines += [f"# {heading}", *[f"* [{c['title']}](/{c['path']}) - {c['description']}"
+                                        + ("" if c.get("verified") else " (not confirmed by the owner)")
+                                        for c in entries], ""]
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _log(owner_id: str) -> str:
-    events = []
-    for name in media.names(owner_id, f"{ROOT}/.events/"):
-        data = media.load(owner_id, name)
-        if data:
-            events.append(json.loads(data))
+def _log(cat: dict) -> str:
     lines = ["# Log", ""]
     by_day: dict[str, list[dict]] = {}
-    for e in sorted(events, key=lambda e: (e["at"], e["id"]), reverse=True):
+    for e in sorted(cat.get("events", []), key=lambda e: (e["at"], e["id"], e["action"]), reverse=True):
         by_day.setdefault(e["at"][:10], []).append(e)
-    for day, items in by_day.items():
-        lines += [f"## {day}", *[f"* **{e['action']}** [{e['title']}](/{e['path']})" for e in items], ""]
+    for day, events in by_day.items():
+        lines += [f"## {day}", *[f"* **{e['action']}** [{e['title']}](/{e['path']})" for e in events], ""]
     return "\n".join(lines).rstrip() + "\n"
 
 
-def write_indexes(owner_id: str, cat: dict | None = None) -> None:
-    cat = cat if cat is not None else catalog(owner_id)
-    media.save(owner_id, f"{ROOT}/index.md", _index(cat).encode(), "text/markdown")
-    media.save(owner_id, f"{ROOT}/log.md", _log(owner_id).encode(), "text/markdown")
+def write_indexes(owner_id: str) -> None:
+    """Rewrite index.md and log.md from the latest catalog. Each write is conditional on the file
+    not having changed since it was read, so an older Keep can never overwrite a newer index."""
+    for name, render_from in ((f"{ROOT}/index.md", _index), (f"{ROOT}/log.md", _log)):
+        def attempt(name=name, render_from=render_from) -> None:
+            _, version = media.load_versioned(owner_id, name)
+            cat, _ = _load(owner_id)
+            media.save_if(owner_id, name, render_from(cat).encode(), "text/markdown", version)
+        _retry(attempt)
 
 
 def rebuild(owner_id: str) -> dict:
-    """Rebuild the catalog, index.md and log.md from the concept files alone (PR-7.4)."""
+    """Rebuild the catalog, index.md and log.md from the concept and event files (PR-7.4)."""
     cat = _empty()
     for name in media.names(owner_id, f"{ROOT}/"):
         rel = name[len(ROOT) + 1:]
-        if not rel.endswith(".md") or rel in ("index.md", "log.md") or rel.startswith("."):
-            continue
-        front, _ = parse((media.load(owner_id, name) or b"").decode())
-        cat["concepts"][front["id"]] = _entry(front, rel)
-    media.save(owner_id, CATALOG, json.dumps(cat, ensure_ascii=False).encode(), "application/json")
-    write_indexes(owner_id, cat)
+        data = media.load(owner_id, name) or b""
+        if rel.startswith(".events/") and rel.endswith(".json"):
+            cat["events"].append(json.loads(data))
+        elif rel.endswith(".md") and rel not in ("index.md", "log.md") and not rel.startswith("."):
+            front, _ = parse(data.decode())
+            cat["concepts"][front["id"]] = _entry(front, rel)
+    cat["events"] = sorted(cat["events"], key=lambda e: (e["at"], e["id"], e["action"]))[-MAX_EVENTS:]
+    _, version = media.load_versioned(owner_id, CATALOG)
+    media.save_if(owner_id, CATALOG, json.dumps(cat, ensure_ascii=False).encode(), "application/json", version)
+    write_indexes(owner_id)
     return cat
 
 
@@ -337,6 +392,19 @@ def items(owner_id: str, collection: str, *, include_replaced: bool = False, **w
 def get(owner_id: str, cid: str) -> dict | None:
     entry = catalog(owner_id)["concepts"].get(cid)
     return as_item(cid, entry, owner_id) if entry else None
+
+
+def current(owner_id: str, cid: str) -> dict | None:
+    """The current version of a kept item, following "superseded by" from an older version."""
+    concepts = catalog(owner_id)["concepts"]
+    for _ in range(50):
+        entry = concepts.get(cid)
+        if not entry:
+            return None
+        if entry["graph"]["status"] == "stable" or not entry.get("superseded_by"):
+            return as_item(cid, entry, owner_id)
+        cid = entry["superseded_by"]
+    return None
 
 
 def family(owner_id: str) -> list[str]:

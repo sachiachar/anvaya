@@ -7,6 +7,7 @@ import threading
 import pytest
 import yaml
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from app import demo, knowledge, main, media, proposals
 from app.governance import core
@@ -171,6 +172,9 @@ def test_overlapping_keeps_never_lose_a_concept():
     for t in threads:
         t.join()
     assert errors == [] and len(knowledge.items(OWNER, "moments")) == 8
+    # The index and log were never overwritten by an older Keep: all 8 are there.
+    index, log = media.load(OWNER, "kept/index.md").decode(), media.load(OWNER, "kept/log.md").decode()
+    assert all(f"[Story {i}]" in index for i in range(8)) and log.count("**Creation**") >= 8
     assert_conformant()
 
 
@@ -190,3 +194,74 @@ def test_concepts_parse_as_plain_yaml():
     text = media.load(OWNER, f"kept/{kept['concept']}").decode()
     front = yaml.safe_load(text.split("---\n")[1])
     assert front["links"] == {} and front["record"]["institution"] == "LIC"
+
+
+def test_two_updates_to_the_same_item_keep_one_current_version_with_both():
+    account = {**POLICY, "category": "bank_account", "institution": "SBI", "product": "Savings",
+               "account_hint": "••1187", "nominee_or_beneficiary": None}
+    kept = _keep("inventory", account)
+    nominee = proposals.save_inventory(OWNER, {**account, "nominee_or_beneficiary": "Priya"}, {})
+    value = proposals.save_inventory(OWNER, {**account, "approximate_value": "4 lakh"}, {})
+    assert nominee["updates"] == value["updates"] == kept["id"]  # both cards point at the first version
+    proposals.approve("inventory", nominee)
+    proposals.approve("inventory", value)
+    current = knowledge.items(OWNER, "inventory")
+    assert len(current) == 1
+    assert current[0]["nominee_or_beneficiary"] == "Priya" and current[0]["approximate_value"] == "4 lakh"
+
+
+def test_masking_hides_identifiers_but_keeps_dates_and_amounts():
+    kept = _keep("moments", {**STORY, "title": "Numbers", "summary": "Born 12-05-1951; worth 1500000 or 15,00,000; "
+                             "years 1965-70 and 2019 2020.",
+                             "quote": "Account 1234.5678.9012, policy LIC/123/456/789, PAN ABCDE1234F."})
+    assert kept["summary"] == "Born 12-05-1951; worth 1500000 or 15,00,000; years 1965-70 and 2019 2020."
+    assert kept["quote"] == "Account ••9012, policy LIC/••6789, PAN ••234F."  # the prefix isn't a number
+    assert knowledge.mask(123456789012) == "••9012" and knowledge.mask(1500000) == 1500000
+
+
+def test_edits_cannot_change_where_a_card_came_from():
+    card = proposals.save_moment(OWNER, STORY, {"recording": "gs://bucket/owner_demo_vikram/rec_1.webm"})
+    TestClient(main.app).post(f"/api/proposals/{card['id']}/decision", json={
+        "collection": "moments", "decision": "approve",
+        "edits": {"recording": "account 123456789012", "document": "x", "title": "My first salary, edited"}})
+    kept = knowledge.items(OWNER, "moments")[0]
+    assert kept["recording"] == "gs://bucket/owner_demo_vikram/rec_1.webm" and "document" not in kept
+    assert kept["title"] == "My first salary, edited"
+
+
+def test_only_the_demo_itself_can_keep_unconfirmed_knowledge():
+    with pytest.raises(knowledge.NotKnowledge):
+        knowledge.commit("moments", {**STORY, "id": new_id("m")}, OWNER, verified=False)
+    index = media.load(OWNER, "kept/index.md").decode()
+    assert "Priya Rao (daughter)" in index and "(not confirmed by the owner)" in index
+
+
+def test_the_live_call_knows_the_family(monkeypatch):
+    from app import live
+
+    seen = {}
+
+    async def fake_call(ws, owner, expand):
+        seen["family"] = owner.get("family")
+        await ws.close()
+
+    monkeypatch.setattr(live, "call", fake_call)
+    try:
+        with TestClient(main.app).websocket_connect(f"/api/owners/{OWNER}/live") as ws:
+            ws.receive_text()
+    except WebSocketDisconnect:
+        pass  # the fake call hangs up straight away
+    assert seen["family"] == ["Priya Rao (daughter)"]
+
+
+def test_two_first_requests_start_an_old_copy_only_once():
+    copy_id = core.user_key(demo.LOCAL)
+    store.update("demo_copies", copy_id, {"knowledge": None})
+    client = TestClient(main.app)
+    threads = [threading.Thread(target=client.get, args=("/api/me",)) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert knowledge.family(OWNER) == ["Priya Rao (daughter)"]
+    assert len(knowledge.catalog(OWNER)["concepts"]) == 1

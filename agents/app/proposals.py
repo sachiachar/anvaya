@@ -124,7 +124,9 @@ def save_person(owner_id: str, person: dict) -> dict | None:
 def approve(collection: str, doc: dict) -> dict:
     """The owner tapped Keep: commit the card to the kept-knowledge bundle, then remove the draft.
     An update card becomes the new version, and the version it updates is marked deprecated."""
-    previous = knowledge.get(doc["owner_id"], doc["updates"]) if doc.get("updates") else None
+    # Follow "superseded by": a second update card for the same item builds on the latest
+    # version, never on one already replaced, so there's only ever one current version.
+    previous = knowledge.current(doc["owner_id"], doc["updates"]) if doc.get("updates") else None
     if previous:  # the new version keeps what was known and adds what the card says
         fresh = {k: v for k, v in doc.items() if v not in (None, "", [])}
         doc = {**{k: v for k, v in previous.items() if k not in ("concept", "okf_status")}, **fresh}

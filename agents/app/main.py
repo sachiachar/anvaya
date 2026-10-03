@@ -208,7 +208,7 @@ async def live_call(ws: WebSocket, owner_id: str, token: str | None = None, acti
     else:
         governance_core.set_current_user(governance_core.user_key(demo.LOCAL))
         demo.begin(demo.LOCAL)
-    demo.ensure()
+    demo.ensure()  # no catalog cache here: a call lasts minutes, and kept knowledge can change meanwhile
     if (acting_as or demo.DEFAULT_PERSON).strip().lower() != "vikram":  # only the owner talks with Saathi
         await ws.close(code=4403, reason="Only Vikram can call Saathi.")
         return
@@ -216,7 +216,7 @@ async def live_call(ws: WebSocket, owner_id: str, token: str | None = None, acti
     if not owner or owner_id != demo.owner_id():  # only the caller's own copy
         await ws.close(code=4404)
         return
-    await live.call(ws, owner, _expand)
+    await live.call(ws, {**owner, "family": knowledge.family(owner_id)}, _expand)  # family from kept people
 
 
 class Speech(BaseModel):
@@ -292,7 +292,9 @@ def decide(doc_id: str, body: Decision) -> dict:
     if body.decision == "reject":
         store.delete(body.collection, doc_id)
         return {"id": doc_id, "status": "rejected"}
-    safe_edits = {k: v for k, v in (body.edits or {}).items() if k not in ("id", "owner_id", "status", "updates")}
+    # Edits change what a card says, never what it is or where it came from.
+    safe_edits = {k: v for k, v in (body.edits or {}).items()
+                  if k not in ("id", "owner_id", "status", "updates", "recording", "document")}
     if safe_edits:
         doc = store.update(body.collection, doc_id, safe_edits)
     return proposals.approve(body.collection, doc)
