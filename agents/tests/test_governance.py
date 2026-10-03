@@ -218,3 +218,16 @@ def test_clearing_examples_keeps_the_kill_switch(client):
     assert core.kill_switch() == "optional_paused"
     assert core.platform_settings()["kill_switch_reason"] == "spend spike"
     store.update("platform_settings", "settings", {"kill_switch": "off", "kill_switch_reason": None})
+
+
+def test_fraud_page_lists_the_india_guide_and_research_saves_it_first(client):
+    for collection in ("fraud_guides", "fraud_guide_versions"):
+        for doc in store.list(collection):
+            store.delete(collection, doc["id"])
+    guides = client.get("/api/platform/fraud", headers=h("judge")).json()["guides"]
+    india = next(g for g in guides if g["id"] == "IN.death_certificate")
+    assert india["version"] == 1 and india["trust_tier"] == "machine-confirmed" and india["signals"] == 8
+    assert client.post("/api/platform/fraud/guides/IN.death_certificate/research", headers=h("judge")).status_code == 403
+    assert client.post("/api/platform/fraud/guides/IN.death_certificate/research", headers=h("risk")).status_code == 200
+    assert store.get("fraud_guide_versions", "IN.death_certificate.v1")
+    assert store.get("fraud_guides", "IN.death_certificate")["status"] == "research_requested"

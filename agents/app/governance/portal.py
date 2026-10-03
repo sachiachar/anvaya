@@ -13,7 +13,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import demo
+from .. import demo, fraud_guides
 from ..store import store
 from . import billing, core
 from .core import Actor, actor, audit, need, platform_settings, registry, small
@@ -177,7 +177,7 @@ def get_fraud(_: Actor = Depends(actor)) -> dict:
     return {"scenarios": scenarios,
             "coverage": {"covered": sum(s["coverage"] == "covered" for s in scenarios),
                          "gaps": sum(s["coverage"] == "gap" for s in scenarios)},
-            "guides": sorted(store.list("fraud_guides"), key=lambda g: g["title"])}
+            "guides": fraud_guides.summaries()}
 
 
 class ScenarioDecision(BaseModel):
@@ -199,9 +199,11 @@ def decide_scenario(scenario_id: str, body: ScenarioDecision, who: Actor = Depen
 
 @router.post("/fraud/guides/{guide_id}/research")
 def research_now(guide_id: str, who: Actor = Depends(need("review_fraud"))) -> dict:
-    guide = store.get("fraud_guides", guide_id)
-    if not guide:
-        raise HTTPException(404, "guide not found")
+    if not store.get("fraud_guides", guide_id):
+        built_in = fraud_guides.BUILT_IN.get(guide_id)
+        if not built_in:
+            raise HTTPException(404, "guide not found")
+        fraud_guides.save_version(built_in)  # first request for a built-in guide: save it as version 1
     audit(who, "fraud.research_requested", guide_id)
     store.update("fraud_guides", guide_id, {"status": "research_requested", "requested_at": time.time()})
     return {"status": "research_requested",

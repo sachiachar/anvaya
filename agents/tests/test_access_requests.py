@@ -11,7 +11,7 @@ ARJUN = {"name": "Arjun Rao", "relationship": "son", "contact": "+91 90000 00000
 
 @pytest.fixture()
 def client(monkeypatch):
-    async def fake_check(image, mime, expected, person):
+    async def fake_check(image, mime, expected, person, guide=None):
         return DocumentCheck(document_type=expected, is_expected_type=True, person_named=person,
                              matches_expected_person=True, confidence=0.9)
 

@@ -94,7 +94,7 @@ agents:
     role: Pre-checks certificates and proof of authority
     autonomy: assist
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
-    tools: [read_fraud_guide]
+    tools: []             # the fraud reference guide is given in its instructions (PR-2.3.4)
     limits: {max_input_tokens: 8000, max_output_tokens: 2000, max_retries: 2}
     budget_class: safety
     safety_critical: true

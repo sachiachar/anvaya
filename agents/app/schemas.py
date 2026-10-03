@@ -138,6 +138,15 @@ class LegalNeeds(BaseModel):
 # ---- Activation / vault release (Assist level: a person decides) ----------
 
 
+class SignResult(BaseModel):
+    sign_id: str = Field(description="The id of a warning sign from the reference guide")
+    result: Literal["found", "ruled_out", "cant_tell"] = Field(
+        description="found: the document shows this sign; ruled_out: it clearly doesn't; cant_tell: "
+                    "the image doesn't show enough to decide"
+    )
+    note: str = Field(default="", description="What you saw, in a few words")
+
+
 class DocumentCheck(BaseModel):
     document_type: str
     is_expected_type: bool = Field(description="True if this is the kind of document requested")
@@ -146,6 +155,7 @@ class DocumentCheck(BaseModel):
     key_date: str | None = Field(default=None, description="Date of death or date of issue")
     issuing_authority: str | None = None
     concerns: list[str] = Field(default=[], description="Anything a human reviewer should look at")
+    signs: list[SignResult] = Field(default=[], description="One result for each warning sign in the guide")
     confidence: float = Field(
         ge=0, le=1,
         description=(
