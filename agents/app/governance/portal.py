@@ -47,7 +47,7 @@ def overview() -> dict:
     for t in TENANTS:
         latest = next((d["tenants"][t] for d in reversed(days) if t in d["tenants"]), {"active_users": 0})
         tenants[t] = {"cost_usd_30d": round(sum(d["tenants"].get(t, {}).get("cost_usd", 0) for d in days), 2),
-                      "active_users_today": small(latest["active_users"])}
+                      "active_users_today": small(latest.get("active_users", 0))}
     s = platform_settings()
     return {
         "seeded": bool(s.get("seeded_at")),

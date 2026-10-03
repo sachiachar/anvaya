@@ -25,8 +25,7 @@ class Store(Protocol):
     def update(self, collection: str, doc_id: str, fields: dict[str, Any]) -> dict[str, Any]: ...
     def list(self, collection: str, **where: Any) -> list[dict[str, Any]]: ...
     def delete(self, collection: str, doc_id: str) -> None: ...
-    def increment(self, collection: str, doc_id: str, group: str, amounts: dict[str, float],
-                  fields: dict[str, Any]) -> None: ...
+    def increment(self, collection: str, doc_id: str, amounts: dict[str, Any], fields: dict[str, Any]) -> None: ...
 
 
 class MemoryStore:
@@ -58,13 +57,18 @@ class MemoryStore:
             self._data.get(collection, {}).pop(doc_id, None)
 
 
-    def increment(self, collection, doc_id, group, amounts, fields):
-        """Add to counters in doc[group] atomically, creating the document with `fields` if needed."""
+    def increment(self, collection, doc_id, amounts, fields):
+        """Add to counters atomically, creating the document with `fields` if needed. `amounts` is
+        nested: {"agents": {"saathi.chat": {"calls": 1}}} adds 1 to doc["agents"]["saathi.chat"]["calls"]."""
+        def add(target: dict, more: dict) -> None:
+            for key, value in more.items():
+                if isinstance(value, dict):
+                    add(target.setdefault(key, {}), value)
+                else:
+                    target[key] = target.get(key, 0) + value
+
         with self._lock:
-            doc = self._data.setdefault(collection, {}).setdefault(doc_id, {"id": doc_id, **fields})
-            counters = doc.setdefault(group, {})
-            for key, value in amounts.items():
-                counters[key] = counters.get(key, 0) + value
+            add(self._data.setdefault(collection, {}).setdefault(doc_id, {"id": doc_id, **fields}), amounts)
 
 
 class FileStore(MemoryStore):
@@ -101,8 +105,8 @@ class FileStore(MemoryStore):
             self._save()
 
 
-    def increment(self, collection, doc_id, group, amounts, fields):
-        super().increment(collection, doc_id, group, amounts, fields)
+    def increment(self, collection, doc_id, amounts, fields):
+        super().increment(collection, doc_id, amounts, fields)
         with self._lock:
             self._save()
 
@@ -136,12 +140,16 @@ class FirestoreStore:
         self._db.collection(collection).document(doc_id).delete()
 
 
-    def increment(self, collection, doc_id, group, amounts, fields):
-        """Atomic on the server (Firestore Increment), so overlapping calls never lose a count."""
+    def increment(self, collection, doc_id, amounts, fields):
+        """Atomic on the server (Firestore Increment), so overlapping calls never lose a count.
+        Nested maps merge, so only the counters named in `amounts` change."""
         from google.cloud import firestore
 
+        def increments(more: dict) -> dict:
+            return {k: increments(v) if isinstance(v, dict) else firestore.Increment(v) for k, v in more.items()}
+
         self._db.collection(collection).document(doc_id).set(
-            {"id": doc_id, **fields, group: {k: firestore.Increment(v) for k, v in amounts.items()}}, merge=True)
+            {"id": doc_id, **fields, **increments(amounts)}, merge=True)
 
 
 def _make_store() -> Store:
