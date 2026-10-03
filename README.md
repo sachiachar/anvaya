@@ -194,13 +194,12 @@ This sets up the service account, Firestore, a private bucket, a KMS key and the
 
 ### Automatic deploys (GitHub Actions)
 
-Every push to `main` deploys **only what changed** ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)):
+Every push to `main` deploys **what changed since each part last deployed** ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)), so a release that GitHub cancelled because a newer merge arrived never loses changes:
 
-| Changed | Deployed |
+| Changed since that part's last successful deploy | Deployed |
 | --- | --- |
 | `agents/**` | Tests, then the API to Cloud Run |
-| `web/**`, `firebase.json` | The web app to Firebase Hosting |
-| `firestore.rules` | Firestore rules |
+| `web/**`, `firebase.json`, `firestore.rules` | The web app to Firebase Hosting, and the Firestore rules |
 | Docs only | Nothing |
 
 **Who can use the demo** is kept in GitHub: *Settings → Environments → production → secret `ALLOWED_EMAILS`* (emails and/or `@domains`, comma-separated). Every API deploy applies it; to apply a change straight away, run **Actions → Deploy → Run workflow → allowlist**.
