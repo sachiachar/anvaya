@@ -140,8 +140,8 @@ export default function Conversation() {
     setCaption({ heard: "", said: "" });
   }
 
-  function decide(p: Proposal, decision: "approve" | "reject"): Promise<void> {
-    return api.decide(p.id, p.collection, decision).then(() => {
+  function decide(p: Proposal, decision: "approve" | "reject", replace = false): Promise<void> {
+    return api.decide(p.id, p.collection, decision, replace).then(() => {
       setTurns((all) => all.map((t) => ({
         ...t,
         proposals: t.proposals
@@ -229,7 +229,9 @@ export default function Conversation() {
   );
 }
 
-function ProposalCard({ p, onDecide }: { p: Proposal; onDecide: (p: Proposal, d: "approve" | "reject") => void }) {
+function ProposalCard({ p, onDecide }: {
+  p: Proposal; onDecide: (p: Proposal, d: "approve" | "reject", replace?: boolean) => void;
+}) {
   const prefix = p.updates ? "Update · " : "";
   let title: string;
   let detail: string | null = null;
@@ -256,6 +258,15 @@ function ProposalCard({ p, onDecide }: { p: Proposal; onDecide: (p: Proposal, d:
       {warning && <p className="warn">{warning}</p>}
       {p.status === "approved" ? (
         <p className="ok">✓ Saved</p>
+      ) : p.looks_like && !p.updates ? (
+        <>
+          <p className="warn">This looks like an update to "{p.looks_like.title}".</p>
+          <div className="row">
+            <button onClick={() => onDecide(p, "approve", true)}>Replace it</button>
+            <button className="secondary" onClick={() => onDecide(p, "approve")}>Keep both</button>
+            <button className="secondary" onClick={() => onDecide(p, "reject")}>Not now</button>
+          </div>
+        </>
       ) : (
         <div className="row">
           <button onClick={() => onDecide(p, "approve")}>Keep</button>

@@ -46,6 +46,9 @@
 - "Missing pieces" on My plan lists them, most important first. Skip any you'd rather not answer, and Saathi won't ask about it again.
 - Telling Saathi who the nominee of an account is now updates that account, rather than becoming a wish, even if you only name the bank ("my wife is the SBI nominee").
 
+**Updating a story or wish without duplicating it**
+- When Saathi words a story or wish differently from one Vikram already kept ("SBI account for my wife" after "Transfer of SBI account"), the card says "This looks like an update to …" and asks: Replace it, Keep both, or Not now. Replace it keeps the new card as the next version, so the map shows one item, not two. Nothing is merged without asking.
+
 **Governance and the admin portal**
 - A separate platform admin portal for the Anvaya team, at https://anvaya-admin.web.app. It shows:
   - actual spend against the monthly budget, with a forecast, in US dollars, read from Google Cloud billing (up to yesterday);

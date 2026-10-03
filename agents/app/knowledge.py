@@ -59,7 +59,7 @@ SECTIONS = [("stories", "Stories"), ("advice", "Advice"), ("practical", "Practic
             ("property", "Property")]
 COLLECTIONS = ("moments", "inventory", "people")
 # Fields of a card that are workflow, not knowledge.
-WORKFLOW_FIELDS = {"owner_id", "status", "updates", "missing_fields"}
+WORKFLOW_FIELDS = {"owner_id", "status", "updates", "missing_fields", "looks_like"}
 UNMASKED = {"id", "recording", "document"}
 
 

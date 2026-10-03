@@ -283,6 +283,8 @@ class Decision(BaseModel):
     collection: Literal["moments", "inventory", "people"]
     decision: Literal["approve", "reject"]
     edits: dict | None = None
+    # "Replace it" on a card that looks like a kept item: keep it as that item's new version.
+    replace: bool = False
 
 
 @api.post("/proposals/{doc_id}/decision", dependencies=[Depends(demo.only("owner"))])
@@ -295,9 +297,15 @@ def decide(doc_id: str, body: Decision) -> dict:
         return {"id": doc_id, "status": "rejected"}
     # Edits change what a card says, never what it is or where it came from.
     safe_edits = {k: v for k, v in (body.edits or {}).items()
-                  if k not in ("id", "owner_id", "status", "updates", "recording", "document")}
+                  if k not in ("id", "owner_id", "status", "updates", "looks_like", "recording", "document")}
     if safe_edits:
         doc = store.update(body.collection, doc_id, safe_edits)
+    if body.replace:
+        target = (doc.get("looks_like") or {}).get("id")
+        kept = knowledge.current(doc["owner_id"], target) if target else None
+        if not kept or not kept.get("concept", "").startswith(("stories/", "advice/", "practical/", "wishes/")):
+            raise HTTPException(409, "There's nothing kept for this card to replace.")
+        doc = store.update(body.collection, doc_id, {"updates": kept["id"]})
     return proposals.approve(body.collection, doc)
 
 

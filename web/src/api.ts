@@ -30,6 +30,9 @@ export type KnowledgeMap = { nodes: MapNode[]; edges: MapEdge[]; gaps: { node: s
 
 export type Moment = {
   id: string;
+  /** On a card waiting for Keep: the kept item it updates, or one it looks like. */
+  updates?: string;
+  looks_like?: { id: string; title: string };
   kind: "story" | "advice" | "practical" | "wish";
   title: string;
   summary: string;
@@ -94,6 +97,8 @@ export type Proposal = (Moment | InventoryItem | Person) & {
   collection: "moments" | "inventory" | "people";
   status: "pending" | "approved";
   updates?: string;
+  /** A kept story or wish this card may be a reworded update of: the card asks Replace or Keep both. */
+  looks_like?: { id: string; title: string };
 };
 
 export type Turn = {
@@ -226,8 +231,9 @@ export const api = {
     request(`/access-requests/${id}/decision`, json({ decision, decided_by })),
 
   review: () => request<{ moments: Moment[]; inventory: InventoryItem[] }>(o("/review")),
-  decide: (id: string, collection: "moments" | "inventory" | "people", decision: "approve" | "reject") =>
-    request(`/proposals/${id}/decision`, json({ collection, decision })),
+  /** replace: keep the card as a new version of the kept item it looks like ("Replace it"). */
+  decide: (id: string, collection: "moments" | "inventory" | "people", decision: "approve" | "reject", replace = false) =>
+    request(`/proposals/${id}/decision`, json({ collection, decision, replace })),
 
   readiness: () => request<{ score: number; tasks: Task[] }>(o("/readiness"), { method: "POST" }),
   tasks: () => request<{ score: number | null; tasks: Task[] }>(o("/tasks")),

@@ -113,8 +113,8 @@ function WeeklyReview() {
   const refresh = () => run(async () => setQueue(await api.review()));
   useEffect(() => { refresh(); }, []);
 
-  const decide = (id: string, c: "moments" | "inventory", d: "approve" | "reject") =>
-    run(async () => { await api.decide(id, c, d); await refresh(); });
+  const decide = (id: string, c: "moments" | "inventory", d: "approve" | "reject", replace = false) =>
+    run(async () => { await api.decide(id, c, d, replace); await refresh(); });
 
   const empty = queue.moments.length + queue.inventory.length === 0;
   return (
@@ -127,10 +127,21 @@ function WeeklyReview() {
           <li key={m.id}>
             <span className="tag">{m.kind}</span> <strong>{m.title}</strong>
             <blockquote>{m.quote}</blockquote>
-            <div className="row">
-              <button onClick={() => decide(m.id, "moments", "approve")}>Keep</button>
-              <button className="secondary" onClick={() => decide(m.id, "moments", "reject")}>Discard</button>
-            </div>
+            {m.looks_like && !m.updates ? (
+              <>
+                <p className="warn">This looks like an update to "{m.looks_like.title}".</p>
+                <div className="row">
+                  <button onClick={() => decide(m.id, "moments", "approve", true)}>Replace it</button>
+                  <button className="secondary" onClick={() => decide(m.id, "moments", "approve")}>Keep both</button>
+                  <button className="secondary" onClick={() => decide(m.id, "moments", "reject")}>Discard</button>
+                </div>
+              </>
+            ) : (
+              <div className="row">
+                <button onClick={() => decide(m.id, "moments", "approve")}>Keep</button>
+                <button className="secondary" onClick={() => decide(m.id, "moments", "reject")}>Discard</button>
+              </div>
+            )}
           </li>
         ))}
         {queue.inventory.map((i) => (
