@@ -139,4 +139,4 @@ jobs:
           [ "${{ needs.changes.outputs.web }}" = "true" ] && targets="hosting"
           [ "${{ needs.changes.outputs.rules }}" = "true" ] && targets="${targets:+$targets,}firestore:rules"
           echo "Deploying: $targets"
-          npx --yes firebase-tools@latest deploy --project "${{ vars.GCP_PROJECT_ID }}" --only "$targets" --non-interactive
+          npx --yes firebase-tools@15.31.0 deploy --project "${{ vars.GCP_PROJECT_ID }}" --only "$targets" --non-interactive
