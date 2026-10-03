@@ -12,23 +12,44 @@
 // Demo simplification: keys are cached in localStorage. Production keeps them as
 // non-extractable keys in IndexedDB and can add a passkey as a second unlock.
 
+import { currentOwnerId } from "./api";
+
 const b64 = (buf: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(buf)));
 const unb64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
-const DATA_KEY = "life-after.owner.dataKey";
-const RECIPIENT_PRIVATE = "life-after.recipient.privateJwk";
+// Keys are kept per demo copy (PR-1.4): the owner's data key and the recipient's private key
+// have different names, and the copy's owner ID keeps two copies in one browser apart.
+const DATA_KEY = "owner.dataKey";
+const RECIPIENT_PRIVATE = "recipient.privateJwk";
+// Before this change keys had one name for every copy; only the local demo (no sign-in) still
+// has the owner they belonged to, so only its keys are carried over.
+const LEGACY_OWNER = "owner_demo_vikram";
+
+function scoped(key: string): string {
+  const owner = currentOwnerId();
+  if (!owner) throw new Error("The demo isn't ready yet. Please wait a moment and try again.");
+  return `anvaya.${owner}.${key}`;
+}
 
 function load(key: string): string | null {
   try {
-    return localStorage.getItem(key);
+    const value = localStorage.getItem(scoped(key));
+    if (value !== null || currentOwnerId() !== LEGACY_OWNER) return value;
+    const legacy = localStorage.getItem(`life-after.${key}`);
+    if (legacy !== null) {
+      localStorage.setItem(scoped(key), legacy);
+      localStorage.removeItem(`life-after.${key}`);
+    }
+    return legacy;
   } catch {
     return null;
   }
 }
 
 function save(key: string, value: string) {
+  const name = scoped(key); // never save a key before the copy is known
   try {
-    localStorage.setItem(key, value);
+    localStorage.setItem(name, value);
   } catch {
     /* storage unavailable: key lives only for this session */
   }
@@ -36,7 +57,7 @@ function save(key: string, value: string) {
 
 function remove(key: string) {
   try {
-    localStorage.removeItem(key);
+    localStorage.removeItem(scoped(key));
   } catch {
     /* nothing to remove */
   }

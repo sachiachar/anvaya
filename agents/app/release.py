@@ -73,7 +73,7 @@ def confirm_authority(case: dict[str, Any], reviewer: str, override_reason: str 
                       now: float | None = None) -> dict[str, Any]:
     if case["state"] != "death_confirmed" or case.get("authority_check") is None:
         raise ReleaseError("need a confirmed death and a submitted proof of authority")
-    if reviewer == case.get("death_confirmed_by"):
+    if reviewer.strip().casefold() == (case.get("death_confirmed_by") or "").strip().casefold():
         raise ReleaseError("A different reviewer must confirm legal authority (two-person rule).")
     note = _check_override(case.get("authority_check"), "proof of legal authority", reviewer, override_reason)
     now = time.time() if now is None else now

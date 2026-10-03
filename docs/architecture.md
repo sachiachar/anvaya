@@ -286,11 +286,12 @@ On `released`, KMS removes the outer layer and the recipient's phone decrypts th
 | Sharing without consent | `legal-handoff` needs consent; access requests go to the owner while alive; neutral replies reveal nothing to strangers |
 | Public access to storage | Firestore rules deny clients; private bucket; least-privilege service account |
 | One judge reaching another judge's demo | Each Google account gets its own copy, chosen from the verified sign-in, never from the browser (`demo.py`). Every route checks that the owner or document belongs to the caller's copy and answers **404** otherwise; team lists show only the caller's copy; the live call closes for another copy's owner. Resetting touches only the caller's copy, including its recordings |
+| Someone acting outside their part | The switcher sends who is acting (`X-Acting-As`; `acting_as` on the live call). The server accepts only the people in the copy and checks each action's person (`demo.only`): only Vikram changes his vault, keeps cards or answers alerts; only Priya registers as recipient, reports, sends proof and opens the vault; only a reviewer confirms. The reviewer is the person acting, never a typed name, so one reviewer can't confirm both steps |
 | Uninvited people using the demo | Google sign-in (Firebase Auth); the server verifies the ID token on every request (`auth.py`) and checks `ALLOWED_EMAILS` (addresses or `@domains`); the live call passes the token as `?token=` |
 
 **Known gaps before real users**
 
-1. **Private copies, but no roles inside a copy yet.** Everyone signs in with Google (Firebase Auth), and only emails or domains on `ALLOWED_EMAILS` get in. Each account has its own demo copy, and the server keeps copies apart. Inside a copy, the signed-in person can still act as owner, recipient or reviewer; switching between real identities comes next (PR-1.3, PR-1.4).
+1. **One judge plays every person in their copy.** Everyone signs in with Google (Firebase Auth), and only emails or domains on `ALLOWED_EMAILS` get in. Each account has its own demo copy, and the server keeps copies apart. Inside a copy, the switcher chooses who acts (Vikram, Priya, Anjali, Rahul or the platform admin). The server checks that person on every action, but in production each person would sign in separately.
 2. **Keys in `localStorage`** so one browser can play every role. Production needs non-extractable keys in IndexedDB with passkeys.
 3. **KMS decrypt scope.** The API has both encrypt and decrypt; move decrypt to a separate release service.
 4. **No notifications.** The owner is alerted only inside the app during the waiting period. Add push, SMS and email.
@@ -325,7 +326,8 @@ Automated tests (`agents/tests/`), with Gemini stubbed so they run without crede
 - release rules: two-person rule, override reasons, waiting period, owner cancel;
 - access gating and consent; recipient invitation, approval and key changes;
 - sign-in: every API route and the live call need an allowed Google account;
-- private demos: two judges at once never reach each other's copy, through any owner route, any document ID, the team lists or the live call, and resetting one copy leaves the other alone;
+- people in a copy: the server knows who is acting, each person can only do their part, and one reviewer can't confirm both steps;
+- private demos: two judges at once never reach each other's copy (whoever they act as), through any owner route, any document ID, the team lists or the live call, and resetting one copy leaves the other alone;
 - card merging (repeats, follow-ups that keep earlier facts, family), using real cases from test runs;
 - next-step rules (duplicates, reworded done steps, LIC vs SBI);
 - reply rules (script, false claims, "shall I add");

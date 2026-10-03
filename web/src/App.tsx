@@ -1,21 +1,44 @@
 import { useEffect, useState } from "react";
-import { AuthError, api } from "./api";
+import { AuthError, api, setActingAs, type DemoPerson, type PersonId } from "./api";
 import { authEnabled, signInWithGoogle, signOutUser, watchUser } from "./auth";
 import { ShowAutonomy } from "./ui";
 import Family from "./Family";
 import Owner from "./Owner";
 import Team from "./Team";
 
-const VIEWS = {
-  owner: { label: "Vikram", sub: "Owner", render: () => <Owner /> },
-  team: { label: "Our team", sub: "Review", render: () => <Team /> },
-  family: { label: "Priya", sub: "Family", render: () => <Family /> },
-} as const;
+// The platform admin opens the separate admin portal (PR-12.9).
+const ADMIN_URL = import.meta.env.VITE_ADMIN_URL ?? (import.meta.env.DEV ? "/admin.html" : "https://anvaya-admin.web.app");
 
-type View = keyof typeof VIEWS;
+const ROLE_TEXT: Record<DemoPerson["role"], string> = {
+  owner: "Owner", family: "Family", reviewer: "Reviewer", platform_admin: "Platform admin",
+};
+
+// Each person sees their own screen; the server checks who is acting on every request (PR-1.3).
+function render(person: DemoPerson) {
+  switch (person.role) {
+    case "owner": return <Owner />;
+    case "family": return <Family />;
+    case "reviewer": return <Team reviewer={person.name} />;
+    case "platform_admin": return <AdminLink />;
+  }
+}
+
+function AdminLink() {
+  return (
+    <section className="card">
+      <h2>Platform admin</h2>
+      <p>The governance team works in a separate portal: spend from Google Cloud billing, every agent and its limits, refused calls, budget requests, guardian interventions and the audit log.</p>
+      <p className="muted">It opens in a new tab. Sign in there with the same Google account.</p>
+      <p><a className="button" href={ADMIN_URL} target="_blank" rel="noreferrer">Open the admin portal</a></p>
+    </section>
+  );
+}
 
 export default function App() {
-  const [view, setView] = useState<View>("owner");
+  const [people, setPeople] = useState<DemoPerson[]>([]);
+  const [acting, setActing] = useState<PersonId>("vikram");
+  const switchTo = (id: PersonId) => { setActingAs(id); setActing(id); };
+  const person = people.find((p) => p.id === acting);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAi, setShowAi] = useState(() => {
@@ -42,7 +65,7 @@ export default function App() {
     if (session !== "checking" && session !== "in") return;
     if (authEnabled && !email) return;
     api.me()
-      .then(() => api.owner().catch(() => api.seed()))
+      .then((m) => { setPeople(m.people); return api.owner().catch(() => api.seed()); })
       .then(() => { setSession("in"); setReady(true); })
       .catch((e) => {
         if (e instanceof AuthError) { setDenied(e.message); setSession("denied"); }
@@ -92,15 +115,21 @@ export default function App() {
           )}
         </div>
       </header>
+      {person && (
+        <p className="acting" role="status">You are acting as <strong>{person.name}</strong> · {ROLE_TEXT[person.role]}</p>
+      )}
       <main>
         {error && <p className="error">Cannot reach the agents API: {error}</p>}
-        <ShowAutonomy.Provider value={showAi}>{ready && VIEWS[view].render()}</ShowAutonomy.Provider>
+        <ShowAutonomy.Provider value={showAi}>
+          {ready && person && <div key={person.id}>{render(person)}</div>}
+        </ShowAutonomy.Provider>
       </main>
-      <nav className="tabs" aria-label="Switch role">
-        {(Object.keys(VIEWS) as View[]).map((v) => (
-          <button key={v} className={v === view ? "active" : ""} aria-current={v === view ? "page" : undefined} onClick={() => setView(v)}>
-            <strong>{VIEWS[v].label}</strong>
-            <span>{VIEWS[v].sub}</span>
+      <nav className="tabs" aria-label="Switch person">
+        {people.map((p) => (
+          <button key={p.id} className={p.id === acting ? "active" : ""} aria-current={p.id === acting ? "page" : undefined}
+            onClick={() => switchTo(p.id)}>
+            <strong>{p.id === "admin" ? "Admin" : p.name}</strong>
+            <span>{p.role === "platform_admin" ? "Portal" : ROLE_TEXT[p.role]}</span>
           </button>
         ))}
       </nav>

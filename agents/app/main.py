@@ -107,7 +107,7 @@ def get_owner(owner_id: str) -> dict:
 # ---- Capture loop -------------------------------------------------------------
 
 
-@api.post("/owners/{owner_id}/capture/audio")
+@api.post("/owners/{owner_id}/capture/audio", dependencies=[Depends(demo.only("owner"))])
 async def capture_audio(owner_id: str, audio: UploadFile = File(...)) -> dict:
     owner = owner_or_404(owner_id)
     data = await audio.read()
@@ -155,7 +155,7 @@ def get_conversation(owner_id: str) -> dict:
     return {"turns": turns}
 
 
-@api.post("/owners/{owner_id}/conversation")
+@api.post("/owners/{owner_id}/conversation", dependencies=[Depends(demo.only("owner"))])
 async def converse(owner_id: str, text: str | None = Form(None), file: UploadFile | None = File(None)) -> dict:
     """One turn: the owner talks, types, or shares a photo or document. The AI replies,
     and anything worth keeping comes back as proposals the owner can keep or discard."""
@@ -193,7 +193,7 @@ async def converse(owner_id: str, text: str | None = Form(None), file: UploadFil
 
 
 @app.websocket("/api/owners/{owner_id}/live")
-async def live_call(ws: WebSocket, owner_id: str, token: str | None = None) -> None:
+async def live_call(ws: WebSocket, owner_id: str, token: str | None = None, acting_as: str | None = None) -> None:
     """Two-way voice call with the companion (Gemini Live API). See live.py for the protocol.
     Browsers can't send headers on a WebSocket, so the sign-in token comes as ?token=."""
     if settings.auth_required:
@@ -208,6 +208,9 @@ async def live_call(ws: WebSocket, owner_id: str, token: str | None = None) -> N
         governance_core.set_current_user(governance_core.user_key(demo.LOCAL))
         demo.begin(demo.LOCAL)
     demo.ensure()
+    if (acting_as or demo.DEFAULT_PERSON).strip().lower() != "vikram":  # only the owner talks with Saathi
+        await ws.close(code=4403, reason="Only Vikram can call Saathi.")
+        return
     owner = store.get("owners", owner_id)
     if not owner or owner_id != demo.owner_id():  # only the caller's own copy
         await ws.close(code=4404)
@@ -242,7 +245,7 @@ async def speech_audio(body: Speech) -> Response:
         raise HTTPException(503, str(e)) from e
 
 
-@api.post("/owners/{owner_id}/documents")
+@api.post("/owners/{owner_id}/documents", dependencies=[Depends(demo.only("owner"))])
 async def add_document(owner_id: str, image: UploadFile = File(...)) -> dict:
     owner = owner_or_404(owner_id)
     data = await image.read()
@@ -254,7 +257,7 @@ async def add_document(owner_id: str, image: UploadFile = File(...)) -> dict:
     return {"autonomy": ACT, "proposal": store.put("inventory", doc)}
 
 
-@api.post("/owners/{owner_id}/wishes")
+@api.post("/owners/{owner_id}/wishes", dependencies=[Depends(demo.only("owner"))])
 def add_wish(owner_id: str, text: str = Form(...)) -> dict:
     """A wish the owner types is the owner's own action, so it is approved at once."""
     owner_or_404(owner_id)
@@ -280,7 +283,7 @@ class Decision(BaseModel):
     edits: dict | None = None
 
 
-@api.post("/proposals/{doc_id}/decision")
+@api.post("/proposals/{doc_id}/decision", dependencies=[Depends(demo.only("owner"))])
 def decide(doc_id: str, body: Decision) -> dict:
     doc = demo.mine(body.collection, doc_id)
     if not doc or doc["status"] != "pending":
@@ -340,7 +343,7 @@ def _readiness_inputs(owner_id: str) -> tuple[dict, list]:
     return owner, args
 
 
-@api.post("/owners/{owner_id}/readiness")
+@api.post("/owners/{owner_id}/readiness", dependencies=[Depends(demo.only("owner"))])
 async def readiness(owner_id: str) -> dict:
     """Readiness loop: score, plus next steps that stay on the owner's list until done."""
     owner, args = _readiness_inputs(owner_id)
@@ -365,7 +368,7 @@ class TaskUpdate(BaseModel):
     status: Literal["done", "dismissed"]
 
 
-@api.post("/tasks/{task_id}")
+@api.post("/tasks/{task_id}", dependencies=[Depends(demo.only("owner"))])
 def update_task(task_id: str, body: TaskUpdate) -> dict:
     if not demo.mine("tasks", task_id):
         raise HTTPException(404, "task not found")
@@ -376,7 +379,7 @@ class Prompt(BaseModel):
     text: str
 
 
-@api.post("/owners/{owner_id}/conversation/prompt")
+@api.post("/owners/{owner_id}/conversation/prompt", dependencies=[Depends(demo.only("owner"))])
 def companion_asks(owner_id: str, body: Prompt) -> dict:
     """Start a topic from a next step: the companion's question appears in the chat,
     and the next typed message or live call carries on from it."""
@@ -385,7 +388,7 @@ def companion_asks(owner_id: str, body: Prompt) -> dict:
                                "role": "assistant", "text": body.text, "language": None})
 
 
-@api.post("/owners/{owner_id}/legal-needs")
+@api.post("/owners/{owner_id}/legal-needs", dependencies=[Depends(demo.only("owner"))])
 async def legal_needs(owner_id: str) -> dict:
     owner = owner_or_404(owner_id)
     args = [store.list("moments", owner_id=owner_id, status="approved", kind="wish"),
@@ -404,7 +407,7 @@ class Handoff(BaseModel):
     needs: list[dict]
 
 
-@api.post("/owners/{owner_id}/legal-handoff")
+@api.post("/owners/{owner_id}/legal-handoff", dependencies=[Depends(demo.only("owner"))])
 def legal_handoff(owner_id: str, body: Handoff) -> dict:
     """Send a pre-filled summary to a legal partner. Requires the owner's explicit consent.
 
@@ -430,7 +433,7 @@ def legal_handoff(owner_id: str, body: Handoff) -> dict:
     return {"autonomy": PROPOSE, "status": "sent to partner (mock)", "summary": summary}
 
 
-@api.post("/owners/{owner_id}/legal-documents")
+@api.post("/owners/{owner_id}/legal-documents", dependencies=[Depends(demo.only("owner"))])
 def record_legal_document(owner_id: str, document_type: str = Form(...), location: str = Form("")) -> dict:
     owner_or_404(owner_id)
     return store.put("legal_documents", {"id": new_id("legal"), "owner_id": owner_id,
@@ -464,7 +467,7 @@ class Invite(BaseModel):
     relationship: str
 
 
-@api.post("/owners/{owner_id}/vault/invite")
+@api.post("/owners/{owner_id}/vault/invite", dependencies=[Depends(demo.only("owner"))])
 def invite_recipient(owner_id: str, body: Invite) -> dict:
     """The owner chooses who receives the vault. Choosing someone new replaces the old choice."""
     owner = owner_or_404(owner_id)
@@ -486,7 +489,7 @@ def get_invite(owner_id: str) -> dict:
     return invite
 
 
-@api.post("/owners/{owner_id}/vault/recipient")
+@api.post("/owners/{owner_id}/vault/recipient", dependencies=[Depends(demo.only("family"))])
 def set_recipient(owner_id: str, body: Recipient) -> dict:
     """The invited person accepts and registers their key. A new key (e.g. recovery code lost)
     means the owner's device must re-seal the vault, so only allowed while no case is open."""
@@ -517,7 +520,7 @@ class RecipientDecision(BaseModel):
     decision: Literal["approve", "decline"]
 
 
-@api.post("/owners/{owner_id}/vault/recipient/decision")
+@api.post("/owners/{owner_id}/vault/recipient/decision", dependencies=[Depends(demo.only("owner"))])
 def decide_recipient(owner_id: str, body: RecipientDecision) -> dict:
     """Only the owner can accept someone as vault recipient."""
     owner = owner_or_404(owner_id)
@@ -535,7 +538,7 @@ class Escrow(BaseModel):
     recipient_wrapped_key: str  # base64; the data key wrapped with the recipient's public key
 
 
-@api.post("/owners/{owner_id}/vault/escrow")
+@api.post("/owners/{owner_id}/vault/escrow", dependencies=[Depends(demo.only("owner"))])
 def set_escrow(owner_id: str, body: Escrow) -> dict:
     owner = owner_or_404(owner_id)
     if (owner.get("vault_recipient") or {}).get("status") != "approved":
@@ -551,7 +554,7 @@ class VaultItem(BaseModel):
     ai_label: str | None = None  # optional, owner-approved label the AI may see
 
 
-@api.post("/owners/{owner_id}/vault/items")
+@api.post("/owners/{owner_id}/vault/items", dependencies=[Depends(demo.only("owner"))])
 def add_vault_item(owner_id: str, body: VaultItem) -> dict:
     owner_or_404(owner_id)
     return store.put("vault_items", {"id": new_id("vault"), "owner_id": owner_id, **body.model_dump()})
@@ -565,7 +568,7 @@ def list_vault_items(owner_id: str) -> dict:
 # ---- Activation and vault release (Assist: a person decides) ------------------
 
 
-@api.post("/owners/{owner_id}/death-report")
+@api.post("/owners/{owner_id}/death-report", dependencies=[Depends(demo.only("family"))])
 async def report_death(owner_id: str, certificate: UploadFile = File(...)) -> dict:
     owner = owner_or_404(owner_id)
     if open_case(owner_id):
@@ -574,10 +577,11 @@ async def report_death(owner_id: str, certificate: UploadFile = File(...)) -> di
     check = await loops.check_document(data, certificate.content_type or "image/jpeg",
                                        "death certificate", owner["name"])
     case = release.new_case(new_id("case"), owner_id, loops.review_summary(check))
+    case["reported_by"] = demo.person()["name"]
     return {"autonomy": ASSIST, "case": store.put("cases", case)}
 
 
-@api.post("/owners/{owner_id}/release/authority")
+@api.post("/owners/{owner_id}/release/authority", dependencies=[Depends(demo.only("family"))])
 async def submit_authority(owner_id: str, proof: UploadFile = File(...)) -> dict:
     owner = owner_or_404(owner_id)
     case = open_case(owner_id)
@@ -605,21 +609,27 @@ def list_cases() -> dict:
 
 
 class Review(BaseModel):
-    reviewer: str
+    reviewer: str | None = None  # ignored: the reviewer is the person acting (PR-1.4)
     override_reason: str | None = None
 
 
-@api.post("/admin/cases/{case_id}/confirm-death")
+def _reviewer() -> str:
+    """The reviewer is whoever is acting, from the switcher, never a typed name, so the
+    two-person rule compares real identities."""
+    return demo.person()["name"]
+
+
+@api.post("/admin/cases/{case_id}/confirm-death", dependencies=[Depends(demo.only("reviewer"))])
 def confirm_death(case_id: str, body: Review) -> dict:
-    return _transition(case_id, lambda c: release.confirm_death(c, body.reviewer, body.override_reason))
+    return _transition(case_id, lambda c: release.confirm_death(c, _reviewer(), body.override_reason))
 
 
-@api.post("/admin/cases/{case_id}/confirm-authority")
+@api.post("/admin/cases/{case_id}/confirm-authority", dependencies=[Depends(demo.only("reviewer"))])
 def confirm_authority(case_id: str, body: Review) -> dict:
-    return _transition(case_id, lambda c: release.confirm_authority(c, body.reviewer, body.override_reason))
+    return _transition(case_id, lambda c: release.confirm_authority(c, _reviewer(), body.override_reason))
 
 
-@api.post("/owners/{owner_id}/alive")
+@api.post("/owners/{owner_id}/alive", dependencies=[Depends(demo.only("owner"))])
 def owner_alive(owner_id: str) -> dict:
     """The owner's device answers the alert: stop everything."""
     case = open_case(owner_id)
@@ -644,7 +654,7 @@ def release_status(owner_id: str) -> dict:
     return {"case": open_case(owner_id)}
 
 
-@api.get("/owners/{owner_id}/vault/release-bundle")
+@api.get("/owners/{owner_id}/vault/release-bundle", dependencies=[Depends(demo.only("family"))])
 def release_bundle(owner_id: str) -> dict:
     """Only after release: the recipient-wrapped data key plus the encrypted items.
 
@@ -668,7 +678,7 @@ class Question(BaseModel):
     session_id: str | None = None
 
 
-@api.post("/owners/{owner_id}/ask")
+@api.post("/owners/{owner_id}/ask", dependencies=[Depends(demo.only("family"))])
 async def ask_question(owner_id: str, body: Question) -> dict:
     require_handover(owner_id)
     owner = owner_or_404(owner_id)
@@ -679,7 +689,7 @@ async def ask_question(owner_id: str, body: Question) -> dict:
         raise HTTPException(404, "conversation not found") from None
 
 
-@api.post("/owners/{owner_id}/settlement")
+@api.post("/owners/{owner_id}/settlement", dependencies=[Depends(demo.only("family"))])
 async def settlement(owner_id: str) -> dict:
     require_handover(owner_id)
     owner = owner_or_404(owner_id)
@@ -707,7 +717,7 @@ class AccessRequest(BaseModel):
     note: str = ""
 
 
-@api.post("/owners/{owner_id}/access-requests")
+@api.post("/owners/{owner_id}/access-requests", dependencies=[Depends(demo.only("family"))])
 def request_access(owner_id: str, body: AccessRequest) -> dict:
     # Same reply either way, so a stranger learns nothing about who uses the service. In the demo
     # a request is kept only for the caller's own copy (PR-1.6).
@@ -740,6 +750,8 @@ class AccessDecision(BaseModel):
 
 @api.post("/access-requests/{request_id}/decision")
 def decide_access(request_id: str, body: AccessDecision) -> dict:
+    if demo.person()["role"] != {"owner": "owner", "team": "reviewer"}[body.decided_by]:
+        raise HTTPException(403, "Only Vikram decides while he's here; after that, a reviewer decides.")
     req = demo.mine("access_requests", request_id)
     expected = {"owner": "pending_owner", "team": "pending_review"}[body.decided_by]
     if not req or req["status"] != expected:
@@ -772,7 +784,8 @@ def me(request: Request) -> dict:
     user = getattr(request.state, "user", None)
     demo.ensure()
     return {"email": user.email if user else None, "name": user.name if user else None,
-            "auth": settings.auth_required, "owner_id": demo.owner_id()}
+            "auth": settings.auth_required, "owner_id": demo.owner_id(),
+            "people": [{"id": pid, **p} for pid, p in demo.PEOPLE.items()], "acting_as": demo.person()["id"]}
 
 
 api.include_router(portal.router)

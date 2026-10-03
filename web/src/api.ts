@@ -5,6 +5,15 @@ import type { KeyBackup } from "./vaultCrypto";
 let ownerId = "";
 export const currentOwnerId = () => ownerId;
 
+// Who is acting within the copy (PR-1.3): sent with every request, and checked on the server.
+export type PersonId = "vikram" | "priya" | "anjali" | "rahul" | "admin";
+export type DemoPerson = { id: PersonId; name: string; role: "owner" | "family" | "reviewer" | "platform_admin" };
+let actingAs: PersonId = "vikram";
+export const currentPerson = () => actingAs;
+export const setActingAs = (person: PersonId) => {
+  actingAs = person;
+};
+
 export type Autonomy = "assist" | "propose" | "act_within_limits";
 
 export type Moment = {
@@ -87,12 +96,12 @@ export type AccessRequest = { id: string; name: string; relationship: string; co
 
 export type VaultItem = { id: string; category: string; iv: string; ciphertext: string; ai_label: string | null };
 
-/** Adds the signed-in user's token; the API refuses anyone not on the demo list. */
+/** Adds the signed-in user's token (the API refuses anyone not on the demo list) and who is acting. */
 async function withAuth(init?: RequestInit): Promise<RequestInit> {
   const token = await idToken();
-  if (!token) return init ?? {};
   const headers = new Headers(init?.headers);
-  headers.set("Authorization", `Bearer ${token}`);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  headers.set("X-Acting-As", actingAs);
   return { ...init, headers };
 }
 
@@ -137,7 +146,7 @@ const o = (path: string) => `/owners/${ownerId}${path}`;
 
 export const api = {
   me: () =>
-    request<{ email: string | null; name: string | null; auth: boolean; owner_id: string }>("/me").then((m) => {
+    request<{ email: string | null; name: string | null; auth: boolean; owner_id: string; people: DemoPerson[] }>("/me").then((m) => {
       ownerId = m.owner_id;
       return m;
     }),

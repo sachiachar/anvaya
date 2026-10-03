@@ -136,6 +136,10 @@ code, .cipher { font-size: 0.8rem; overflow-wrap: anywhere; }
 .tabs button { flex: 1; max-width: 186px; flex-direction: column; background: none; border: none; color: var(--muted); min-height: 52px; }
 .tabs button span { font-size: 0.75rem; font-weight: 400; }
 .tabs button.active { color: var(--brand); background: var(--accent-soft); }
+.tabs button { min-width: 0; padding-inline: 4px; }
+.tabs button strong, .tabs button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Who is acting (PR-1.3): always visible, so a judge knows whose screen this is. */
+.acting { margin: 0; padding: 8px 16px; background: var(--accent-soft); color: var(--brand); font-size: 0.9rem; text-align: center; }
 
 details summary { cursor: pointer; color: var(--brand); margin: 6px 0; }
 

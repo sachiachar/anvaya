@@ -13,6 +13,7 @@
 - Readiness, legal needs and the claims checklist are worked out again only when the owner's information has changed; otherwise the last result comes back straight away.
 
 **Access**
+- Switch between the people in your demo: Vikram (owner), Priya (family), Anjali and Rahul (reviewers) and the platform admin. A banner always shows who you are acting as. The server checks it: only Vikram changes his vault, only Priya opens it after release, and only a reviewer confirms. One reviewer can't confirm both the death and the legal authority, even though you play both.
 - Each person who signs in gets their own private copy of the demo. Nobody else can see or change it, and "Reset my demo" restores only your own copy, including its recordings.
 - The app is now called Anvaya, at https://anvaya-saathi.web.app, with a new logo, icons and navy theme. The old address redirects there.
 
@@ -49,7 +50,7 @@
 - A business model with costs and margins, a brand guide, a proposal for governing the agents, and the guardian layer and storage design in the architecture document.
 
 ### Known limitations
-- No per-role permissions inside a demo copy yet; one signed-in browser plays every role in its own copy. Switching between people with their own identities comes next. The admin portal has its own roles.
+- One signed-in person plays everyone in their demo copy through the switcher; in a real service each person would sign in separately. The admin portal has its own roles.
 - No notifications (push, SMS, email); the owner sees alerts only inside the app.
 - The legal partner is mocked.
 - Live calls end after about 15 minutes (Gemini Live limit), and spoken replies can't be rule-checked like typed ones.
@@ -59,7 +60,7 @@
 - Spend can't yet be split by agent or tenant on the bill; those show use instead.
 
 ### Next
-Switching between the people in your demo · guardian checks at every step · a claim file and bank view · accounts checked at the source · kept knowledge with gentle questions about what's missing · measured AI quality.
+Judges acting as the platform admin in the portal · guardian checks at every step · a claim file and bank view · accounts checked at the source · kept knowledge with gentle questions about what's missing · measured AI quality.
 
 ## Prototype 0.1 · 28 September 2026 (AI Builder Cup 2026)
 
