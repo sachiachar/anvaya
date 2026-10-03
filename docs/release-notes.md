@@ -39,6 +39,7 @@
 - People a story mentions but who aren't kept yet show as dotted circles, and an account or policy with no nominee is marked in red, so the gaps are easy to see.
 - It looks like Obsidian's graph view: a dark canvas where items settle into place, bigger circles for items with more links, scroll to zoom, drag to move, and hover to light up an item's links. It zooms to fit until you move it, and "Fit the whole map" brings that back.
 - A wish or story links to the people it names in its own words, including "my wife" or "my daughter", and to the accounts and banks it mentions. "Transfer of SBI account to my wife" links to the SBI account and to his wife.
+- Someone related through another person now hangs off that person: "Kavya, wife of my brother-in-law" links to Bhaskar, not straight to Vikram. "Bhaskar's son" works the same way.
 
 **Saathi asks about what's missing**
 - Saathi now knows what is missing from Vikram's plan and gently asks about the most important piece when the moment fits: one at a time, never pressing. It might be an account with no nominee, a wish that gives an account to someone other than its nominee, a flat nobody is named to receive, or someone whose relationship isn't known.

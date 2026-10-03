@@ -149,3 +149,16 @@ def test_names_with_punctuation_match_in_text(client):
     g = graph()
     assert linked(g, story["id"], node(g, "Dr. Mehta")["id"], "mentions")
     assert linked(g, story["id"], acct["id"], "about")
+
+
+def test_a_relative_of_a_relative_links_to_them_not_the_owner(client):
+    bhaskar = proposals.approve("people", proposals.save_person(OWNER, {"name": "Bhaskar", "relationship": "brother-in-law"}))
+    kavya = proposals.approve("people", proposals.save_person(OWNER, {"name": "Kavya", "relationship": "wife of brother-in-law"}))
+    ravi = proposals.approve("people", proposals.save_person(OWNER, {"name": "Ravi", "relationship": "Bhaskar's son"}))
+    nobody = proposals.approve("people", proposals.save_person(OWNER, {"name": "Lata", "relationship": "wife of a cousin"}))
+    g = graph()
+    assert linked(g, kavya["id"], bhaskar["id"], "wife") and not linked(g, kavya["id"], "owner", "wife of brother-in-law")
+    assert linked(g, ravi["id"], bhaskar["id"], "son")
+    assert linked(g, bhaskar["id"], "owner", "brother-in-law")
+    assert linked(g, nobody["id"], "owner", "wife of a cousin")  # nobody kept to link through
+    assert not any(n["group"] == "mentioned" for n in g["nodes"])
