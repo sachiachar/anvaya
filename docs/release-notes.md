@@ -1,5 +1,56 @@
 # Anvaya: Release Notes
 
+## Not yet released
+
+### What's included
+
+**Talking to Saathi (owner)**
+- Spoken replies read out only what Saathi actually said, checked on the server. Playing a reply again, or a new reply with the same words, reuses the saved audio.
+- Spoken replies are limited to 1,000 characters.
+
+**Next steps**
+- Readiness, legal needs and the claims checklist are worked out again only when the owner's information has changed; otherwise the last result comes back straight away.
+
+**Access**
+- The app is now called Anvaya, at https://anvaya-saathi.web.app, with a new logo, icons and navy theme. The old address redirects there.
+
+**Governance and the admin portal**
+- A separate platform admin portal for the Anvaya team, at https://anvaya-admin.web.app. It shows:
+  - spend against the monthly budget, with a forecast, in US dollars;
+  - spend by agent, model and tenant;
+  - the register of agents, with each one's role, allowed models and tools, and use;
+  - calls that were refused;
+  - budget requests to approve or reject;
+  - guardian interventions to confirm or reverse;
+  - the fraud coverage map and reference guides;
+  - judges' demo copies;
+  - an audit log of every decision.
+- Roles in the portal (platform admin, budget approver, risk reviewer, viewer) are checked on the server. Anyone else who signs in can only view.
+- The portal never shows conversation text or names. People appear as anonymous keys, and counts under 5 are hidden.
+- Every call to Gemini is checked against the register of agents: the agent must be registered and the model allowed. Refused calls are recorded, and each call's tokens and cost are counted.
+- A kill switch in the portal pauses voice and spoken replies first, then everything except certificate checks and the guardian.
+- Limits for each agent:
+  - oversized requests are refused before anything is spent;
+  - each reply has a length cap;
+  - a request is retried at most twice;
+  - the family's assistant makes at most 6 model calls per question;
+  - live calls end at 20 minutes.
+
+**Documents**
+- New concept document and two pitches: one for people and families, one for banks and insurers. They cite figures for India and Asia, and regulatory deadlines. Branded PDFs are included.
+- A business model with costs and margins, a brand guide, a proposal for governing the agents, and the guardian layer and storage design in the architecture document.
+
+### Known limitations
+- No per-role permissions in the app yet; one signed-in browser plays every role in the demo. Anyone signed in can see the demo family's data until private demos per person arrive. The admin portal has its own roles.
+- No notifications (push, SMS, email); the owner sees alerts only inside the app.
+- The legal partner is mocked.
+- Live calls end after about 15 minutes (Gemini Live limit), and spoken replies can't be rule-checked like typed ones.
+- Free-tier Gemini keys run out quickly; turn on billing for demos.
+- The admin portal shows clearly labelled sample data until enough real use is recorded. Its costs are estimates from published prices.
+
+### Next
+A private demo for each judge · guardian checks at every step · a claim file and bank view · accounts checked at the source · kept knowledge with gentle questions about what's missing · measured AI quality · daily allowances per person.
+
 ## Prototype 0.1 · 28 September 2026 (AI Builder Cup 2026)
 
 The first working prototype, built on Google Gemini and Google Cloud. See [architecture.md](architecture.md) for how it works and [use-cases.md](use-cases.md) for the full list of use cases.
