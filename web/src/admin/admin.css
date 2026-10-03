@@ -125,9 +125,13 @@ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--pa-
 th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--pa-muted); font-weight: 600; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .pa-scroll { overflow-x: auto; }
-.pa-scroll table { min-width: 1100px; }
-.pa-scroll td:nth-child(2) { min-width: 220px; }
-.pa-nowrap { white-space: nowrap; }
+.pa-scroll table { min-width: 760px; }
+.pa-sub { color: var(--pa-muted); font-size: 0.8rem; margin-top: 2px; }
+.pa-mono .pa-sub { font-size: 0.75rem; }
+/* Agents: id and role share a column; models and tools break anywhere rather than widen the table. */
+.pa-agents td:first-child { min-width: 200px; }
+.pa-agents td.pa-mono { overflow-wrap: anywhere; }
+.pa-agents td.num { white-space: nowrap; }
 
 .pa-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; }
 .pa-list > li { padding: 12px 0; border-bottom: 1px solid var(--pa-line); }

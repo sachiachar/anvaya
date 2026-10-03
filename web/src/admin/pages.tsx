@@ -281,19 +281,26 @@ export function AgentsPage() {
       <p className="pa-lede">Every agent is registered with one role, an autonomy level, and only its allowed models and tools (<span className="pa-mono">registry.yaml</span>). The gateway refuses anything else and records it below.</p>
       <Section title="Agent registry and use, 30 days">
         <div className="pa-scroll">
-          <table>
-            <thead><tr><th>Agent</th><th>Role</th><th>Autonomy</th><th>Models</th><th>Tools</th><th>Pool</th>
+          <table className="pa-agents">
+            <thead><tr><th>Agent and role</th><th>Autonomy and pool</th><th>Models</th><th>Tools</th>
               <th className="num">Calls</th><th className="num">Tokens</th><th className="num">Errors</th><th className="num">Blocked</th></tr></thead>
             <tbody>{data.agents.map((a: Agent) => (
               <tr key={a.id}>
-                <td className="pa-mono">{a.id}{a.safety_critical && <span className="pa-tag">Safety</span>}</td>
-                <td>{a.role}</td>
-                <td>{fmt.label(a.autonomy)}</td>
-                <td className="pa-mono pa-nowrap">{[a.models.primary, ...a.models.fallback].map((m) => <div key={m}>{m}</div>)}</td>
-                <td className="pa-mono pa-nowrap">{a.tools.length ? a.tools.map((x) => <div key={x}>{x}</div>) : "none"}</td>
-                <td>{fmt.label(a.budget_class)}</td>
-                <td className="num">{fmt.num(a.usage_30d.calls)}{a.usage_30d.minutes ? ` (${fmt.num(a.usage_30d.minutes)} min)` : ""}</td>
-                <td className="num">{fmt.num(a.usage_30d.tokens_in + a.usage_30d.tokens_out)}</td>
+                <td>
+                  <span className="pa-mono">{a.id}</span>{a.safety_critical && <span className="pa-tag">Safety</span>}
+                  <div className="pa-sub">{a.role}</div>
+                </td>
+                <td>{fmt.label(a.autonomy)}<div className="pa-sub">{fmt.label(a.budget_class)} pool</div></td>
+                <td className="pa-mono">
+                  {a.models.primary}
+                  {a.models.fallback.map((m) => <div key={m} className="pa-sub">{m}</div>)}
+                </td>
+                <td className="pa-mono">{a.tools.length ? a.tools.map((x) => <div key={x}>{x}</div>) : <span className="pa-muted">none</span>}</td>
+                <td className="num">{fmt.num(a.usage_30d.calls)}</td>
+                <td className="num">
+                  {fmt.num(a.usage_30d.tokens_in + a.usage_30d.tokens_out)}
+                  {a.usage_30d.minutes > 0 && <div className="pa-sub">{fmt.num(a.usage_30d.minutes)} min</div>}
+                </td>
                 <td className="num">{fmt.pct(a.usage_30d.error_rate)}</td>
                 <td className="num">{a.usage_30d.blocked}</td>
               </tr>
