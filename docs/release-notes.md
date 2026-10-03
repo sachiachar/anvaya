@@ -23,6 +23,11 @@
 - Reviewers now see the check sign by sign: for an Indian certificate of passing, it looks for eight known warning signs, such as a missing or mismatched QR code, a pasted signature, impossible dates or the wrong issuing office, and says for each whether it found it, ruled it out or couldn't tell.
 - Any warning sign found means "Needs a closer look". The signs come from a fraud reference guide with cited sources, shown on the Fraud page of the admin portal.
 
+**Finding fraud before it happens (admin portal)**
+- "Dream now" on the Fraud page imagines new ways a fraudster could get around our safeguards, starting from known fraud tactics and what the guardian has seen. Each idea is checked against web sources with Google Search, then matched to the safeguard that would catch it, or shown as a gap.
+- Live mode shows the run as it happens: which stage it's in, each step, and new scenarios as they're added. A reviewer can press Stop at any time, and every run has a fixed limit on model calls to keep costs down.
+- "Research now" looks for new fraud tactics for a guide. Only tactics and scenarios a cited source confirms can be approved, and nothing joins a guide until a risk reviewer approves it. Ideas no source confirms fade after three runs.
+
 **Governance and the admin portal**
 - A separate platform admin portal for the Anvaya team, at https://anvaya-admin.web.app. It shows:
   - actual spend against the monthly budget, with a forecast, in US dollars, read from Google Cloud billing (up to yesterday);

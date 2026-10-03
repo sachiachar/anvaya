@@ -150,6 +150,13 @@ def check_call(agent: str, model: str) -> None:
     check_allowance(agent)
 
 
+def check_tool(agent: str, tool: str) -> None:
+    """Refuse a tool the registry doesn't list for this agent, e.g. Google Search."""
+    if tool not in (agent_entry(agent) or {}).get("tools", []):
+        record_blocked(agent, "tool", tool, "Tool not allowed for this agent")
+        raise Refused(f"{agent} may not use {tool}.")
+
+
 def limit(agent: str, key: str, default: int | None = None) -> int | None:
     """One of the agent's limits from the registry (PR-10.2)."""
     entry = agent_entry(agent) or {}

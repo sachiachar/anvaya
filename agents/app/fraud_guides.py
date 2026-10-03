@@ -105,12 +105,32 @@ def current(key: str) -> Guide | None:
 
 
 def save_version(guide: Guide) -> Guide:
-    """Save the guide as a new version, keeping every earlier one, and update the portal's row."""
-    latest = _latest_stored(guide.key)
-    saved = guide.model_copy(update={"version": (latest.version + 1) if latest else 1, "updated_at": time.time()})
-    store.put("fraud_guide_versions", {"id": f"{saved.key}.v{saved.version}", **saved.model_dump()})
-    store.put("fraud_guides", summary(saved))
-    return saved
+    """Save the guide as a new version, keeping every earlier one, and update the portal's row.
+    Each version id is written only once, so two saves at the same moment can't overwrite each other."""
+    for _ in range(5):
+        latest = _latest_stored(guide.key)
+        saved = guide.model_copy(update={"version": (latest.version + 1) if latest else 1, "updated_at": time.time()})
+        if store.create("fraud_guide_versions", {"id": f"{saved.key}.v{saved.version}", **saved.model_dump()}):
+            store.put("fraud_guides", summary(saved))
+            return saved
+    raise RuntimeError(f"Couldn't save a new version of {guide.key}")
+
+
+def add_items(key: str, *, signs: list[Sign] = (), tactics: list[Tactic] = (), scenarios: list[dict] = (),
+              sources: list[Source] = ()) -> Guide:
+    """A new version of the guide with these items added. Nothing is removed here: retiring a
+    warning sign is a separate decision for a person."""
+    guide = current(key)
+    if guide is None:
+        raise KeyError(key)
+    known = {s.id for s in guide.signs} | {t.id for t in guide.tactics}
+    cited = {s.id for s in guide.sources}
+    return save_version(guide.model_copy(update={
+        "signs": [*guide.signs, *(s for s in signs if s.id not in known)],
+        "tactics": [*guide.tactics, *(t for t in tactics if t.id not in known)],
+        "scenarios": [*guide.scenarios, *scenarios],
+        "sources": [*guide.sources, *{s.id: s for s in sources if s.id not in cited}.values()],
+    }))
 
 
 def summary(guide: Guide) -> dict:

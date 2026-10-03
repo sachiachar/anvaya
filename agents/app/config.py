@@ -25,6 +25,9 @@ class Settings:
     tts_voice: str = os.getenv("GEMINI_TTS_VOICE", "Sulafat")
     # Live, two-way voice calls (Gemini Live API). Uses the same voice.
     live_model: str = os.getenv("GEMINI_LIVE_MODEL", "gemini-3.8-live")
+    # The fraud pipeline (imagine, then check with Google Search). Must be in the registry
+    # for fraud.dreamer and fraud.researcher.
+    research_model: str = os.getenv("GEMINI_RESEARCH_MODEL", "gemini-3.8-flash")
 
     # Sign-in (Firebase Auth) and the demo allowlist; see auth.py.
     auth_required: bool = os.getenv("AUTH_REQUIRED", "false").lower() == "true"

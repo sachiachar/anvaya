@@ -220,8 +220,14 @@ def test_clearing_examples_keeps_the_kill_switch(client):
     store.update("platform_settings", "settings", {"kill_switch": "off", "kill_switch_reason": None})
 
 
-def test_fraud_page_lists_the_india_guide_and_research_saves_it_first(client):
-    for collection in ("fraud_guides", "fraud_guide_versions"):
+def test_fraud_page_lists_the_india_guide_and_research_saves_it_first(client, monkeypatch):
+    from app import fraud_pipeline
+
+    async def no_run(run):
+        return run
+
+    monkeypatch.setattr(fraud_pipeline, "research", no_run)
+    for collection in ("fraud_guides", "fraud_guide_versions", "fraud_runs"):
         for doc in store.list(collection):
             store.delete(collection, doc["id"])
     guides = client.get("/api/platform/fraud", headers=h("judge")).json()["guides"]
