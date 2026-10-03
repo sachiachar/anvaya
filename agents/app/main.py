@@ -208,7 +208,7 @@ async def live_call(ws: WebSocket, owner_id: str, token: str | None = None, acti
         governance_core.set_current_user(governance_core.user_key(demo.LOCAL))
         demo.begin(demo.LOCAL)
     demo.ensure()
-    if (acting_as or demo.DEFAULT_PERSON) != "vikram":  # only the owner talks with Saathi
+    if (acting_as or demo.DEFAULT_PERSON).strip().lower() != "vikram":  # only the owner talks with Saathi
         await ws.close(code=4403, reason="Only Vikram can call Saathi.")
         return
     owner = store.get("owners", owner_id)

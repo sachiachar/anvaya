@@ -21,19 +21,35 @@ const unb64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 // have different names, and the copy's owner ID keeps two copies in one browser apart.
 const DATA_KEY = "owner.dataKey";
 const RECIPIENT_PRIVATE = "recipient.privateJwk";
-const scoped = (key: string) => `anvaya.${currentOwnerId()}.${key}`;
+// Before this change keys had one name for every copy; only the local demo (no sign-in) still
+// has the owner they belonged to, so only its keys are carried over.
+const LEGACY_OWNER = "owner_demo_vikram";
+
+function scoped(key: string): string {
+  const owner = currentOwnerId();
+  if (!owner) throw new Error("The demo isn't ready yet. Please wait a moment and try again.");
+  return `anvaya.${owner}.${key}`;
+}
 
 function load(key: string): string | null {
   try {
-    return localStorage.getItem(scoped(key));
+    const value = localStorage.getItem(scoped(key));
+    if (value !== null || currentOwnerId() !== LEGACY_OWNER) return value;
+    const legacy = localStorage.getItem(`life-after.${key}`);
+    if (legacy !== null) {
+      localStorage.setItem(scoped(key), legacy);
+      localStorage.removeItem(`life-after.${key}`);
+    }
+    return legacy;
   } catch {
     return null;
   }
 }
 
 function save(key: string, value: string) {
+  const name = scoped(key); // never save a key before the copy is known
   try {
-    localStorage.setItem(scoped(key), value);
+    localStorage.setItem(name, value);
   } catch {
     /* storage unavailable: key lives only for this session */
   }

@@ -97,3 +97,11 @@ def test_only_vikram_calls_saathi(client):
         with client.websocket_connect(f"/api/owners/{OWNER}/live?acting_as=priya") as ws:
             ws.receive_text()
     assert closed.value.code == 4403
+
+
+def test_the_two_reviewer_rule_ignores_capitals():
+    # A case confirmed before this change could hold a typed "anjali".
+    case = {"id": "c", "owner_id": OWNER, "state": "death_confirmed", "death_confirmed_by": "anjali ",
+            "authority_check": {"verdict": "likely_valid"}, "history": []}
+    with pytest.raises(release.ReleaseError):
+        release.confirm_authority(case, "Anjali")
