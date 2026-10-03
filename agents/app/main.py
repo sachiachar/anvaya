@@ -21,6 +21,8 @@ from pydantic import BaseModel, ValidationError
 from . import auth, escrow, live, loops, media, proposals, release, speech, tasks
 from .config import settings
 from .executor_agent import ask
+from .governance import core as governance_core
+from .governance import portal
 from .store import new_id, store
 
 app = FastAPI(title="Anvaya agents", version="0.1.0")
@@ -48,6 +50,11 @@ async def no_credentials(_: Request, exc: DefaultCredentialsError) -> JSONRespon
 @app.exception_handler(genai_errors.APIError)
 async def gemini_error(_: Request, exc: genai_errors.APIError) -> JSONResponse:
     return JSONResponse(status_code=502, content={"detail": f"Gemini error {exc.code}: {exc.message}"})
+
+
+@app.exception_handler(governance_core.Refused)
+async def refused_by_gateway(_: Request, exc: governance_core.Refused) -> JSONResponse:
+    return JSONResponse(status_code=403, content={"detail": str(exc)})
 
 
 @app.exception_handler(ValidationError)
@@ -712,4 +719,5 @@ def me(request: Request) -> dict:
             "auth": settings.auth_required}
 
 
+api.include_router(portal.router)
 app.include_router(api)

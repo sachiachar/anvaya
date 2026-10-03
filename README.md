@@ -61,6 +61,27 @@ Fraud can enter at any step of agentic execution, not only at the handover. The 
 
 The guardian never approves or rejects a case; people decide.
 
+## Governance layer and platform admin portal
+
+One governance layer governs every agent: the **registry** ([agents/registry.yaml](agents/registry.yaml)), the **gateway** checks and usage **ledger**, the **guardian**'s interventions, the **kill switch**, platform **roles** and the **audit log**. Code: [agents/app/governance/](agents/app/governance/).
+
+The **platform admin portal**, at https://anvaya-admin.web.app, is a separate site for the Anvaya governance team. It covers:
+- spend against budget and forecast;
+- the agent registry with use per agent, and blocked calls;
+- budget approvals;
+- guardian interventions (confirm or reverse);
+- the fraud coverage map and reference guides;
+- judges' demo copies;
+- the audit log.
+
+Roles are enforced on the server (platform admin, budget approver, risk reviewer, viewer) and set with the `PLATFORM_ROLES` secret. Anyone else who can sign in is a read-only viewer. The portal never shows conversation text or names. Until the gateway and guardian record real events, it shows clearly labelled seeded data.
+
+Live today:
+- every Gemini call from the conversation, extraction, document, readiness, legal, certificate and settlement steps names its agent;
+- the registry and kill switch are checked before each of those calls, and it's recorded in the ledger.
+
+The live call, spoken replies and the ADK handover agent follow in PR-10.
+
 ## Live now, and coming
 
 What's built is recorded as numbered requirements (P0-1 to P0-11) in the completed [Prototype 0.1 milestone](https://github.com/sachiachar/anvaya/milestone/3?closed=1).
@@ -89,6 +110,7 @@ Tracked in the [Prototype release milestone](https://github.com/sachiachar/anvay
 | PR-7 | Kept knowledge as an OKF graph; Keep is the commit; gaps drive the conversation | High-value | [#18](https://github.com/sachiachar/anvaya/issues/18) |
 | PR-8 | Measure AI quality on a synthetic test set and publish the numbers | High-value | [#22](https://github.com/sachiachar/anvaya/issues/22) |
 | PR-9 | Inside the agents: a live panel for judges | High-value | [#23](https://github.com/sachiachar/anvaya/issues/23) |
+| PR-12 | **Built:** platform admin portal: governance dashboard, approvals, guardian and fraud operations, demo management | High-value | [#42](https://github.com/sachiachar/anvaya/issues/42) |
 | PR-11 | Connect to financial institutions (Account Aggregator, statements) and check each account's readiness for handover | High-value | [#41](https://github.com/sachiachar/anvaya/issues/41) |
 | PR-10 | Agent governance: gateway, registry, limits, allowances, backstops, Model Armor ([proposal](docs/proposals/agent-governance.md)) | High-value | [#24](https://github.com/sachiachar/anvaya/issues/24) |
 

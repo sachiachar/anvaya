@@ -80,10 +80,13 @@ jobs:
       - name: Deploy API to Cloud Run
         env:
           ALLOWED_EMAILS: ${{ secrets.ALLOWED_EMAILS }}
+          # Platform admin portal roles, e.g. "you@example.com:platform_admin,@team.com:risk_reviewer".
+          # Anyone else allowed in is a read-only viewer.
+          PLATFORM_ROLES: ${{ secrets.PLATFORM_ROLES }}
         run: |
           gcloud run deploy life-after-agents --source agents \
             --project "${{ vars.GCP_PROJECT_ID }}" --region "${{ vars.GCP_REGION }}" --quiet \
-            --update-env-vars "^;^ALLOWED_EMAILS=${ALLOWED_EMAILS}"
+            --update-env-vars "^;^ALLOWED_EMAILS=${ALLOWED_EMAILS};PLATFORM_ROLES=${PLATFORM_ROLES}"
 
   allowlist:
     # Manual only: apply the allowlist without rebuilding anything.

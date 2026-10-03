@@ -3,19 +3,82 @@
     {
       "site": "anvaya-saathi",
       "public": "web/dist",
-      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
       "rewrites": [
-        { "source": "/api/**", "run": { "serviceId": "life-after-agents", "region": "asia-southeast1" } },
-        { "source": "**", "destination": "/index.html" }
+        {
+          "source": "/api/**",
+          "run": {
+            "serviceId": "life-after-agents",
+            "region": "asia-southeast1"
+          }
+        },
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ],
+      "redirects": [
+        {
+          "source": "/admin.html",
+          "destination": "https://anvaya-admin.web.app/",
+          "type": 301
+        }
+      ]
+    },
+    {
+      "site": "anvaya-admin",
+      "public": "web/dist",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "X-Robots-Tag",
+              "value": "noindex"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            }
+          ]
+        }
+      ],
+      "rewrites": [
+        {
+          "source": "/api/**",
+          "run": {
+            "serviceId": "life-after-agents",
+            "region": "asia-southeast1"
+          }
+        },
+        {
+          "source": "**",
+          "destination": "/admin.html"
+        }
       ]
     },
     {
       "site": "life-after-509907",
       "public": "web/redirect",
       "redirects": [
-        { "source": "/:path*", "destination": "https://anvaya-saathi.web.app/:path", "type": 301 }
+        {
+          "source": "/:path*",
+          "destination": "https://anvaya-saathi.web.app/:path",
+          "type": 301
+        }
       ]
     }
   ],
-  "firestore": { "rules": "firestore.rules" }
+  "firestore": {
+    "rules": "firestore.rules"
+  }
 }

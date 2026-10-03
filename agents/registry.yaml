@@ -1,0 +1,125 @@
+# Agent registry: every agent that calls a model, with its one role, autonomy level,
+# allowed models and tools, limits and budget pool. Reviewed like code.
+#
+# The platform admin portal (PR-12) shows this file. The agent gateway (PR-10.1) will
+# enforce it: a call with a model or tool not listed here is refused and recorded.
+# Design: docs/proposals/agent-governance.md §2.
+
+version: 1
+agents:
+  - id: saathi.chat
+    role: Typed or photo conversation with the owner
+    autonomy: act_within_limits
+    models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
+    tools: []
+    limits: {max_input_tokens: 20000, max_output_tokens: 1200, max_retries: 2}
+    budget_class: owner
+    safety_critical: false
+
+  - id: saathi.voice
+    role: Live voice conversation with the owner
+    autonomy: act_within_limits
+    models: {primary: gemini-3.8-live, fallback: []}
+    tools: []
+    limits: {max_call_minutes: 20}
+    budget_class: owner
+    safety_critical: false
+
+  - id: saathi.speech
+    role: Speaks Saathi's own replies aloud
+    autonomy: act_within_limits
+    models: {primary: gemini-3.8-flash-lite-tts, fallback: [gemini-3.8-flash-tts]}
+    tools: []
+    limits: {max_characters: 1000}
+    budget_class: owner
+    safety_critical: false
+
+  - id: capture.extractor
+    role: Turns each exchange into suggestion cards
+    autonomy: propose
+    models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
+    tools: []
+    limits: {max_input_tokens: 12000, max_output_tokens: 1500, max_retries: 2}
+    budget_class: owner
+    safety_critical: false
+
+  - id: documents.reader
+    role: Reads a policy or statement photo into an account card
+    autonomy: propose
+    models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
+    tools: []
+    limits: {max_output_tokens: 1000, max_retries: 2}
+    budget_class: owner
+    safety_critical: false
+
+  - id: readiness.planner
+    role: Next steps and the most important gap to ask about
+    autonomy: propose
+    models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
+    tools: []
+    limits: {max_input_tokens: 30000, max_output_tokens: 1500, max_retries: 2}
+    budget_class: owner
+    safety_critical: false
+
+  - id: legal.needs
+    role: Finds wishes that need a legal document
+    autonomy: propose
+    models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
+    tools: []
+    limits: {max_input_tokens: 20000, max_output_tokens: 1000, max_retries: 2}
+    budget_class: owner
+    safety_critical: false
+
+  - id: activation.checker
+    role: Pre-checks certificates and proof of authority
+    autonomy: assist
+    models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
+    tools: [read_fraud_guide]
+    limits: {max_output_tokens: 1500, max_retries: 2}
+    budget_class: safety
+    safety_critical: true
+
+  - id: handover.assistant
+    role: Answers the family's questions from kept knowledge, citing sources
+    autonomy: act_within_limits
+    models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
+    tools: [read_bundle_index, read_concept, list_accounts]
+    limits: {max_input_tokens: 60000, max_output_tokens: 800, max_model_calls_per_run: 6, max_retries: 2}
+    budget_class: family
+    safety_critical: false
+
+  - id: settlement.planner
+    role: Claims checklist and draft letters
+    autonomy: propose
+    models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
+    tools: []
+    limits: {max_input_tokens: 30000, max_output_tokens: 3000, max_retries: 2}
+    budget_class: family
+    safety_critical: false
+
+  - id: guardian.detectors
+    role: Pressure, probing, synthetic audio and hidden-instruction signals
+    autonomy: assist
+    models: {primary: gemini-3.1-flash-lite, fallback: []}
+    tools: []
+    limits: {max_output_tokens: 600, max_retries: 1}
+    budget_class: safety
+    safety_critical: true
+
+  - id: fraud.researcher
+    role: Searches for new fraud tactics and drafts reference guides
+    autonomy: propose
+    models: {primary: gemini-3.8-flash, fallback: []}
+    tools: [google_search, write_draft_guide]
+    limits: {max_new_patterns_per_run: 2, max_retries: 1}
+    budget_class: platform
+    safety_critical: false
+
+  - id: fraud.dreamer
+    role: Imagines attacks on our safeguards and maps which one catches each
+    autonomy: propose
+    models: {primary: gemini-3.8-flash, fallback: []}
+    tools: [google_search, write_draft_scenario]
+    limits: {max_scenarios_per_sequence: 3, max_sequences_per_run: 2, max_retries: 1}
+    budget_class: platform
+    safety_critical: false

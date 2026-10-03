@@ -93,7 +93,7 @@ async function withAuth(init?: RequestInit): Promise<RequestInit> {
 
 export class AuthError extends Error {}
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, await withAuth(init));
   if (res.status === 401 || res.status === 403) {
     let detail = "Please sign in.";
@@ -116,7 +116,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-const json = (body: unknown): RequestInit => ({
+export const json = (body: unknown): RequestInit => ({
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify(body),

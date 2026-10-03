@@ -131,6 +131,13 @@ flowchart LR
 | **Enforcement** | Saving, recipient changes, release and the handover assistant ask the guardian first and obey. The guardian runs with its own permissions, agents can't bypass it, and it has no vault access. |
 | **Governance** | A Guardian page shows every intervention with its reason. People confirm or reverse each one, and the decision is logged. It also shows false-alarm rates, reviewer pattern analytics, and the dreaming agent's safeguard coverage map. |
 
+**How it's built** (`agents/app/governance/`, one layer shared by the gateway, the guardian and the portal):
+- `core.py`: the registry, roles and permissions, the audit log, the gateway's `check_call` (registry and kill switch), `record_usage` (daily ledger with tokens and cost), `record_blocked` and `record_intervention`;
+- `portal.py`: the platform admin portal API under `/api/platform` (PR-12), with roles checked on the server;
+- `seed.py`: clearly labelled seeded data until real events accumulate.
+
+The portal is a separate entry point (`web/admin.html`), served by its own Firebase Hosting site, `anvaya-admin`.
+
 **Rules for the guardian:**
 - It never approves or rejects a case; people decide.
 - Hard rules are fixed rules, never the model's judgment.

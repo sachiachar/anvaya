@@ -48,6 +48,19 @@ class Settings:
     # Vault release waiting period. Production would use days; the demo uses seconds.
     release_wait_seconds: int = int(os.getenv("RELEASE_WAIT_SECONDS", "60"))
 
+    # Platform admin portal (PR-12). PLATFORM_ROLES maps emails or @domains to a role:
+    #   PLATFORM_ROLES=sachi@example.com:platform_admin, @team.com:risk_reviewer
+    # Roles: platform_admin, budget_approver, risk_reviewer, viewer. Anyone else who can
+    # sign in gets PLATFORM_DEFAULT_ROLE (read-only "viewer" by default; "none" to refuse).
+    platform_roles: dict[str, str] = field(default_factory=lambda: {
+        k.strip().lower(): v.strip() for k, v in (
+            e.split(":", 1) for e in os.getenv("PLATFORM_ROLES", "").split(",") if ":" in e)})
+    platform_default_role: str = os.getenv("PLATFORM_DEFAULT_ROLE", "viewer")
+    # Monthly model budget the portal compares spend against (INR), and the salt used
+    # to turn user IDs into keys the portal can show without naming anyone.
+    monthly_budget_inr: float = float(os.getenv("MONTHLY_BUDGET_INR", "25000"))
+    user_key_salt: str = os.getenv("USER_KEY_SALT", "anvaya-demo")
+
     # Comma-separated origins allowed to call the API directly (local dev only;
     # in production Firebase Hosting proxies /api to Cloud Run on the same origin).
     cors_origins: str = os.getenv("CORS_ORIGINS", "http://localhost:5173")

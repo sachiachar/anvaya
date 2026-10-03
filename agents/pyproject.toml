@@ -13,6 +13,7 @@ dependencies = [
     "google-cloud-firestore>=2.19",
     "google-cloud-kms>=3.0",
     "google-cloud-storage>=2.18",
+    "pyyaml>=6.0",
 ]
 
 [dependency-groups]

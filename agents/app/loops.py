@@ -63,6 +63,7 @@ PRIVACY_RULES = (
 async def capture_audio(audio: bytes, mime_type: str, owner: dict) -> CaptureResult:
     """Capture loop: a voice recording becomes a transcript plus candidate moments."""
     return await generate_json(
+        agent="capture.extractor",
         model=settings.flash_model,
         schema=CaptureResult,
         media=[(audio, mime_type)],
@@ -145,6 +146,7 @@ async def converse(owner: dict, history: list[dict], text: str | None,
 
 async def _converse_once(owner: dict, prompt: str, media: tuple[bytes, str] | None) -> ConversationTurn:
     return await generate_json(
+        agent="saathi.chat",
         model=settings.flash_model,
         schema=ConversationTurn,
         media=[media] if media else None,
@@ -192,6 +194,7 @@ def live_instructions(owner: dict, known: dict, recent: list[dict] | None = None
 async def extract_from_exchange(owner: dict, heard: str, said: str, known: dict) -> Extraction:
     """After each exchange in a live call: what is worth keeping (the owner approves later)."""
     return await generate_json(
+        agent="capture.extractor",
         model=settings.flash_model,
         schema=Extraction,
         system=(
@@ -211,6 +214,7 @@ async def extract_from_exchange(owner: dict, heard: str, said: str, known: dict)
 async def extract_document(image: bytes, mime_type: str, owner: dict) -> InventoryItem:
     """Capture loop: a photo of a policy or statement becomes a financial inventory entry."""
     return await generate_json(
+        agent="documents.reader",
         model=settings.flash_model,
         schema=InventoryItem,
         media=[(image, mime_type)],
@@ -240,6 +244,7 @@ async def assess_readiness(owner: dict, inventory: list[dict], moments: list[dic
             for t in tasks if t["status"] != "open"],
     }
     return await generate_json(
+        agent="readiness.planner",
         model=settings.pro_model,
         schema=Readiness,
         system=(
@@ -269,6 +274,7 @@ async def find_legal_needs(owner: dict, wishes: list[dict], inventory: list[dict
         "has_digital_vault": has_vault,
     }
     return await generate_json(
+        agent="legal.needs",
         model=settings.pro_model,
         schema=LegalNeeds,
         system=(
@@ -288,6 +294,7 @@ async def check_document(image: bytes, mime_type: str, expected: str, person: st
     The result is shown to our team; a person always makes the decision.
     """
     return await generate_json(
+        agent="activation.checker",
         model=settings.pro_model,
         schema=DocumentCheck,
         media=[(image, mime_type)],
@@ -331,6 +338,7 @@ async def plan_settlement(owner: dict, inventory: list[dict], moments: list[dict
         "practical_moments": [m for m in moments if m.get("kind") == "practical"],
     }
     return await generate_json(
+        agent="settlement.planner",
         model=settings.pro_model,
         schema=Settlement,
         system=(

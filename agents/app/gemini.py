@@ -16,6 +16,7 @@ from google.genai import errors, types
 from pydantic import BaseModel
 
 from .config import settings
+from .governance import core as governance
 
 T = TypeVar("T", bound=BaseModel)
 log = logging.getLogger(__name__)
@@ -40,11 +41,16 @@ async def generate_json(
     prompt: str,
     media: list[tuple[bytes, str]] | None = None,
     system: str | None = None,
+    agent: str,
 ) -> T:
     """Ask Gemini for output that validates against `schema`.
 
     `media` is a list of (bytes, mime_type) pairs, e.g. an audio recording or a
     photo of a document, sent alongside the text prompt.
+
+    `agent` is the registered agent making the call (registry.yaml). The governance
+    layer refuses models the agent isn't allowed and calls the kill switch pauses, and
+    records every call's tokens and cost in the ledger.
     """
     parts: list[types.Part] = [types.Part.from_bytes(data=d, mime_type=m) for d, m in media or []]
     parts.append(types.Part(text=prompt))
@@ -58,15 +64,25 @@ async def generate_json(
     )
     contents = [types.Content(role="user", parts=parts)]
 
+    governance.check_call(agent, model)
+    used = model
     try:
         response = await client().aio.models.generate_content(model=model, contents=contents, config=config)
     except errors.APIError as e:
         if e.code not in TRANSIENT_CODES or model == settings.fallback_model:
+            governance.record_usage(agent, model, "direct", error=True)
             raise
         log.warning("Gemini %s unavailable (%s); falling back to %s", model, e.code, settings.fallback_model)
+        governance.check_call(agent, settings.fallback_model)
+        used = settings.fallback_model
         response = await client().aio.models.generate_content(
             model=settings.fallback_model, contents=contents, config=config
         )
+    usage = response.usage_metadata
+    t_in = (usage.prompt_token_count or 0) if usage else 0
+    t_out = ((usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)) if usage else 0
+    governance.record_usage(agent, used, "direct", tokens_in=t_in, tokens_out=t_out,
+                            cost_inr=governance.cost_inr(used, t_in, t_out))
 
     if isinstance(response.parsed, schema):
         return response.parsed

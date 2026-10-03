@@ -198,10 +198,10 @@ There are two dashboards built on the same data: the ledger, guardian events, ap
 - Every dashboard action, especially approvals, is logged.
 
 **How it's built**
-- **In the prototype:** pages inside the web app, fed by API endpoints that aggregate the ledger and guardian events.
-  - The platform dashboard is a **Governance** tab for "Our team".
-  - The tenant dashboard is a **Governance** tab for the **Bank** role (PR-3).
-  - Judges see both through the person switcher (PR-1), with seeded data so the charts look realistic.
+- **In the prototype:** API endpoints that aggregate the ledger and guardian events feed both dashboards.
+  - The platform dashboard lives in a separate **platform admin portal** ([PR-12, #42](https://github.com/sachiachar/anvaya/issues/42)), with its own address, admin-only endpoints and server-enforced roles. The portal also holds budget approvals, the guardian's interventions, fraud research with the coverage map, demo management and the admin audit log.
+  - The tenant dashboard is a **Governance** view inside the **Bank** role (PR-3). A separate tenant portal on the same codebase follows for the pilot.
+  - Judges reach both through the person switcher (PR-1), including a platform admin person, with seeded data so the charts look realistic.
 - **Later:** a daily copy of the ledger in BigQuery, with Looker Studio for deeper platform analysis, joined with the billing export (cost per agent label).
 
 ---
@@ -243,7 +243,7 @@ Google Cloud has two products that cover parts of this proposal. Neither covers 
 | G-4 | **Token ledger and user budgets:** reserve and reconcile from `usage_metadata`; daily user allowances; fair-use rate limits; protected safety pool; graceful messages | 4, 10 |
 | G-5 | **Backstops:** Google Cloud budget with alerts; lower Gemini quotas as a hard cap; a simple kill-switch flag read by the gateway | 11 |
 | G-6 | **Approvals, minimal version:** "request more" for judges and users; approve or reject in the team console, time-limited and logged; two-person approval for agent budgets | — |
-| G-7 | **Governance dashboards** (§6.1): a platform Governance tab for "Our team" and a tenant Governance tab for the Bank role, covering spend and budget, agents, approvals, guardian and outcomes, with seeded data for the demo. The tenant audit export follows after the deadline. | — |
+| G-7 | **Governance dashboards** (§6.1): the platform dashboard in a separate **platform admin portal** (PR-12) and a tenant Governance view for the Bank role, covering spend and budget, agents, approvals, guardian and outcomes, with seeded data for the demo. The tenant audit export follows after the deadline. | — |
 | G-8 | **Model Armor:** screen the owner's messages, uploaded documents and tool responses for hidden instructions (PR-2.3.6, PR-2.8.4) and sensitive data (helps PR-6.5), through the gateway | — |
 
 ### 7.2 After the deadline (finale and pilot)

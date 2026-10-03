@@ -1,0 +1,461 @@
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import {
+  fmt, platform, type Agent, type AuditEntry, type Blocked, type BudgetRequest, type DemoCopy, type GuardianEvent,
+  type Guide, type KillSwitchState, type Me, type Overview, type Permission, type Scenario,
+} from "./api";
+
+// ---- Shared pieces --------------------------------------------------------------
+
+function useLoad<T>(load: () => Promise<T>) {
+  const [data, setData] = useState<T | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const reload = useCallback(() => {
+    load().then((d) => { setData(d); setError(null); }).catch((e) => setError(String(e.message ?? e)));
+  }, [load]);
+  useEffect(reload, [reload]);
+  return { data, error, reload };
+}
+
+const can = (me: Me, p: Permission) => me.permissions.includes(p);
+
+function Loading({ error }: { error: string | null }) {
+  return error ? <p className="pa-error" role="alert">{error}</p> : <p className="pa-muted">Loading…</p>;
+}
+
+function SeededNote() {
+  return (
+    <p className="pa-note">
+      Seeded demo data, clearly synthetic. Real usage appears here as the agent gateway and the guardian record it.
+    </p>
+  );
+}
+
+function Section({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
+  return (
+    <section className="pa-card">
+      <div className="pa-card-head"><h2>{title}</h2>{aside}</div>
+      {children}
+    </section>
+  );
+}
+
+function Status({ value }: { value: string }) {
+  return <span className={`pa-status pa-status-${value}`}>{fmt.label(value)}</span>;
+}
+
+/** A decision with a required reason (and optional hours). Every decision is logged. */
+function DecisionForm({ actions, withHours, defaultHours, onDecide }: {
+  actions: { value: string; label: string; tone?: "danger" }[];
+  withHours?: boolean;
+  defaultHours?: number;
+  onDecide: (value: string, reason: string, hours?: number) => Promise<unknown>;
+}) {
+  const [reason, setReason] = useState("");
+  const [hours, setHours] = useState(defaultHours ?? 24);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const ok = reason.trim().length >= 3;
+  const act = (value: string) => {
+    setBusy(true);
+    setError(null);
+    onDecide(value, reason.trim(), withHours ? hours : undefined)
+      .catch((e) => setError(String(e.message ?? e)))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="pa-decide">
+      <label>
+        <span>Reason (required, logged)</span>
+        <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
+      </label>
+      {withHours && (
+        <label className="pa-hours">
+          <span>Hours</span>
+          <input type="number" min={1} max={168} value={hours} onChange={(e) => setHours(Number(e.target.value))} />
+        </label>
+      )}
+      {actions.map((a) => (
+        <button key={a.value} disabled={!ok || busy} className={a.tone === "danger" ? "pa-danger" : ""} onClick={() => act(a.value)}>
+          {a.label}
+        </button>
+      ))}
+      {error && <p className="pa-error" role="alert">{error}</p>}
+    </div>
+  );
+}
+
+// ---- Overview -----------------------------------------------------------------
+
+function Bar({ value, max, label }: { value: number; max: number; label: string }) {
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  return (
+    <div className="pa-bar" role="img" aria-label={label}>
+      <div style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+function DailyChart({ daily, budgetPerDay }: { daily: Overview["daily"]; budgetPerDay: number }) {
+  const max = Math.max(budgetPerDay * 1.2, ...daily.map((d) => d.cost_inr));
+  const w = 720, h = 180, gap = 4;
+  const bw = (w - gap * (daily.length - 1)) / daily.length;
+  const y = (v: number) => h - (v / max) * h;
+  const total = daily.reduce((s, d) => s + d.cost_inr, 0);
+  return (
+    <figure className="pa-chart">
+      <svg viewBox={`0 0 ${w} ${h + 24}`} role="img"
+        aria-label={`Daily model spend for the last ${daily.length} days, ${fmt.inr(total)} in total, against a daily budget of ${fmt.inr(budgetPerDay)}.`}>
+        {daily.map((d, i) => (
+          <rect key={d.day} x={i * (bw + gap)} y={y(d.cost_inr)} width={bw} height={h - y(d.cost_inr)}
+            className={d.cost_inr > budgetPerDay ? "over" : "under"} rx={2}>
+            <title>{`${d.day}: ${fmt.inr(d.cost_inr)}${d.cost_inr > budgetPerDay ? " (over the daily budget)" : ""}`}</title>
+          </rect>
+        ))}
+        <line x1={0} x2={w} y1={y(budgetPerDay)} y2={y(budgetPerDay)} className="budget" />
+        <text x={w} y={y(budgetPerDay) - 6} textAnchor="end" className="budget-label">Daily budget {fmt.inr(budgetPerDay)}</text>
+        <text x={0} y={h + 20} className="axis">{daily[0]?.day}</text>
+        <text x={w} y={h + 20} textAnchor="end" className="axis">{daily[daily.length - 1]?.day}</text>
+      </svg>
+      <figcaption className="pa-muted">Bars above the line are days over the daily budget (shown in a darker shade).</figcaption>
+    </figure>
+  );
+}
+
+const KILL_LABELS: Record<KillSwitchState, string> = {
+  off: "Everything running",
+  optional_paused: "Optional features paused (spoken replies, live voice)",
+  all_paused: "All non-safety agents paused",
+};
+
+export function OverviewPage({ me }: { me: Me }) {
+  const load = useCallback(() => platform.overview(), []);
+  const { data: o, error, reload } = useLoad(load);
+  const [switchTo, setSwitchTo] = useState<KillSwitchState>("off");
+  if (!o) return <Loading error={error} />;
+  const used = o.month_to_date_inr / o.budget_inr;
+  const forecastPct = o.forecast_inr / o.budget_inr;
+  const agentMax = Math.max(...Object.values(o.by_agent));
+  return (
+    <>
+      {o.seeded && <SeededNote />}
+      <div className="pa-kpis">
+        <div className="pa-kpi">
+          <span>Spend this month</span>
+          <strong>{fmt.inr(o.month_to_date_inr)}</strong>
+          <Bar value={o.month_to_date_inr} max={o.budget_inr} label={`${fmt.pct(used)} of the monthly budget`} />
+          <em>{fmt.pct(used)} of {fmt.inr(o.budget_inr)} budget</em>
+        </div>
+        <div className="pa-kpi">
+          <span>Forecast for the month</span>
+          <strong>{fmt.inr(o.forecast_inr)}</strong>
+          <em className={forecastPct > 1 ? "pa-warn" : ""}>{forecastPct > 1 ? `Over budget by ${fmt.pct(forecastPct - 1)}` : `${fmt.pct(forecastPct)} of budget`}</em>
+        </div>
+        <a className="pa-kpi" href="#/approvals"><span>Budget requests waiting</span><strong>{o.pending_approvals}</strong><em>Review in Approvals</em></a>
+        <a className="pa-kpi" href="#/guardian"><span>Open interventions</span><strong>{o.open_interventions}</strong><em>Review in Guardian</em></a>
+        <a className="pa-kpi" href="#/agents"><span>Blocked calls, 30 days</span><strong>{o.blocked_30d}</strong><em>Not allowed by the registry or a limit</em></a>
+      </div>
+
+      <Section title="Kill switch" aside={<Status value={o.kill_switch} />}>
+        <p>{KILL_LABELS[o.kill_switch]}. The agent gateway reads this before every model call; certificate checks and the guardian always keep running.</p>
+        {can(me, "kill_switch") ? (
+          <div className="pa-row">
+            <label>
+              <span className="pa-muted">Change to</span>
+              <select value={switchTo} onChange={(e) => setSwitchTo(e.target.value as KillSwitchState)}>
+                {(Object.keys(KILL_LABELS) as KillSwitchState[]).map((k) => <option key={k} value={k}>{KILL_LABELS[k]}</option>)}
+              </select>
+            </label>
+            <DecisionForm actions={[{ value: "set", label: "Apply", tone: switchTo === "off" ? undefined : "danger" }]}
+              onDecide={(_, reason) => platform.setKillSwitch(switchTo, reason).then(reload)} />
+          </div>
+        ) : <p className="pa-muted">Only a platform admin can change the kill switch.</p>}
+      </Section>
+
+      <Section title="Daily model spend, last 30 days">
+        <DailyChart daily={o.daily} budgetPerDay={o.budget_inr / 30} />
+      </Section>
+
+      <div className="pa-grid2">
+        <Section title="Spend by agent, 30 days">
+          <ul className="pa-bars">
+            {Object.entries(o.by_agent).map(([agent, cost]) => (
+              <li key={agent}>
+                <span className="pa-mono">{agent}</span>
+                <Bar value={cost} max={agentMax} label={`${agent}: ${fmt.inr(cost)}`} />
+                <span>{fmt.inr(cost)}</span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+        <div>
+          <Section title="Spend by model, 30 days">
+            <table>
+              <thead><tr><th>Model</th><th className="num">Spend</th></tr></thead>
+              <tbody>{Object.entries(o.by_model).map(([m, c]) => <tr key={m}><td className="pa-mono">{m}</td><td className="num">{fmt.inr(c)}</td></tr>)}</tbody>
+            </table>
+          </Section>
+          <Section title="Tenants">
+            <table>
+              <thead><tr><th>Tenant</th><th className="num">Spend, 30 days</th><th className="num">Active today</th></tr></thead>
+              <tbody>{Object.entries(o.by_tenant).map(([t, v]) => (
+                <tr key={t}><td>{fmt.label(t)}</td><td className="num">{fmt.inr(v.cost_inr_30d)}</td>
+                  <td className="num">{v.active_users_today ?? "fewer than 5"}</td></tr>
+              ))}</tbody>
+            </table>
+          </Section>
+          {o.quota && (
+            <Section title="Gemini quota headroom (peak use)">
+              <p>Requests per minute: {fmt.num(o.quota.rpm_peak)} of {fmt.num(o.quota.rpm_limit)}</p>
+              <Bar value={o.quota.rpm_peak} max={o.quota.rpm_limit} label="Requests per minute used at peak" />
+              <p>Tokens per minute: {fmt.num(o.quota.tpm_peak)} of {fmt.num(o.quota.tpm_limit)}</p>
+              <Bar value={o.quota.tpm_peak} max={o.quota.tpm_limit} label="Tokens per minute used at peak" />
+            </Section>
+          )}
+        </div>
+      </div>
+      {can(me, "reseed") && (
+        <p><button className="pa-link" onClick={() => platform.reseed().then(reload)}>Reset the seeded demo data</button></p>
+      )}
+    </>
+  );
+}
+
+// ---- Agents ----------------------------------------------------------------------
+
+export function AgentsPage() {
+  const load = useCallback(() => platform.agents(), []);
+  const { data, error } = useLoad(load);
+  if (!data) return <Loading error={error} />;
+  return (
+    <>
+      <p className="pa-lede">Every agent is registered with one role, an autonomy level, and only its allowed models and tools (<span className="pa-mono">registry.yaml</span>). The gateway refuses anything else and records it below.</p>
+      <Section title="Agent registry and use, 30 days">
+        <div className="pa-scroll">
+          <table>
+            <thead><tr><th>Agent</th><th>Role</th><th>Autonomy</th><th>Models</th><th>Tools</th><th>Pool</th>
+              <th className="num">Calls</th><th className="num">Spend</th><th className="num">Errors</th><th className="num">Blocked</th></tr></thead>
+            <tbody>{data.agents.map((a: Agent) => (
+              <tr key={a.id}>
+                <td className="pa-mono">{a.id}{a.safety_critical && <span className="pa-tag">Safety</span>}</td>
+                <td>{a.role}</td>
+                <td>{fmt.label(a.autonomy)}</td>
+                <td className="pa-mono pa-nowrap">{[a.models.primary, ...a.models.fallback].map((m) => <div key={m}>{m}</div>)}</td>
+                <td className="pa-mono pa-nowrap">{a.tools.length ? a.tools.map((x) => <div key={x}>{x}</div>) : "none"}</td>
+                <td>{fmt.label(a.budget_class)}</td>
+                <td className="num">{fmt.num(a.usage_30d.calls)}{a.usage_30d.minutes ? ` (${fmt.num(a.usage_30d.minutes)} min)` : ""}</td>
+                <td className="num">{fmt.inr(a.usage_30d.cost_inr)}</td>
+                <td className="num">{fmt.pct(a.usage_30d.error_rate)}</td>
+                <td className="num">{a.usage_30d.blocked}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      </Section>
+      <Section title="Blocked calls">
+        <table>
+          <thead><tr><th>When</th><th>Agent</th><th>Kind</th><th>Attempted</th><th>Why</th></tr></thead>
+          <tbody>{data.blocked.map((b: Blocked) => (
+            <tr key={b.id}><td>{fmt.when(b.at)}</td><td className="pa-mono">{b.agent}</td><td>{fmt.label(b.kind)}</td>
+              <td className="pa-mono">{b.attempted}</td><td>{b.reason}</td></tr>
+          ))}</tbody>
+        </table>
+      </Section>
+    </>
+  );
+}
+
+// ---- Approvals -------------------------------------------------------------------
+
+export function ApprovalsPage({ me }: { me: Me }) {
+  const load = useCallback(() => platform.approvals(), []);
+  const { data, error, reload } = useLoad(load);
+  if (!data) return <Loading error={error} />;
+  const row = (r: BudgetRequest) => (
+    <>
+      <td>{fmt.when(r.at)}</td><td>{fmt.label(r.tenant)}</td><td className="pa-mono">{r.user_key}</td>
+      <td>{fmt.label(r.kind)}: +{r.amount}</td><td>{r.hours} h</td><td>{r.reason}</td>
+    </>
+  );
+  return (
+    <>
+      <p className="pa-lede">Extra allowance needs a person's approval. Grants are time-limited, and nobody can approve their own request.</p>
+      <Section title={`Waiting for a decision (${data.pending.length})`}>
+        {data.pending.length === 0 ? <p className="pa-muted">Nothing waiting.</p> : (
+          <ul className="pa-list">
+            {data.pending.map((r) => (
+              <li key={r.id}>
+                <table><tbody><tr>{row(r)}</tr></tbody></table>
+                {can(me, "approve_budget") ? (
+                  <DecisionForm withHours defaultHours={r.hours}
+                    actions={[{ value: "approve", label: "Approve" }, { value: "reject", label: "Reject", tone: "danger" }]}
+                    onDecide={(v, reason, hours) => platform.decideApproval(r.id, v as "approve" | "reject", reason, hours).then(reload)} />
+                ) : <p className="pa-muted">Your role can view requests but not decide them.</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+      <Section title="Active grants">
+        {data.active.length === 0 ? <p className="pa-muted">No active grants.</p> : (
+          <table>
+            <thead><tr><th>Requested</th><th>Tenant</th><th>User</th><th>What</th><th>For</th><th>Why</th><th>Expires</th></tr></thead>
+            <tbody>{data.active.map((r) => <tr key={r.id}>{row(r)}<td>{r.expires_at ? fmt.when(r.expires_at) : "—"}</td></tr>)}</tbody>
+          </table>
+        )}
+      </Section>
+      <Section title="History">
+        <table>
+          <thead><tr><th>Requested</th><th>Tenant</th><th>User</th><th>What</th><th>For</th><th>Why</th><th>Decision</th><th>By</th><th>Reason</th></tr></thead>
+          <tbody>{data.history.map((r) => (
+            <tr key={r.id}>{row(r)}<td><Status value={r.status} /></td><td>{r.decided_by}</td><td>{r.decision_reason}</td></tr>
+          ))}</tbody>
+        </table>
+      </Section>
+    </>
+  );
+}
+
+// ---- Guardian --------------------------------------------------------------------
+
+export function GuardianPage({ me }: { me: Me }) {
+  const load = useCallback(() => platform.guardian(), []);
+  const { data, error, reload } = useLoad(load);
+  if (!data) return <Loading error={error} />;
+  return (
+    <>
+      <p className="pa-lede">The guardian watches every agent step and can add a check, reduce autonomy, pause or block. It never approves or rejects a case: people review every intervention here.</p>
+      <div className="pa-kpis">
+        {Object.entries(data.by_response).map(([k, v]) => <div className="pa-kpi" key={k}><span>{fmt.label(k)}</span><strong>{v}</strong></div>)}
+        <div className="pa-kpi"><span>False alarms</span><strong>{data.false_alarm_rate === null ? "—" : fmt.pct(data.false_alarm_rate)}</strong><em>Reversed after review</em></div>
+      </div>
+      <Section title="Interventions">
+        <ul className="pa-list">
+          {data.events.map((e: GuardianEvent) => (
+            <li key={e.id}>
+              <div className="pa-row">
+                <Status value={e.status} />
+                <strong>{fmt.label(e.response)}</strong>
+                <span className="pa-mono">{e.agent}</span>
+                <span className="pa-muted">{fmt.when(e.at)}{e.case_key ? ` · case ${e.case_key}` : ""}</span>
+              </div>
+              <p>{e.reason}</p>
+              {e.status === "open" ? (
+                can(me, "review_guardian") ? (
+                  <DecisionForm actions={[{ value: "confirm", label: "Confirm" }, { value: "reverse", label: "Reverse", tone: "danger" }]}
+                    onDecide={(v, reason) => platform.decideGuardian(e.id, v as "confirm" | "reverse", reason).then(reload)} />
+                ) : <p className="pa-muted">A risk reviewer decides this.</p>
+              ) : <p className="pa-muted">{fmt.label(e.status)} by {e.decided_by}: {e.decision_reason}</p>}
+            </li>
+          ))}
+        </ul>
+      </Section>
+    </>
+  );
+}
+
+// ---- Fraud -------------------------------------------------------------------------
+
+export function FraudPage({ me }: { me: Me }) {
+  const load = useCallback(() => platform.fraud(), []);
+  const { data, error, reload } = useLoad(load);
+  const [note, setNote] = useState<string | null>(null);
+  if (!data) return <Loading error={error} />;
+  return (
+    <>
+      <p className="pa-lede">The dreaming agent imagines attacks on our safeguards; the research agent keeps the fraud reference guides current. A scenario affects checks only after a reviewer approves it.</p>
+      <div className="pa-kpis">
+        <div className="pa-kpi"><span>Scenarios covered</span><strong>{data.coverage.covered}</strong><em>A safeguard catches it</em></div>
+        <div className="pa-kpi"><span>Gaps</span><strong className={data.coverage.gaps ? "pa-warn" : ""}>{data.coverage.gaps}</strong><em>No safeguard catches it yet</em></div>
+      </div>
+      <Section title="Safeguard coverage map">
+        <ul className="pa-list">
+          {data.scenarios.map((s: Scenario) => (
+            <li key={s.id}>
+              <div className="pa-row">
+                <Status value={s.coverage === "gap" ? "gap" : "covered"} />
+                <Status value={s.status} />
+                <span className="pa-muted">Safeguard: {s.safeguard}</span>
+              </div>
+              <p><strong>{s.scenario}</strong></p>
+              <p className="pa-muted">{s.caught_by ? `Caught by: ${s.caught_by}` : "Not caught by any safeguard yet."}</p>
+              {s.review === "pending" ? (
+                can(me, "review_fraud") ? (
+                  <DecisionForm actions={[{ value: "approve", label: "Approve scenario" }, { value: "discard", label: "Discard", tone: "danger" }]}
+                    onDecide={(v, reason) => platform.decideScenario(s.id, v as "approve" | "discard", reason).then(reload)} />
+                ) : <p className="pa-muted">Waiting for a risk reviewer.</p>
+              ) : <p className="pa-muted">Review: {fmt.label(s.review)}</p>}
+            </li>
+          ))}
+        </ul>
+      </Section>
+      <Section title="Fraud reference guides">
+        {note && <p className="pa-note" role="status">{note}</p>}
+        <table>
+          <thead><tr><th>Guide</th><th className="num">Version</th><th>Trust</th><th className="num">Sources</th><th className="num">Signals</th><th>Researched</th><th></th></tr></thead>
+          <tbody>{data.guides.map((g: Guide) => (
+            <tr key={g.id}>
+              <td>{g.title}</td><td className="num">{g.version}</td><td>{fmt.label(g.trust_tier)}</td>
+              <td className="num">{g.sources}</td><td className="num">{g.signals}</td><td>{fmt.when(g.researched_at)}</td>
+              <td>{g.status === "research_requested" ? <Status value="research_requested" /> : can(me, "review_fraud") && (
+                <button className="pa-small" onClick={() => platform.researchNow(g.id).then((r) => { setNote(r.message); reload(); })}>Research now</button>
+              )}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </Section>
+    </>
+  );
+}
+
+// ---- Demos ---------------------------------------------------------------------------
+
+export function DemosPage({ me }: { me: Me }) {
+  const load = useCallback(() => platform.demos(), []);
+  const { data, error, reload } = useLoad(load);
+  const [resetting, setResetting] = useState<string | null>(null);
+  if (!data) return <Loading error={error} />;
+  return (
+    <>
+      <p className="pa-lede">Each judge gets a private copy of the demo. Unused copies are removed after {data.cleanup_after_days} days. Per-judge copies arrive with PR-1; until then these are seeded examples.</p>
+      <Section title="Judges' demo copies">
+        <table>
+          <thead><tr><th>Judge</th><th>Created</th><th>Last used</th><th>Allowance used</th><th></th></tr></thead>
+          <tbody>{data.copies.map((c: DemoCopy) => (
+            <tr key={c.id}>
+              <td className="pa-mono">{c.user_key}</td><td>{fmt.when(c.created_at)}</td><td>{fmt.when(c.last_used_at)}</td>
+              <td>{fmt.pct(c.allowance_used)}</td>
+              <td>{can(me, "manage_demos") && (resetting === c.id ? (
+                <DecisionForm actions={[{ value: "reset", label: "Reset this copy", tone: "danger" }]}
+                  onDecide={(_, reason) => platform.resetDemo(c.id, reason).then(() => { setResetting(null); reload(); })} />
+              ) : <button className="pa-small" onClick={() => setResetting(c.id)}>Reset…</button>)}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </Section>
+    </>
+  );
+}
+
+// ---- Audit log -------------------------------------------------------------------------
+
+export function AuditPage() {
+  const load = useCallback(() => platform.audit(), []);
+  const { data, error } = useLoad(load);
+  if (!data) return <Loading error={error} />;
+  return (
+    <>
+      <p className="pa-lede">Every decision in this portal: who, what, when and why.</p>
+      <Section title="Audit log">
+        {data.entries.length === 0 ? <p className="pa-muted">No decisions recorded yet.</p> : (
+          <table>
+            <thead><tr><th>When</th><th>Who</th><th>Role</th><th>Action</th><th>Target</th><th>Reason</th></tr></thead>
+            <tbody>{data.entries.map((e: AuditEntry) => (
+              <tr key={e.id}><td>{fmt.when(e.at)}</td><td>{e.actor}</td><td>{fmt.label(e.role)}</td>
+                <td className="pa-mono">{e.action}</td><td className="pa-mono">{e.target}</td><td>{e.reason ?? "—"}</td></tr>
+            ))}</tbody>
+          </table>
+        )}
+      </Section>
+    </>
+  );
+}
