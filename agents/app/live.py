@@ -68,11 +68,19 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
             upstream = asyncio.create_task(_from_browser(ws, session))
             downstream = asyncio.create_task(_to_browser(ws, session, owner, expand))
             cap = governance.limit(AGENT, "max_call_minutes", 20)
-            done, pending = await asyncio.wait({upstream, downstream}, timeout=cap * 60,
+            left = governance.remaining(AGENT)  # the person's voice minutes left today (PR-10.4)
+            by_allowance = left is not None and left < cap
+            timeout = (left if by_allowance else cap) * 60
+            done, pending = await asyncio.wait({upstream, downstream}, timeout=timeout,
                                                return_when=asyncio.FIRST_COMPLETED)
             for task in pending:
                 task.cancel()
-            if not done:  # the call reached its length limit (PR-10.2)
+            if not done and by_allowance:  # the person's daily voice minutes ran out
+                governance.record_blocked(AGENT, "allowance", "owner.voice_minutes", "Daily voice minutes used",
+                                          user=governance.current_user())
+                await ws.send_json({"type": "error", "detail": "You've used today's voice minutes. You can keep "
+                                    "typing, and voice is back tomorrow, or you can ask for more."})
+            elif not done:  # the call reached its length limit (PR-10.2)
                 governance.record_blocked(AGENT, "limit", "max_call_minutes", f"Live call ended at {cap} minutes")
                 await ws.send_json({"type": "error", "detail": f"This call has reached its {cap}-minute limit. "
                                     "You can start a new call or keep typing."})

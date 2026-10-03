@@ -207,10 +207,13 @@ async def live_call(ws: WebSocket, owner_id: str, token: str | None = None) -> N
     Browsers can't send headers on a WebSocket, so the sign-in token comes as ?token=."""
     if settings.auth_required:
         try:
-            auth.verify(token)
+            user = auth.verify(token)
         except HTTPException as e:
             await ws.close(code=4401 if e.status_code == 401 else 4403, reason=e.detail[:120])
             return
+        governance_core.set_current_user(governance_core.user_key(user.uid))
+    else:
+        governance_core.set_current_user(governance_core.user_key("local"))
     owner = store.get("owners", owner_id)
     if not owner:
         await ws.close(code=4404)
@@ -753,6 +756,13 @@ def decide_access(request_id: str, body: AccessDecision) -> dict:
 @app.get("/api/healthz")
 def healthz() -> dict:
     return {"ok": True, "store": settings.store, "kms": bool(settings.kms_key_name), "auth": settings.auth_required}
+
+
+@api.get("/allowance")
+def my_allowance() -> dict:
+    """Today's use against the signed-in person's daily allowance (PR-10.4), so the app can
+    warn near the limit."""
+    return {"pools": governance_core.allowance_status(), "warn_at": governance_core.WARN_AT}
 
 
 @api.get("/me")
