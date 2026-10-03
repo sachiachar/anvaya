@@ -37,6 +37,10 @@
 - "Open the knowledge map" (on Vikram's screen) opens a second window that shows his kept knowledge as a map, filling in live: each story, wish, account and person appears the moment he taps Keep, linked to the people it mentions, its nominee and its bank or insurer.
 - People a story mentions but who aren't kept yet show as dotted circles, and an account or policy with no nominee is marked in red, so the gaps are easy to see.
 
+**Knowledge map, take two**
+- The map now looks like Obsidian's graph view: a dark canvas where items settle into place, bigger circles for items with more links, scroll to zoom, drag to move, and hover to light up an item's links. It zooms to fit until you move it, and "Fit the whole map" brings that back.
+- More connections: a wish or story now links to the people it names in its own words, including "my wife" or "my daughter", and to the accounts and banks it mentions. "Transfer of SBI account to my wife" links to the SBI account and to his wife.
+
 **Governance and the admin portal**
 - A separate platform admin portal for the Anvaya team, at https://anvaya-admin.web.app. It shows:
   - actual spend against the monthly budget, with a forecast, in US dollars, read from Google Cloud billing (up to yesterday);
