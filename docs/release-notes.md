@@ -41,6 +41,7 @@
 - Certificate checks and the guardian never count against anyone's allowance, so checking a certificate always works.
 - An approved request in the admin portal raises a person's allowance until it expires. Allowances reset each day.
 - A live call ends when the person's voice minutes for the day run out. Two calls at the same time can't each use the full allowance.
+- Live calls show their tokens in the admin portal, as well as their minutes. Before, every call showed 0 tokens.
 
 **Documents**
 - New concept document and two pitches: one for people and families, one for banks and insurers. They cite figures for India and Asia, and regulatory deadlines. Branded PDFs are included.

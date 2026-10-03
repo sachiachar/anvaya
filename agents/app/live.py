@@ -48,6 +48,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
         return
     started: float | None = None
     reserved = 0.0
+    turn_tokens: dict[int, tuple[int, int]] = {}  # tokens in and out for each model turn
     config = types.LiveConnectConfig(
         response_modalities=["AUDIO"],
         speech_config=types.SpeechConfig(
@@ -67,7 +68,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
             started = time.time()
             await ws.send_json({"type": "ready"})
             upstream = asyncio.create_task(_from_browser(ws, session))
-            downstream = asyncio.create_task(_to_browser(ws, session, owner, expand))
+            downstream = asyncio.create_task(_to_browser(ws, session, owner, expand, turn_tokens))
             cap = governance.limit(AGENT, "max_call_minutes", 20)
             left = governance.remaining(AGENT)  # the person's voice minutes left today (PR-10.4)
             by_allowance = left is not None and left < cap
@@ -102,9 +103,11 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
     finally:
         if reserved:  # give back the held minutes; the actual minutes are counted below
             governance.release(AGENT, reserved)
-        if started is not None:  # record the call's minutes in the usage ledger
+        if started is not None:  # record the call's minutes and tokens in the usage ledger
             minutes = (time.time() - started) / 60
-            governance.record_usage(AGENT, settings.live_model, "direct", minutes=minutes)
+            governance.record_usage(AGENT, settings.live_model, "direct", minutes=minutes,
+                                    tokens_in=sum(t[0] for t in turn_tokens.values()),
+                                    tokens_out=sum(t[1] for t in turn_tokens.values()))
         try:
             await ws.close()
         except Exception:
@@ -125,12 +128,18 @@ async def _from_browser(ws: WebSocket, session) -> None:
             return
 
 
-async def _to_browser(ws: WebSocket, session, owner: dict, expand) -> None:
+async def _to_browser(ws: WebSocket, session, owner: dict, expand,
+                      turn_tokens: dict[int, tuple[int, int]]) -> None:
     heard, said = "", ""
+    turn = 0
     while True:
         received = 0
         async for message in session.receive():  # one model turn per iteration
             received += 1
+            if usage := message.usage_metadata:
+                # Usage is per turn, not a running total. Keep the latest for this turn, so a turn
+                # that reports more than once is still counted once.
+                turn_tokens[turn] = (usage.prompt_token_count or 0, usage.response_token_count or 0)
             content = message.server_content
             if not content:
                 continue
@@ -152,6 +161,7 @@ async def _to_browser(ws: WebSocket, session, owner: dict, expand) -> None:
                 heard, said = "", ""
         if received == 0:  # the session has ended
             return
+        turn += 1
 
 
 async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expand) -> None:
