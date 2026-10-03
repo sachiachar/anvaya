@@ -14,9 +14,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ..store import store
-from . import billing
+from . import billing, core
 from .core import Actor, actor, audit, need, platform_settings, registry, small
-from .seed import TENANTS, ensure_seeded, seed
+from .seed import ensure_seeded, seed
 
 # ---- Read models ----------------------------------------------------------------
 
@@ -40,11 +40,11 @@ def _by(days: list[dict], key: str) -> dict[str, dict]:
 def overview() -> dict:
     """Actual spend from Google Cloud billing; usage (not dollars) per agent, model and tenant."""
     days = _days()
-    tenants = {}
-    for t in TENANTS:
-        latest = next((d["tenants"][t] for d in reversed(days) if t in d["tenants"]), {"active_users": 0})
-        tenants[t] = {**_use([d["tenants"][t] for d in days if t in d["tenants"]]),
-                      "active_users_today": small(latest.get("active_users", 0))}
+    # Tenants with real use. Every call is "direct" until bank tenants arrive, so today's
+    # active people (one allowance record each) all belong to it.
+    active_today = len(store.list("user_usage", day=core._today()))
+    tenants = {t: {**v, "active_users_today": small(active_today) if t == "direct" else None}
+               for t, v in _by(days, "tenants").items()}
     s = platform_settings()
     return {
         "spend": billing.spend(),

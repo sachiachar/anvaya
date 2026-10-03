@@ -182,6 +182,16 @@ def test_seed_never_writes_usage_or_blocked_calls_and_clears_old_samples():
     assert store.list("budget_requests", seeded=True) and store.list("guardian_events", seeded=True)
 
 
+def test_tenants_show_only_real_use_and_real_active_people(client):
+    for i in range(6):
+        core.set_current_user(f"tenant-test-{i}")
+        core.record_usage("saathi.chat", "gemini-3.1-flash-lite", "direct", tokens_in=10, tokens_out=5)
+    core.set_current_user(None)
+    tenants = client.get("/api/platform/overview", headers=h("admin")).json()["usage"]["by_tenant"]
+    assert set(tenants) == {"direct"}  # no sample tenants
+    assert tenants["direct"]["calls"] >= 6 and tenants["direct"]["active_users_today"] >= 6
+
+
 def test_reseeding_keeps_the_kill_switch(client):
     assert client.post("/api/platform/kill-switch", headers=h("admin"),
                        json={"state": "optional_paused", "reason": "spend spike"}).status_code == 200
