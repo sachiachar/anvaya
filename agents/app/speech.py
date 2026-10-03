@@ -54,6 +54,10 @@ AGENT = "saathi.speech"
 async def speak(text: str) -> bytes:
     """Speak one of Saathi's replies. Each model is checked by the gateway (registry and kill
     switch) before it's used, and every spoken reply is recorded in the usage ledger."""
+    cap = governance.limit(AGENT, "max_characters", 1000)
+    if len(text) > cap:
+        governance.record_blocked(AGENT, "limit", "max_characters", f"Reply of {len(text)} characters is over {cap}")
+        raise governance.Refused(f"Spoken replies are limited to {cap} characters.")
     last_error: errors.APIError | None = None
     refused: governance.Refused | None = None
     for model in settings.tts_models:

@@ -158,6 +158,26 @@ def check_call(agent: str, model: str) -> None:
         raise Refused("This feature is paused right now. Please try again later.")
 
 
+def limit(agent: str, key: str, default: int | None = None) -> int | None:
+    """One of the agent's limits from the registry (PR-10.2)."""
+    entry = agent_entry(agent) or {}
+    return entry.get("limits", {}).get(key, default)
+
+
+def estimate_tokens(chars: int, media: int = 0) -> int:
+    """A quick estimate before the call: about 4 characters per token, about 300 tokens per image or clip."""
+    return chars // 4 + media * 300
+
+
+def check_input(agent: str, estimated_tokens: int) -> None:
+    """Refuse a request larger than the agent's max_input_tokens, before anything is spent."""
+    cap = limit(agent, "max_input_tokens")
+    if cap is not None and estimated_tokens > cap:
+        record_blocked(agent, "limit", "max_input_tokens",
+                       f"Request of about {estimated_tokens:,} tokens is over the limit of {cap:,}")
+        raise Refused("This request is too large. Please try a shorter message or a smaller file.")
+
+
 def on_vertex() -> bool:
     """Request labels (billing per agent) work only on Vertex AI, not with a Gemini API key."""
     return os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "false").lower() == "true"

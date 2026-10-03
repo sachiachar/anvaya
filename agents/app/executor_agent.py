@@ -20,7 +20,7 @@ from google.adk.tools import ToolContext
 from google.genai import types
 
 from .config import settings
-from .gemini import RETRY
+from .gemini import retry_for
 from .governance import core as governance
 from .store import store
 
@@ -74,9 +74,12 @@ def gateway_check(callback_context, llm_request: LlmRequest) -> LlmResponse | No
     """Before every model call the agent makes: the gateway checks the registry and kill switch."""
     model = llm_request.model or settings.flash_model
     callback_context.state["temp:model"] = model
+    governance.check_call(AGENT, model)
+    chars = sum(len(p.text or "") for c in (getattr(llm_request, "contents", None) or []) for p in (c.parts or []))
+    governance.check_input(AGENT, governance.estimate_tokens(chars))
     if llm_request.config is not None:
         llm_request.config.labels = governance.labels(AGENT) if governance.on_vertex() else None
-    governance.check_call(AGENT, model)
+        llm_request.config.max_output_tokens = governance.limit(AGENT, "max_output_tokens")
     return None
 
 
@@ -102,8 +105,8 @@ def build_agent() -> LlmAgent:
         name="handover_assistant",
         # Retries on overload, then falls back to a second model.
         model=FallbackModel(models=[
-            Gemini(model=settings.flash_model, retry_options=RETRY),
-            Gemini(model=settings.fallback_model, retry_options=RETRY),
+            Gemini(model=settings.flash_model, retry_options=retry_for(AGENT)),
+            Gemini(model=settings.fallback_model, retry_options=retry_for(AGENT, 1)),
         ]),
         description="Answers the family's questions from the owner's own words and records.",
         instruction=(

@@ -22,9 +22,19 @@ T = TypeVar("T", bound=BaseModel)
 log = logging.getLogger(__name__)
 
 TRANSIENT_CODES = [429, 500, 502, 503, 504]
+# Default retries: 2 after the first attempt (3 attempts). Each agent's own max_retries
+# from the registry overrides this per request (PR-10.2).
 RETRY = types.HttpRetryOptions(
-    attempts=4, initial_delay=2.0, max_delay=20.0, http_status_codes=TRANSIENT_CODES
+    attempts=3, initial_delay=2.0, max_delay=20.0, http_status_codes=TRANSIENT_CODES
 )
+
+
+def retry_for(agent: str, attempts: int | None = None) -> types.HttpRetryOptions:
+    """Retry options for one agent: its max_retries after the first attempt."""
+    if attempts is None:
+        attempts = 1 + int(governance.limit(agent, "max_retries", 2))
+    return types.HttpRetryOptions(attempts=attempts, initial_delay=2.0, max_delay=20.0,
+                                  http_status_codes=TRANSIENT_CODES)
 
 
 @lru_cache(maxsize=1)
@@ -52,6 +62,8 @@ async def generate_json(
     layer refuses models the agent isn't allowed and calls the kill switch pauses, and
     records every call's tokens and cost in the ledger.
     """
+    governance.check_call(agent, model)
+    governance.check_input(agent, governance.estimate_tokens(len(prompt) + len(system or ""), len(media or [])))
     parts: list[types.Part] = [types.Part.from_bytes(data=d, mime_type=m) for d, m in media or []]
     parts.append(types.Part(text=prompt))
     config = types.GenerateContentConfig(
@@ -63,10 +75,13 @@ async def generate_json(
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         # Billing labels per agent; only Vertex AI accepts them (the Gemini API key path doesn't).
         labels=governance.labels(agent) if governance.on_vertex() else None,
+        # Limits from the registry: the model stops at the agent's output cap, and retries stop
+        # at its max_retries.
+        max_output_tokens=governance.limit(agent, "max_output_tokens"),
+        http_options=types.HttpOptions(retry_options=retry_for(agent)),
     )
     contents = [types.Content(role="user", parts=parts)]
 
-    governance.check_call(agent, model)
     used = model
     try:
         response = await client().aio.models.generate_content(model=model, contents=contents, config=config)
@@ -77,8 +92,10 @@ async def generate_json(
         log.warning("Gemini %s unavailable (%s); falling back to %s", model, e.code, settings.fallback_model)
         governance.check_call(agent, settings.fallback_model)
         used = settings.fallback_model
+        # One attempt on the fallback model; its retries already ran on the primary.
+        fallback_config = config.model_copy(update={"http_options": types.HttpOptions(retry_options=retry_for(agent, 1))})
         response = await client().aio.models.generate_content(
-            model=settings.fallback_model, contents=contents, config=config
+            model=settings.fallback_model, contents=contents, config=fallback_config
         )
     usage = response.usage_metadata
     t_in = (usage.prompt_token_count or 0) if usage else 0

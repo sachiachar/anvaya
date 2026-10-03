@@ -67,9 +67,15 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
             await ws.send_json({"type": "ready"})
             upstream = asyncio.create_task(_from_browser(ws, session))
             downstream = asyncio.create_task(_to_browser(ws, session, owner, expand))
-            done, pending = await asyncio.wait({upstream, downstream}, return_when=asyncio.FIRST_COMPLETED)
+            cap = governance.limit(AGENT, "max_call_minutes", 20)
+            done, pending = await asyncio.wait({upstream, downstream}, timeout=cap * 60,
+                                               return_when=asyncio.FIRST_COMPLETED)
             for task in pending:
                 task.cancel()
+            if not done:  # the call reached its length limit (PR-10.2)
+                governance.record_blocked(AGENT, "limit", "max_call_minutes", f"Live call ended at {cap} minutes")
+                await ws.send_json({"type": "error", "detail": f"This call has reached its {cap}-minute limit. "
+                                    "You can start a new call or keep typing."})
             for task in done:
                 if task.exception() and not isinstance(task.exception(), WebSocketDisconnect):
                     raise task.exception()

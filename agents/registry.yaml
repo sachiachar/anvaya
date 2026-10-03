@@ -1,6 +1,14 @@
 # Agent registry: every agent that calls a model, with its one role, autonomy level,
 # allowed models and tools, limits and budget pool. Reviewed like code.
 #
+# Limits the gateway enforces (PR-10.2):
+#   max_input_tokens         estimated before the call; larger requests are refused
+#   max_output_tokens        sent with the request, so the model stops there
+#   max_retries              retries after the first attempt, then one try on the fallback model
+#   max_model_calls_per_run  model calls in one ADK run (handover agent)
+#   max_call_minutes         length of one live call
+#   max_characters           length of one spoken reply
+#
 # The platform admin portal (PR-12) shows this file. The agent gateway (PR-10.1) will
 # enforce it: a call with a model or tool not listed here is refused and recorded.
 # Design: docs/proposals/agent-governance.md §2.
@@ -12,7 +20,7 @@ agents:
     autonomy: act_within_limits
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
     tools: []
-    limits: {max_input_tokens: 20000, max_output_tokens: 1200, max_retries: 2}
+    limits: {max_input_tokens: 20000, max_output_tokens: 4000, max_retries: 2}
     budget_class: owner
     safety_critical: false
 
@@ -41,7 +49,7 @@ agents:
     autonomy: propose
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
     tools: []
-    limits: {max_input_tokens: 12000, max_output_tokens: 1500, max_retries: 2}
+    limits: {max_input_tokens: 12000, max_output_tokens: 4000, max_retries: 2}
     budget_class: owner
     safety_critical: false
 
@@ -50,7 +58,7 @@ agents:
     autonomy: propose
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
     tools: []
-    limits: {max_output_tokens: 1000, max_retries: 2}
+    limits: {max_input_tokens: 8000, max_output_tokens: 2000, max_retries: 2}
     budget_class: owner
     safety_critical: false
 
@@ -59,7 +67,7 @@ agents:
     autonomy: propose
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
     tools: []
-    limits: {max_input_tokens: 30000, max_output_tokens: 1500, max_retries: 2}
+    limits: {max_input_tokens: 30000, max_output_tokens: 4000, max_retries: 2}
     budget_class: owner
     safety_critical: false
 
@@ -68,7 +76,7 @@ agents:
     autonomy: propose
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
     tools: []
-    limits: {max_input_tokens: 20000, max_output_tokens: 1000, max_retries: 2}
+    limits: {max_input_tokens: 20000, max_output_tokens: 2000, max_retries: 2}
     budget_class: owner
     safety_critical: false
 
@@ -77,7 +85,7 @@ agents:
     autonomy: assist
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
     tools: [read_fraud_guide]
-    limits: {max_output_tokens: 1500, max_retries: 2}
+    limits: {max_input_tokens: 8000, max_output_tokens: 2000, max_retries: 2}
     budget_class: safety
     safety_critical: true
 
@@ -86,7 +94,7 @@ agents:
     autonomy: act_within_limits
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
     tools: [read_bundle_index, read_concept, list_accounts]
-    limits: {max_input_tokens: 60000, max_output_tokens: 800, max_model_calls_per_run: 6, max_retries: 2}
+    limits: {max_input_tokens: 60000, max_output_tokens: 1500, max_model_calls_per_run: 6, max_retries: 2}
     budget_class: family
     safety_critical: false
 
@@ -95,7 +103,7 @@ agents:
     autonomy: propose
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
     tools: []
-    limits: {max_input_tokens: 30000, max_output_tokens: 3000, max_retries: 2}
+    limits: {max_input_tokens: 30000, max_output_tokens: 8000, max_retries: 2}
     budget_class: family
     safety_critical: false
 
@@ -104,7 +112,7 @@ agents:
     autonomy: assist
     models: {primary: gemini-3.1-flash-lite, fallback: []}
     tools: []
-    limits: {max_output_tokens: 600, max_retries: 1}
+    limits: {max_input_tokens: 8000, max_output_tokens: 1000, max_retries: 1}
     budget_class: safety
     safety_critical: true
 
