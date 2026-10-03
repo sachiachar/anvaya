@@ -104,6 +104,20 @@ def test_recipient_key_cannot_change_once_a_case_is_open(client):
 
 def test_nobody_becomes_recipient_without_the_owners_invitation(client):
     assert client.post(f"/api/owners/{OWNER}/vault/recipient", json=RECIPIENT, headers=PRIYA).status_code == 409
+    # Vikram chose someone else: Priya can't register in their place.
     client.post(f"/api/owners/{OWNER}/vault/invite", json={"name": "Meena Rao", "relationship": "wife"})
+    r = client.post(f"/api/owners/{OWNER}/vault/recipient", json=RECIPIENT, headers=PRIYA)
+    assert r.status_code == 409 and "not you" in r.json()["detail"]
+    # Vikram chose Priya: she registers under the invited name, whatever name is sent.
+    client.post(f"/api/owners/{OWNER}/vault/invite", json={"name": "Priya Rao", "relationship": "daughter"})
     client.post(f"/api/owners/{OWNER}/vault/recipient", json={**RECIPIENT, "name": "Someone else"}, headers=PRIYA)
-    assert client.get(f"/api/owners/{OWNER}/vault/recipient").json()["name"] == "Meena Rao"
+    assert client.get(f"/api/owners/{OWNER}/vault/recipient").json()["name"] == "Priya Rao"
+
+
+def test_an_empty_invitation_is_refused_not_a_crash(client):
+    client.post(f"/api/owners/{OWNER}/vault/invite", json={"name": "  ", "relationship": "daughter"})
+    assert client.post(f"/api/owners/{OWNER}/vault/recipient", json=RECIPIENT, headers=PRIYA).status_code == 409
+
+
+def test_vikram_starts_with_priya_in_his_family(client):
+    assert "Priya Rao (daughter)" in client.get(f"/api/owners/{OWNER}").json()["family"]

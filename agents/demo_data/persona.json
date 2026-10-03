@@ -1,12 +1,14 @@
 {
-  "_note": "Starting profile only. Everything else (family, stories, accounts, wishes) is learned from the conversation.",
+  "_note": "Starting profile only. Priya, his daughter, is known from the start because the demo's family person plays her; everything else (more family, stories, accounts, wishes) is learned from the conversation.",
   "owner": {
     "id": "owner_demo_vikram",
     "name": "Vikram Rao",
     "age": 58,
     "country": "India",
     "city": "Bengaluru",
-    "family": []
+    "family": [
+      "Priya Rao (daughter)"
+    ]
   },
   "moments": [],
   "inventory": []
