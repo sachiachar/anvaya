@@ -10,7 +10,7 @@ exist; until then the links the cards already imply, marked `derived`:
     story or wish -> an account or bank it names      ("about")
     account or policy -> its nominee, its holder      ("nominee", "holder")
     account or policy -> its institution              ("with")
-    person -> the owner                               (their relationship)
+    person -> the owner, or the person they're related through   ("wife of brother-in-law")
 
 Gaps: an account or policy with no nominee (the full gap check is PR-7.10).
 Only the owner's own copy, through the same guard as every route; never the vault.
@@ -34,6 +34,17 @@ def _plain(text: str) -> str:
     """Lower case, punctuation as spaces (apostrophes kept), so "Dr. Mehta" and "HDFC Bank Ltd."
     compare the same in a name and in a story's text."""
     return " ".join(re.sub(r"[^a-z0-9']+", " ", (text or "").lower()).split())
+
+
+def _related_to(relationship: str) -> tuple[str, str | None]:
+    """Whose relative someone is. "wife of brother-in-law" -> ("wife", "brother-in-law");
+    "Bhaskar's wife" -> ("wife", "Bhaskar"); "daughter" -> ("daughter", None), the owner's."""
+    rel = " ".join(relationship.split())
+    if m := re.match(r"^(.+?) of (?:my |his |her )?(.+)$", rel, re.IGNORECASE):
+        return m.group(1), m.group(2)
+    if m := re.match(r"^(.+?)'s (.+)$", rel):
+        return m.group(2), m.group(1)
+    return rel or "family", None
 
 
 def _group(okf_type: str) -> str:
@@ -67,7 +78,7 @@ def build(owner_id: str, owner_name: str) -> dict:
                                            f"{_plain(owner_name).split(' ')[0]}'s"))
     possessive = re.compile(rf"^(?:{mine})\s+")
 
-    def person(name: str) -> str | None:
+    def person(name: str, mention: bool = True) -> str | None:
         """The owner, a kept person, or a 'mentioned' one the owner hasn't kept yet."""
         key = possessive.sub("", _plain(name))  # "my wife", "Vikram's wife" -> "wife"
         if not key:
@@ -81,6 +92,8 @@ def build(owner_id: str, owner_name: str) -> dict:
             return first_names[key][0]
         if len(relations.get(key, [])) == 1:  # "wife" -> the one kept person who is the wife
             return relations[key][0]
+        if not mention:
+            return None
         mid = f"mention:{key}"
         if not any(n["id"] == mid for n in nodes):
             nodes.append({"id": mid, "label": name.strip(), "group": "mentioned", "type": "Mentioned"})
@@ -107,7 +120,12 @@ def build(owner_id: str, owner_name: str) -> dict:
                 if target in concepts:
                     link(cid, target, name, derived=False)
         if okf_type == "Person":
-            link(cid, "owner", record.get("relationship") or "family")
+            rel, anchor = _related_to(record.get("relationship") or "")
+            target = person(anchor, mention=False) if anchor else "owner"
+            if target and target != cid:
+                link(cid, target, rel)  # "wife of brother-in-law" -> Bhaskar, labelled "wife"
+            else:
+                link(cid, "owner", record.get("relationship") or "family")
         elif c["collection"] == "moments":
             for name in record.get("people") or []:
                 target = person(name)
