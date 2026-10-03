@@ -9,6 +9,10 @@
 - Spoken replies are limited to 1,000 characters.
 - A gentle notice when the owner is close to, or has reached, today's allowance. Near the limit for spoken replies, replies stop being read aloud automatically, and the owner can turn it back on.
 
+**Keeping what matters**
+- Everything the owner keeps is saved as a small open-format document (Open Knowledge Format), with where it came from and that the owner confirmed it. Changing a kept item keeps the earlier version, marked as replaced. Long account numbers keep only their last 4 digits.
+- Demo copies made before this change start again once, from the beginning, the next time they're opened.
+
 **Next steps**
 - Readiness, legal needs and the claims checklist are worked out again only when the owner's information has changed; otherwise the last result comes back straight away.
 

@@ -19,10 +19,10 @@ from google.adk.sessions import InMemorySessionService
 from google.adk.tools import ToolContext
 from google.genai import types
 
+from . import knowledge
 from .config import settings
 from .gemini import retry_for
 from .governance import core as governance
-from .store import store
 
 APP_NAME = "life-after"
 
@@ -43,7 +43,7 @@ def search_archive(query: str, tool_context: ToolContext) -> dict:
     owner_id = tool_context.state["owner_id"]
     wanted = _words(query)
     scored = []
-    for m in store.list("moments", owner_id=owner_id, status="approved"):
+    for m in knowledge.items(owner_id, "moments"):
         text = " ".join([m["title"], m["summary"], m["quote"], *m.get("people", []), *m.get("places", [])])
         score = len(wanted & _words(text))
         if score:
@@ -64,7 +64,7 @@ def list_inventory(tool_context: ToolContext) -> dict:
         Every item with an `id` to cite. Numbers are masked to the last 4 characters.
     """
     owner_id = tool_context.state["owner_id"]
-    return {"items": store.list("inventory", owner_id=owner_id, status="approved")}
+    return {"items": knowledge.items(owner_id, "inventory")}
 
 
 AGENT = "handover.assistant"

@@ -28,7 +28,7 @@ Everything Anvaya is built on, with each item's version, licence and purpose. Ve
 | google-cloud-kms | 3.18.0 | Apache-2.0 | Wraps the vault escrow blob with the KMS key |
 | google-cloud-storage | 3.16.0 | Apache-2.0 | Recordings and documents in a private bucket |
 | google-auth | 2.59.1 | Apache-2.0 | Verifies the Google sign-in token on every request (`auth.py`) |
-| pyyaml | 6.0.3 | MIT | Reads the agent registry (`registry.yaml`) |
+| pyyaml | 6.0.3 | MIT | Reads the agent registry (`registry.yaml`), and writes and reads the frontmatter of kept-knowledge concepts (OKF) |
 
 **Development only**
 

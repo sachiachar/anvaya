@@ -18,7 +18,7 @@ from google.auth.exceptions import DefaultCredentialsError
 from google.genai import errors as genai_errors
 from pydantic import BaseModel, ValidationError
 
-from . import auth, demo, escrow, fraud_guides, live, loops, media, proposals, release, speech, tasks
+from . import auth, demo, escrow, fraud_guides, knowledge, live, loops, media, proposals, release, speech, tasks
 from .config import settings
 from .executor_agent import UnknownSession, ask
 from .governance import core as governance_core
@@ -71,7 +71,7 @@ def owner_or_404(owner_id: str) -> dict:
     owner = store.get("owners", owner_id)
     if not owner:
         raise HTTPException(404, "owner not found")
-    return owner
+    return {**owner, "family": knowledge.family(owner_id)}  # family comes from kept Person concepts
 
 
 def open_case(owner_id: str) -> dict | None:
@@ -139,8 +139,9 @@ def _expand(turn: dict) -> dict:
     ids = turn.get("proposals")
     if not ids:
         return turn
+    # A draft is in Firestore; once kept it's in the owner's bundle, under the same id.
     items = [{**doc, "collection": c} for c in ("people", "moments", "inventory")
-             for doc in (store.get(c, i) for i in ids.get(c, [])) if doc]
+             for doc in (store.get(c, i) or knowledge.get(turn["owner_id"], i) for i in ids.get(c, [])) if doc]
     return {**turn, "proposals": items, "discarded": sum(len(v) for v in ids.values()) - len(items)}
 
 
@@ -207,7 +208,7 @@ async def live_call(ws: WebSocket, owner_id: str, token: str | None = None, acti
     else:
         governance_core.set_current_user(governance_core.user_key(demo.LOCAL))
         demo.begin(demo.LOCAL)
-    demo.ensure()
+    demo.ensure()  # no catalog cache here: a call lasts minutes, and kept knowledge can change meanwhile
     if (acting_as or demo.DEFAULT_PERSON).strip().lower() != "vikram":  # only the owner talks with Saathi
         await ws.close(code=4403, reason="Only Vikram can call Saathi.")
         return
@@ -215,7 +216,7 @@ async def live_call(ws: WebSocket, owner_id: str, token: str | None = None, acti
     if not owner or owner_id != demo.owner_id():  # only the caller's own copy
         await ws.close(code=4404)
         return
-    await live.call(ws, owner, _expand)
+    await live.call(ws, {**owner, "family": knowledge.family(owner_id)}, _expand)  # family from kept people
 
 
 class Speech(BaseModel):
@@ -261,9 +262,9 @@ async def add_document(owner_id: str, image: UploadFile = File(...)) -> dict:
 def add_wish(owner_id: str, text: str = Form(...)) -> dict:
     """A wish the owner types is the owner's own action, so it is approved at once."""
     owner_or_404(owner_id)
-    doc = {"id": new_id("m"), "owner_id": owner_id, "status": "approved", "kind": "wish",
+    doc = {"id": new_id("m"), "kind": "wish",
            "title": text[:60], "summary": text, "quote": text, "people": [], "places": [], "year": None}
-    return store.put("moments", doc)
+    return knowledge.commit("moments", doc, owner_id, generated_by=f"human:owner-{owner_id}")
 
 
 # ---- Curation loop (Propose: the owner decides) -------------------------------
@@ -291,7 +292,9 @@ def decide(doc_id: str, body: Decision) -> dict:
     if body.decision == "reject":
         store.delete(body.collection, doc_id)
         return {"id": doc_id, "status": "rejected"}
-    safe_edits = {k: v for k, v in (body.edits or {}).items() if k not in ("id", "owner_id", "status", "updates")}
+    # Edits change what a card says, never what it is or where it came from.
+    safe_edits = {k: v for k, v in (body.edits or {}).items()
+                  if k not in ("id", "owner_id", "status", "updates", "recording", "document")}
     if safe_edits:
         doc = store.update(body.collection, doc_id, safe_edits)
     return proposals.approve(body.collection, doc)
@@ -300,8 +303,8 @@ def decide(doc_id: str, body: Decision) -> dict:
 @api.get("/owners/{owner_id}/archive")
 def archive(owner_id: str) -> dict:
     return {
-        "moments": store.list("moments", owner_id=owner_id, status="approved"),
-        "inventory": store.list("inventory", owner_id=owner_id, status="approved"),
+        "moments": knowledge.items(owner_id, "moments"),
+        "inventory": knowledge.items(owner_id, "inventory"),
         "legal_documents": store.list("legal_documents", owner_id=owner_id),
     }
 
@@ -332,8 +335,8 @@ def _readiness_inputs(owner_id: str) -> tuple[dict, list]:
     recipient = owner.get("vault_recipient") or {}
     args = [
         {k: v for k, v in owner.items() if k != "readiness_score"},
-        store.list("inventory", owner_id=owner_id, status="approved"),
-        store.list("moments", owner_id=owner_id, status="approved"),
+        knowledge.items(owner_id, "inventory"),
+        knowledge.items(owner_id, "moments"),
         [v["ai_label"] for v in store.list("vault_items", owner_id=owner_id) if v.get("ai_label")],
         [d["document_type"] for d in store.list("legal_documents", owner_id=owner_id)],
         store.list("tasks", owner_id=owner_id),
@@ -391,8 +394,8 @@ def companion_asks(owner_id: str, body: Prompt) -> dict:
 @api.post("/owners/{owner_id}/legal-needs", dependencies=[Depends(demo.only("owner"))])
 async def legal_needs(owner_id: str) -> dict:
     owner = owner_or_404(owner_id)
-    args = [store.list("moments", owner_id=owner_id, status="approved", kind="wish"),
-            store.list("inventory", owner_id=owner_id, status="approved"),
+    args = [knowledge.items(owner_id, "moments", kind="wish"),
+            knowledge.items(owner_id, "inventory"),
             bool(store.list("vault_items", owner_id=owner_id))]
     if (cached := _cached("legal_needs", owner_id, args)) is not None:
         return {**cached, "cached": True}
@@ -426,7 +429,7 @@ def legal_handoff(owner_id: str, body: Handoff) -> dict:
         "requests": body.needs,
         "assets_overview": [
             {k: i.get(k) for k in ("category", "institution", "product", "nominee_or_beneficiary")}
-            for i in store.list("inventory", owner_id=owner_id, status="approved")
+            for i in knowledge.items(owner_id, "inventory")
         ],
     }
     store.put("handoffs", summary)
@@ -702,8 +705,8 @@ async def ask_question(owner_id: str, body: Question) -> dict:
 async def settlement(owner_id: str) -> dict:
     require_handover(owner_id)
     owner = owner_or_404(owner_id)
-    args = [store.list("inventory", owner_id=owner_id, status="approved"),
-            store.list("moments", owner_id=owner_id, status="approved")]
+    args = [knowledge.items(owner_id, "inventory"),
+            knowledge.items(owner_id, "moments")]
     if (cached := _cached("settlement", owner_id, args)) is not None:
         return {**cached, "cached": True}
     result = {"autonomy": PROPOSE, **(await loops.plan_settlement(owner, *args)).model_dump()}

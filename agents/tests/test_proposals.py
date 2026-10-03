@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app import main, proposals
+from app import knowledge, main, proposals
 from app.store import store
 
 OWNER = "owner_demo_vikram"
@@ -25,7 +25,8 @@ def test_a_repeat_of_a_kept_story_adds_no_card():
     proposals.approve("moments", first)
     again = {**SALARY, "title": "First salary in Mysore"}  # what the model produced after "Yes"
     assert proposals.save_moment(OWNER, again, {}) is None
-    assert len(store.list("moments", owner_id=OWNER)) == 1
+    assert len(knowledge.items(OWNER, "moments")) == 1
+    assert not store.list("moments", owner_id=OWNER)  # the draft left Firestore when it was kept
 
 
 def test_a_follow_up_detail_updates_the_pending_card():
@@ -42,15 +43,18 @@ def test_a_follow_up_to_a_kept_moment_is_an_update_card():
                                            "quote": "Meena should have it."}, {})
     assert update["updates"] == kept["id"]
     proposals.approve("moments", update)
-    moments = store.list("moments", owner_id=OWNER)
+    moments = knowledge.items(OWNER, "moments")
     assert len(moments) == 1 and "Meena has the key" in moments[0]["summary"]
+    # The earlier version stays in the bundle, marked deprecated (PR-7.2).
+    old = knowledge.get(OWNER, kept["id"])
+    assert old["okf_status"] == "deprecated" and len(knowledge.items(OWNER, "moments", include_replaced=True)) == 2
 
 
 def test_people_become_family_once_kept():
     card = proposals.save_person(OWNER, {"name": "Ajay", "relationship": "nephew"})
     assert proposals.save_person(OWNER, {"name": "Ajay", "relationship": "nephew"})["id"] == card["id"]
     proposals.approve("people", card)
-    assert store.get("owners", OWNER)["family"] == ["Priya Rao (daughter)", "Ajay (nephew)"]
+    assert sorted(knowledge.family(OWNER)) == ["Ajay (nephew)", "Priya Rao (daughter)"]
     assert proposals.save_person(OWNER, {"name": "Ajay", "relationship": "nephew"}) is None
     assert proposals.save_person(OWNER, {"name": "Priya", "relationship": "daughter"}) is None  # known from the start
 
@@ -60,6 +64,7 @@ def test_a_follow_up_never_wipes_earlier_details():
     kept = proposals.approve("moments", proposals.save_moment(OWNER, SALARY, {}))
     update = proposals.save_moment(OWNER, {**SALARY, "summary": "His mother was overjoyed when he gave her his first salary.",
                                            "quote": "Oh, she was too happy."}, {})
-    proposals.approve("moments", update)
-    summary = store.get("moments", kept["id"])["summary"]
+    new = proposals.approve("moments", update)
+    assert knowledge.get(OWNER, kept["id"])["okf_status"] == "deprecated"
+    summary = knowledge.get(OWNER, new["id"])["summary"]
     assert "Mysore" in summary and "1987" in summary and "overjoyed" in summary
