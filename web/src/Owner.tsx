@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type Case, type Gap, type InventoryItem, type Moment, type Task, type VaultItem } from "./api";
+import { api, type Case, type Gap, type InventoryItem, type KeptItem, type Moment, type Task, type VaultItem } from "./api";
 import Conversation from "./Conversation";
 import { Card, ErrorLine, useAction } from "./ui";
 import { encryptSecret, keyFingerprint, ownerDataKey, wrapForRecipient } from "./vaultCrypto";
@@ -23,6 +23,7 @@ export default function Owner() {
         <>
           <NextSteps onTalk={() => setTab("talk")} />
           <MissingPieces />
+          <WhatYouKept />
           <People />
           <WeeklyReview />
           <div id="legal"><WishesAndLegal /></div>
@@ -52,6 +53,50 @@ function AliveAlert() {
       <button onClick={() => run(async () => { await api.ownerAlive(); setOpen(null); })}>I'm OK, cancel this</button>
       <ErrorLine error={error} />
     </section>
+  );
+}
+
+const KEPT_GROUPS = [
+  { collection: "moments", heading: "Stories, advice and wishes" },
+  { collection: "inventory", heading: "Accounts and policies" },
+  { collection: "people", heading: "People" },
+] as const;
+
+/** Everything kept, with Remove for anything recorded wrongly. Removing deletes it, and every
+ * earlier version, from the kept knowledge for good: the family never sees it. The conversation
+ * it came from stays in the chat. */
+function WhatYouKept() {
+  const [items, setItems] = useState<KeptItem[] | null>(null);
+  const { error, run } = useAction();
+  useEffect(() => { run(async () => setItems((await api.kept()).items)); }, []);
+  if (error && !items) return <ErrorLine error={error} />;
+  if (!items || items.length === 0) return null;
+  const remove = (item: KeptItem) => {
+    if (!window.confirm(`Remove "${item.title}"? It's removed for good from what your family receives.`)) return;
+    run(async () => setItems((await api.removeKept(item.id)).items));
+  };
+  return (
+    <Card title="What you've kept">
+      <p className="muted">If something was recorded wrongly, remove it here. To change a detail, just tell Saathi.</p>
+      {KEPT_GROUPS.map(({ collection, heading }) => {
+        const group = items.filter((i) => i.collection === collection);
+        if (group.length === 0) return null;
+        return (
+          <details key={collection}>
+            <summary>{heading} ({group.length})</summary>
+            <ul className="list">
+              {group.map((i) => (
+                <li key={i.id} className="row">
+                  <span><strong>{i.title}</strong>{i.description && <span className="muted"> · {i.description}</span>}</span>
+                  <button className="secondary" onClick={() => remove(i)}>Remove</button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        );
+      })}
+      <ErrorLine error={error} />
+    </Card>
   );
 }
 

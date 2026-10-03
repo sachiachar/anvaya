@@ -153,6 +153,12 @@ def save_inventory(owner_id: str, item: dict, source: dict[str, Any]) -> dict:
     return _pending("inventory", owner_id, item, **source)
 
 
+def same_name(a: str | None, b: str | None) -> bool:
+    """The same person by name, ignoring case and punctuation ("Priya" and "Priya Rao" too)."""
+    na, nb = _norm(a), _norm(b)
+    return bool(na and nb) and (na == nb or na.split()[0] == nb.split()[0])
+
+
 def _placeholder(p: dict) -> bool:
     """Someone saved by relationship only, before their name was known: "Wife" (wife)."""
     return _norm(p.get("name")) == _norm(p.get("relationship"))
@@ -186,6 +192,9 @@ def approve(collection: str, doc: dict) -> dict:
     # Follow "superseded by": a second update card for the same item builds on the latest
     # version, never on one already replaced, so there's only ever one current version.
     previous = knowledge.current(doc["owner_id"], doc["updates"]) if doc.get("updates") else None
+    if doc.get("updates") and not previous:
+        store.delete(collection, doc["id"])
+        raise knowledge.Removed(doc["updates"])  # it updates something the owner removed
     if previous:  # the new version keeps what was known and adds what the card says
         fresh = {k: v for k, v in doc.items() if v not in (None, "", [])}
         doc = {**{k: v for k, v in previous.items() if k not in ("concept", "okf_status")}, **fresh}

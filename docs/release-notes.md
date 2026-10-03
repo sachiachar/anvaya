@@ -46,6 +46,11 @@
 - "Missing pieces" on My plan lists them, most important first. Skip any you'd rather not answer, and Saathi won't ask about it again.
 - Telling Saathi who the nominee of an account is now updates that account, rather than becoming a wish, even if you only name the bank ("my wife is the SBI nominee").
 
+**Removing something recorded wrongly**
+- "What you've kept" on My plan lists every story, wish, account, policy and person Vikram has kept, with Remove. The knowledge map's side panel has the same button.
+- Removing deletes the item and every earlier version of it from the kept knowledge for good, along with any update cards waiting for it: the family and their assistant never see it. The record of changes keeps only "An item was removed by the owner". The conversation it came from stays in the chat.
+- Nothing can be removed while a handover is being reviewed, and the person who receives the vault can't be removed until Vikram chooses someone else.
+
 **Updating a story or wish without duplicating it**
 - When Saathi words a story or wish differently from one Vikram already kept ("SBI account for my wife" after "Transfer of SBI account"), the card says "This looks like an update to …" and asks: Replace it, Keep both, or Not now. Replace it keeps the new card as the next version, so the map shows one item, not two. Nothing is merged without asking.
 

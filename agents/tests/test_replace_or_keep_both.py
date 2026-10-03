@@ -74,3 +74,11 @@ def test_replace_needs_the_same_kind_and_a_refusal_changes_nothing(client):
     assert r.status_code == 409
     assert proposals.store.get("moments", card["id"])["title"] == "SBI account for my wife"
     assert knowledge.current(OWNER, kept["id"])["kind"] == "wish"
+
+
+def test_removing_the_lookalike_turns_the_card_into_a_plain_keep(client):
+    kept = _keep("moments", WISH)
+    card = proposals.save_moment(OWNER, REWORDED, {})
+    knowledge.remove(OWNER, kept["id"])
+    assert proposals.store.get("moments", card["id"])["looks_like"] is None
+    assert decide(client, card).status_code == 200
