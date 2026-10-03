@@ -19,6 +19,7 @@ import hashlib
 import os
 import pathlib
 import time
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from functools import lru_cache
 
@@ -102,8 +103,17 @@ def small(n: int) -> int | None:
 
 
 @lru_cache(maxsize=1)
+def _registry_file() -> dict:
+    return yaml.safe_load(REGISTRY_PATH.read_text())
+
+
 def registry() -> list[dict]:
-    return yaml.safe_load(REGISTRY_PATH.read_text())["agents"]
+    return _registry_file()["agents"]
+
+
+def allowances() -> dict[str, dict]:
+    """Daily allowance per person for each budget pool (registry.yaml, PR-10.4)."""
+    return _registry_file().get("allowances", {})
 
 
 def platform_settings() -> dict:
@@ -133,7 +143,8 @@ def cost_usd(model: str, tokens_in: int, tokens_out: int) -> float:
 
 
 class Refused(Exception):
-    """The gateway refused a call (not in the registry, or paused by the kill switch)."""
+    """The gateway refused a call: not in the registry, paused by the kill switch, over a
+    limit, or over the person's daily allowance."""
 
 
 def agent_entry(agent: str) -> dict | None:
@@ -156,6 +167,7 @@ def check_call(agent: str, model: str) -> None:
     if paused:
         record_blocked(agent, "kill_switch", state, "Paused by the kill switch")
         raise Refused("This feature is paused right now. Please try again later.")
+    check_allowance(agent)
 
 
 def limit(agent: str, key: str, default: int | None = None) -> int | None:
@@ -191,6 +203,111 @@ def labels(agent: str, tenant: str = "direct") -> dict[str, str]:
     return {"agent": clean(agent), "tenant": clean(tenant), "app": "anvaya"}
 
 
+# ---- Daily allowances per person (PR-10.4) ----------------------------------------
+#
+# Each person has a daily allowance per budget pool (registry.yaml "allowances"), so one
+# person can't use up capacity meant for everyone. The safety pool (certificate checks,
+# the guardian) is never limited or counted against anyone, so cancelling a false report
+# or checking a certificate always works. Approved requests in the platform admin portal
+# raise a person's allowance until they expire.
+
+_current_user: ContextVar[str | None] = ContextVar("current_user", default=None)
+WARN_AT = 0.8
+# Which measure each agent counts against; everything else counts tokens.
+METRIC = {"saathi.voice": "voice_minutes", "saathi.speech": "spoken_replies"}
+# Approved request kinds and the measure they raise (daily_allowance is in thousands of tokens).
+GRANT_METRIC = {"daily_allowance": ("tokens", 1000), "voice_minutes": ("voice_minutes", 1),
+                "spoken_replies": ("spoken_replies", 1)}
+
+
+def set_current_user(key: str | None) -> None:
+    """Called once at sign-in for each request or live call; the gateway reads it anywhere."""
+    _current_user.set(key)
+
+
+def current_user() -> str | None:
+    return _current_user.get()
+
+
+def _pool(agent: str) -> str:
+    return (agent_entry(agent) or {}).get("budget_class", "owner")
+
+
+def _usage_today(user: str) -> dict:
+    return store.get("user_usage", f"{_today()}:{user}") or {}
+
+
+def _granted(user: str, metric: str) -> float:
+    now, extra = time.time(), 0.0
+    for r in store.list("budget_requests", user_key=user, status="approved"):
+        kind = GRANT_METRIC.get(r.get("kind", ""))
+        if kind and kind[0] == metric and r.get("expires_at", 0) > now:
+            extra += r["amount"] * kind[1]
+    return extra
+
+
+def allowance_status(user: str | None = None) -> dict:
+    """Today's use against the allowance, per pool and measure: used, limit, share and state."""
+    user = user or current_user()
+    used_today = _usage_today(user) if user else {}
+    out: dict[str, dict] = {}
+    for pool, limits in allowances().items():
+        for metric, base in (limits or {}).items():
+            metric = metric.removesuffix("_per_day")
+            cap = base + (_granted(user, metric) if user else 0)
+            used = used_today.get(pool, {}).get(metric, 0)
+            share = used / cap if cap else 0.0
+            out.setdefault(pool, {})[metric] = {
+                "used": round(used, 1), "limit": cap, "share": round(share, 3),
+                "state": "reached" if share >= 1 else "warning" if share >= WARN_AT else "ok"}
+    return out
+
+
+def remaining(agent: str) -> float | None:
+    """What's left today for this agent's pool and measure, or None when there's no limit."""
+    user, pool = current_user(), _pool(agent)
+    limits = allowances().get(pool)
+    if not user or not limits:
+        return None
+    status = allowance_status(user).get(pool, {}).get(METRIC.get(agent, "tokens"))
+    return None if status is None else max(0.0, status["limit"] - status["used"])
+
+
+def check_allowance(agent: str) -> None:
+    """Refuse a call when the person has used today's allowance for the agent's pool."""
+    left = remaining(agent)
+    if left is not None and left <= 0:
+        metric = METRIC.get(agent, "tokens")
+        record_blocked(agent, "allowance", f"{_pool(agent)}.{metric}", "Daily allowance reached",
+                       user=current_user())
+        raise Refused("You've used today's allowance for this. It resets tomorrow, or you can ask for more.")
+
+
+def _add(agent: str, amount: float) -> None:
+    """Add to (or, with a negative amount, take from) the person's counter for today, atomically."""
+    user, pool = current_user(), _pool(agent)
+    if not user or not allowances().get(pool):
+        return
+    store.increment("user_usage", f"{_today()}:{user}", pool, {METRIC.get(agent, "tokens"): amount},
+                    {"day": _today(), "user_key": user})
+
+
+def count_for_user(agent: str, *, tokens: int = 0, minutes: float = 0.0) -> None:
+    """Add one call to the person's counters for today (not for the safety pool)."""
+    metric = METRIC.get(agent, "tokens")
+    _add(agent, {"tokens": tokens, "voice_minutes": round(minutes, 2), "spoken_replies": 1}[metric])
+
+
+def reserve(agent: str, amount: float) -> None:
+    """Hold part of the allowance before a long call (live voice), so a second call at the same
+    time sees only what's really left. Release it when the call ends; the actual use is counted."""
+    _add(agent, amount)
+
+
+def release(agent: str, amount: float) -> None:
+    _add(agent, -amount)
+
+
 # ---- Recording (used by the gateway and the guardian) -------------------------
 
 
@@ -216,6 +333,8 @@ def record_usage(agent: str, model: str, tenant: str, *, tokens_in: int = 0, tok
     t = day["tenants"].setdefault(tenant, {"cost_usd": 0.0, "active_users": 0})
     t["cost_usd"] = round(t["cost_usd"] + cost_usd, 6)
     store.put("usage_days", day)
+    if not error:
+        count_for_user(agent, tokens=tokens_in + tokens_out, minutes=minutes)
 
 
 def record_blocked(agent: str, kind: str, attempted: str, reason: str, user: str | None = None) -> None:

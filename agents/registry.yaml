@@ -14,6 +14,16 @@
 # Design: docs/proposals/agent-governance.md §2.
 
 version: 1
+
+# Daily allowance per person for each budget pool (PR-10.4). Every agent belongs to one
+# pool (its budget_class). Voice counts minutes, spoken replies count replies, and the
+# rest count tokens (in + out). Pools not listed here (safety, platform) have no
+# per-person limit: certificate checks and the guardian always run.
+# Approved requests in the platform admin portal add to these until they expire.
+allowances:
+  owner: {tokens_per_day: 300000, voice_minutes_per_day: 30, spoken_replies_per_day: 50}
+  family: {tokens_per_day: 200000}
+
 agents:
   - id: saathi.chat
     role: Typed or photo conversation with the owner

@@ -7,6 +7,7 @@
 **Talking to Saathi (owner)**
 - Spoken replies read out only what Saathi actually said, checked on the server. Playing a reply again, or a new reply with the same words, reuses the saved audio.
 - Spoken replies are limited to 1,000 characters.
+- A gentle notice when the owner is close to, or has reached, today's allowance. Near the limit for spoken replies, replies stop being read aloud automatically, and the owner can turn it back on.
 
 **Next steps**
 - Readiness, legal needs and the claims checklist are worked out again only when the owner's information has changed; otherwise the last result comes back straight away.
@@ -35,6 +36,10 @@
   - a request is retried at most twice;
   - the family's assistant makes at most 6 model calls per question;
   - live calls end at 20 minutes.
+- Each person has a daily allowance, so one person can't use up capacity meant for everyone. Owners get 300,000 tokens, 30 voice minutes and 50 spoken replies a day; family members get 200,000 tokens. Use is counted on the server for each signed-in account.
+- Certificate checks and the guardian never count against anyone's allowance, so checking a certificate always works.
+- An approved request in the admin portal raises a person's allowance until it expires. Allowances reset each day.
+- A live call ends when the person's voice minutes for the day run out. Two calls at the same time can't each use the full allowance.
 
 **Documents**
 - New concept document and two pitches: one for people and families, one for banks and insurers. They cite figures for India and Asia, and regulatory deadlines. Branded PDFs are included.
@@ -49,7 +54,7 @@
 - The admin portal shows clearly labelled sample data until enough real use is recorded. Its costs are estimates from published prices.
 
 ### Next
-A private demo for each judge · guardian checks at every step · a claim file and bank view · accounts checked at the source · kept knowledge with gentle questions about what's missing · measured AI quality · daily allowances per person.
+A private demo for each judge · guardian checks at every step · a claim file and bank view · accounts checked at the source · kept knowledge with gentle questions about what's missing · measured AI quality.
 
 ## Prototype 0.1 · 28 September 2026 (AI Builder Cup 2026)
 
