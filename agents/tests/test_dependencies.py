@@ -15,7 +15,7 @@ INVENTORY = (REPO / "docs" / "dependencies.md").read_text()
 
 # Permissive licences, as SPDX ids or the names packages use in their metadata.
 ALLOWED = re.compile(
-    r"^(MIT|MIT-0|MIT License|Apache-2\.0|Apache Software License|Apache License 2\.0|BSD|BSD License|"
+    r"^(MIT|MIT-0|MIT License|Apache-2\.0|Apache Software License|Apache License 2\.0|Apache 2\.0|BSD|BSD License|"
     r"BSD-2-Clause|BSD-3-Clause|3-Clause BSD License|0BSD|ISC|ISC License \(ISCL\)|PSF-2\.0|"
     r"Python Software Foundation License|Unlicense|CC0-1\.0)$"
 )

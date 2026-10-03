@@ -23,6 +23,7 @@ Everything Anvaya is built on, with each item's version, licence and purpose. Ve
 | pydantic | 2.13.5 | MIT | Request and response schemas; structured output from Gemini |
 | google-genai | 2.28.0 | Apache-2.0 | Gemini calls: conversation, extraction, documents, spoken replies, live calls |
 | google-adk | 2.11.0 | Apache-2.0 | The handover assistant agent (`executor_agent.py`) |
+| google-cloud-bigquery | 3.46.1 | Apache-2.0 | Reads actual costs from the Cloud Billing export (admin portal) |
 | google-cloud-firestore | 2.34.0 | Apache-2.0 | Data store on Google Cloud (`STORE=firestore`) |
 | google-cloud-kms | 3.18.0 | Apache-2.0 | Wraps the vault escrow blob with the KMS key |
 | google-cloud-storage | 3.16.0 | Apache-2.0 | Recordings and documents in a private bucket |
@@ -91,6 +92,7 @@ All of these are Google's proprietary managed services, used under the Google Cl
 | **Cloud Run** | Runs the API (`life-after-agents`) | `infra/deploy.sh`, `.github/workflows/deploy.yml` |
 | **Firestore** | Stores cases, cards, the ledger and the audit log; clients have no direct access (`firestore.rules`) | `agents/app/store.py` |
 | **Cloud Storage** | Private bucket for recordings and documents | `agents/app/media.py` |
+| **Cloud Billing export to BigQuery** | Actual spend for the admin portal, read from the detailed usage cost export (dataset `anvaya_platform`, set by `BILLING_EXPORT_TABLE`) | `agents/app/governance/billing.py` |
 | **Cloud KMS** | Key that wraps the vault escrow blob | `agents/app/escrow.py` |
 | **Secret Manager** | Holds the Gemini API key for Cloud Run | `infra/deploy.sh` |
 | **Cloud Build, Artifact Registry** | Build and store the API container on each deploy | `gcloud run deploy --source` |

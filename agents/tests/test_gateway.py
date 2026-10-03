@@ -91,7 +91,7 @@ def test_handover_agent_calls_are_checked_and_recorded():
     executor_agent.gateway_record(ctx, SimpleNamespace(error_code=None, usage_metadata=SimpleNamespace(
         prompt_token_count=900, candidates_token_count=80, thoughts_token_count=None)))
     row = store.get("usage_days", core._today())["agents"]["handover.assistant"]
-    assert row["calls"] == before + 1 and row["cost_usd"] > 0
+    assert row["calls"] == before + 1 and row["tokens_in"] >= 900
 
 
 def test_billing_labels_are_valid():

@@ -113,8 +113,8 @@ The defaults match [business-model.md](../business-model.md) (120 voice minutes 
 ### 3.3 Counting
 
 - **Before the call:** the gateway estimates input tokens (token count, or a character-based estimate for speed) and **reserves** the estimate against every budget level. If any level would be exceeded, it refuses before spending anything.
-- **After the call:** it reads the actual `usage_metadata` (input, output and cached tokens; minutes for live audio). It **reconciles** the reservation, and writes a ledger entry: agent, user key, tenant, model, tokens, estimated cost, outcome and latency.
-- **Price table:** per model, in config, from Google's published prices. It includes the spoken-reply price doubling on 1 January 2027.
+- **After the call:** it reads the actual `usage_metadata` (input, output and cached tokens; minutes for live audio). It **reconciles** the reservation, and writes a ledger entry: agent, user key, tenant, model, tokens, minutes and outcome.
+- **No price table.** Dollars come only from Google's Cloud Billing export to BigQuery (PR-10.9), so they always match the bill. The ledger counts usage, never cost.
 - **Retries and fallbacks count** against the same reservation, so nothing goes unaccounted.
 
 ### 3.4 When a budget runs low
@@ -147,7 +147,7 @@ Layered controls, cheapest first, each a backstop for the one before:
    - a daily **per-agent and per-user anomaly check** from the ledger, for example spend more than three times the usual. Anomalies go to the guardian's review page.
 5. **Kill switch:** budget alerts publish to Pub/Sub, and a small function sets a **runtime flag** that switches off optional features (spoken replies, then live voice) at 90%, and all non-safety agents at 100%. The gateway reads the flag on every call. Turning features back on needs an approval (§5).
 6. **Hard cap at the provider:** the **requests-per-minute and tokens-per-minute quotas** for Gemini (Vertex AI) are set to a ceiling that matches the monthly budget. Even if everything above failed, Google Cloud itself would refuse beyond that rate.
-7. **Cost report:** the billing export to BigQuery, broken down by agent label, compared with the ledger daily. This is the cost report discussed earlier.
+7. **Cost report:** the billing export to BigQuery is the portal's only source of dollar figures (PR-10.9): spend by day, service and SKU, up to yesterday. A breakdown by agent label needs Vertex AI (§8, question 5); until then, agents and tenants show usage, not dollars.
 
 ---
 
@@ -263,7 +263,7 @@ Google Cloud has two products that cover parts of this proposal. Neither covers 
 2. **Default allowances** in §3.1: are 30 voice minutes a day and 150 a month right for owners? What should the fixed allowance per judge's demo be?
 3. **Who are the budget owners and approvers?** Two people are needed for agent and platform budgets.
 4. **Monthly platform budget** for the competition period, which sets the Google Cloud budget and the quota ceiling.
-5. **Vertex AI now or later.** Per-agent billing labels need Vertex AI. Without it, the ledger still attributes cost per agent, but the Google bill doesn't.
+5. **Vertex AI now or later.** Per-agent billing labels need Vertex AI. Without it, the ledger still attributes usage per agent, but the Google bill can't split cost by agent.
 6. **Google products:** agree the path in §6.2: Model Armor now; Apigee and Agent Gateway for the bank pilot.
 7. **Who sees the dashboards.** Confirm the platform roles (admin, budget approver, risk reviewer) and tenant roles (admin, risk officer, viewer), and the small-count threshold of 5.
 8. **Schedule.** With the dashboards, this adds about 4 days to an already full plan. Candidates to make room: PR-2.10 (cloned-voice protection) as the second factor only, and PR-7.11 (coverage map) after the deadline.

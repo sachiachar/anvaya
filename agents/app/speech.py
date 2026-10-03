@@ -85,8 +85,7 @@ async def speak(text: str) -> bytes:
             usage = response.usage_metadata
             t_in = (usage.prompt_token_count or 0) if usage else 0
             t_out = (usage.candidates_token_count or 0) if usage else 0
-            governance.record_usage(AGENT, model, "direct", tokens_in=t_in, tokens_out=t_out,
-                                    cost_usd=governance.cost_usd(model, t_in, t_out))
+            governance.record_usage(AGENT, model, "direct", tokens_in=t_in, tokens_out=t_out)
             return _as_wav(audio.data, audio.mime_type or "")
         except errors.APIError as e:
             log.warning("TTS model %s unavailable (%s); trying the next one", model, e.code)

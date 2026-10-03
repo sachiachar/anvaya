@@ -84,13 +84,12 @@ def gateway_check(callback_context, llm_request: LlmRequest) -> LlmResponse | No
 
 
 def gateway_record(callback_context, llm_response: LlmResponse) -> LlmResponse | None:
-    """After every model call: record its tokens and cost in the usage ledger."""
+    """After every model call: record its tokens in the usage ledger."""
     usage = llm_response.usage_metadata
     model = callback_context.state.get("temp:model") or settings.flash_model
     t_in = (usage.prompt_token_count or 0) if usage else 0
     t_out = ((usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)) if usage else 0
     governance.record_usage(AGENT, model, "direct", tokens_in=t_in, tokens_out=t_out,
-                            cost_usd=governance.cost_usd(model, t_in, t_out),
                             error=bool(llm_response.error_code))
     return None
 

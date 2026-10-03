@@ -104,8 +104,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
             governance.release(AGENT, reserved)
         if started is not None:  # record the call's minutes in the usage ledger
             minutes = (time.time() - started) / 60
-            governance.record_usage(AGENT, settings.live_model, "direct", minutes=minutes,
-                                    cost_usd=minutes * governance.LIVE_USD_PER_MINUTE)
+            governance.record_usage(AGENT, settings.live_model, "direct", minutes=minutes)
         try:
             await ws.close()
         except Exception:
