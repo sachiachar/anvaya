@@ -1,8 +1,9 @@
-# Deploys only what changed on each push to main:
-#   agents/**                -> tests, then the API to Cloud Run
-#   web/**, firebase.json    -> the web app to Firebase Hosting
-#   firestore.rules          -> Firestore security rules
-# Docs-only changes deploy nothing. "Run workflow" (manual) deploys everything,
+# Deploys what changed on main since each part last deployed successfully:
+#   agents/**                                  -> tests, then the API to Cloud Run
+#   web/**, firebase.json, firestore.rules     -> the web app and the Firestore rules
+# Each part compares against the commit of its own last successful deploy, not just
+# the previous push, so a release that was cancelled (a newer merge arrived while it
+# waited) or skipped never loses changes. Docs-only changes deploy nothing. "Run workflow" (manual) deploys everything,
 # or only the allowlist.
 #
 # Who may use the demo lives in GitHub: environment "production" -> secret
@@ -32,29 +33,53 @@ concurrency:
 permissions:
   contents: read
   id-token: write
+  actions: read  # to find each part's last successful deploy
 
 jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
       # Manual runs follow the chosen target; pushes follow what changed.
-      api: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'all' || github.event_name == 'push' && steps.filter.outputs.api == 'true' }}
-      web: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'all' || github.event_name == 'push' && steps.filter.outputs.web == 'true' }}
-      rules: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'all' || github.event_name == 'push' && steps.filter.outputs.rules == 'true' }}
+      api: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'all' || github.event_name == 'push' && steps.api.outputs.changed == 'true' }}
+      web: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'all' || github.event_name == 'push' && steps.web.outputs.changed == 'true' }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@v4
-        if: github.event_name == 'push'
-        id: filter
         with:
-          filters: |
-            api:
-              - 'agents/**'
-            web:
-              - 'web/**'
-              - 'firebase.json'
-            rules:
-              - 'firestore.rules'
+          fetch-depth: 0  # compare against older commits
+      - name: Find each part's last successful deploy
+        if: github.event_name == 'push'
+        id: last
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Each part's last deploy is its most recently *finished* successful job among the
+          # recent runs on main (pushed or manual), so re-running an old run counts as the
+          # latest deploy of that older commit.
+          runs=$(gh api "repos/${{ github.repository }}/actions/workflows/deploy.yml/runs?branch=main&per_page=50" \
+            --jq '.workflow_runs[] | select(.id != ${{ github.run_id }}) | "\(.id) \(.head_sha)"')
+          jobs=$(while read -r id head; do
+            gh api "repos/${{ github.repository }}/actions/runs/$id/jobs" \
+              --jq ".jobs[] | select(.conclusion == \"success\") | \"\(.name) \(.completed_at) $head\""
+          done <<< "$runs")
+          for part in api web; do
+            sha=$(echo "$jobs" | awk -v p="$part" '$1 == p' | sort -k2 | tail -n 1 | cut -d' ' -f3)
+            echo "$part last deployed at: ${sha:-never (deploying it now)}"
+            echo "$part=$sha" >> "$GITHUB_OUTPUT"
+          done
+      - name: Did the API change since then?
+        if: github.event_name == 'push'
+        id: api
+        run: |
+          base="${{ steps.last.outputs.api }}"
+          if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null; then echo "changed=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if git diff --quiet "$base" HEAD -- agents; then echo "changed=false"; else echo "changed=true"; fi >> "$GITHUB_OUTPUT"
+      - name: Did the web app or Firestore rules change since then?
+        if: github.event_name == 'push'
+        id: web
+        run: |
+          base="${{ steps.last.outputs.web }}"
+          if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null; then echo "changed=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if git diff --quiet "$base" HEAD -- web firebase.json firestore.rules; then echo "changed=false"; else echo "changed=true"; fi >> "$GITHUB_OUTPUT"
 
   api:
     needs: changes
@@ -113,7 +138,7 @@ jobs:
 
   web:
     needs: changes
-    if: needs.changes.outputs.web == 'true' || needs.changes.outputs.rules == 'true'
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -123,7 +148,6 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - name: Build web app
-        if: needs.changes.outputs.web == 'true'
         working-directory: web
         env:
           VITE_LIVE_URL: ${{ vars.VITE_LIVE_URL }}
@@ -139,10 +163,6 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOYER_SA }}
           create_credentials_file: true
+      # Always both, so a successful "web" job means the site and the rules match this commit.
       - name: Deploy to Firebase
-        run: |
-          targets=""
-          [ "${{ needs.changes.outputs.web }}" = "true" ] && targets="hosting"
-          [ "${{ needs.changes.outputs.rules }}" = "true" ] && targets="${targets:+$targets,}firestore:rules"
-          echo "Deploying: $targets"
-          npx --yes firebase-tools@15.31.0 deploy --project "${{ vars.GCP_PROJECT_ID }}" --only "$targets" --non-interactive
+        run: npx --yes firebase-tools@15.31.0 deploy --project "${{ vars.GCP_PROJECT_ID }}" --only hosting,firestore:rules --non-interactive
