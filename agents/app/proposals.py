@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from . import knowledge
+from . import gaps, knowledge
 from .store import new_id, store
 
 
@@ -71,7 +71,10 @@ def known(owner_id: str) -> dict:
             f"{p['name']} ({p['relationship']}), waiting for confirmation"
             for p in store.list("people", owner_id=owner_id, status="pending")],
         "moments": [{"title": m["title"], "summary": m["summary"]} for m in _all("moments", owner_id)],
-        "inventory": [f"{i['institution']} {i['product']} {i['account_hint']}" for i in _all("inventory", owner_id)],
+        "inventory": [f"{i['institution']} {i['product']} {i['account_hint']} (nominee: "
+                      f"{i.get('nominee_or_beneficiary') or 'not recorded'})" for i in _all("inventory", owner_id)],
+        # PR-7.10: what's missing, found by fixed rules and ranked by harm; Saathi may raise one.
+        "open_gaps": gaps.top(owner_id),
     }
 
 
@@ -95,11 +98,27 @@ def save_moment(owner_id: str, moment: dict, source: dict[str, Any]) -> dict | N
     return _pending("moments", owner_id, moment, **source)
 
 
+def _match(owner_id: str, item: dict) -> list[dict]:
+    """Saved items this one is about: same institution and last 4 digits; or, if the model left
+    the digits out (e.g. "my wife is the SBI nominee"), the only account of that kind at that
+    institution, counting kept accounts and new ones waiting for Keep."""
+    saved = _all("inventory", owner_id)
+    same = [e for e in saved if _same_item(e, item)]
+    if same or _digits(item.get("account_hint")):
+        return same
+    at = [e for e in saved if _norm(e.get("institution")) == _norm(item.get("institution"))
+          and (not item.get("category") or item.get("category") == e.get("category"))
+          and (not item.get("product") or _norm(item.get("product")) == _norm(e.get("product")))]
+    # One account, however many cards: a kept item and the update cards that point at it.
+    accounts = {e.get("updates") or e["id"] for e in at}
+    return at if len(accounts) == 1 else []
+
+
 def save_inventory(owner_id: str, item: dict, source: dict[str, Any]) -> dict:
     """Merge into a matching pending proposal, or create a new one."""
-    for existing in _all("inventory", owner_id):
-        if not _same_item(existing, item):
-            continue
+    for existing in _match(owner_id, item):
+        if not _digits(item.get("account_hint")):
+            item = {**item, "account_hint": existing.get("account_hint")}
         if existing["status"] != "pending":
             return _pending("inventory", owner_id, item, updates=existing["id"], **source)
         merged = {**existing, **{k: v for k, v in item.items() if v not in (None, "", [])}}
@@ -111,8 +130,25 @@ def save_inventory(owner_id: str, item: dict, source: dict[str, Any]) -> dict:
     return _pending("inventory", owner_id, item, **source)
 
 
+def _placeholder(p: dict) -> bool:
+    """Someone saved by relationship only, before their name was known: "Wife" (wife)."""
+    return _norm(p.get("name")) == _norm(p.get("relationship"))
+
+
 def save_person(owner_id: str, person: dict) -> dict | None:
-    name = _norm(person["name"])
+    """A new person, or None if they're already saved. Once the name of someone saved by
+    relationship only is known ("Wife" becomes "Anjana"), that person is renamed, not duplicated."""
+    name, relationship = _norm(person["name"]), _norm(person.get("relationship"))
+    saved = knowledge.items(owner_id, "people") + store.list("people", owner_id=owner_id)
+    same_role = [p for p in saved if relationship and _norm(p.get("relationship")) == relationship]
+    if _placeholder(person) and same_role:
+        return None  # "my wife" when the wife is already saved, by name or not
+    stand_ins = [p for p in same_role if _placeholder(p)]
+    if len(stand_ins) == 1 and len(same_role) == 1:
+        old = stand_ins[0]
+        if old.get("status") == "pending":
+            return store.update("people", old["id"], person)
+        return _pending("people", owner_id, person, updates=old["id"])
     if any(_norm(f).startswith(name) for f in knowledge.family(owner_id)):
         return None
     for existing in store.list("people", owner_id=owner_id):

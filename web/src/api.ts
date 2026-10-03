@@ -16,6 +16,9 @@ export const setActingAs = (person: PersonId) => {
 
 export type Autonomy = "assist" | "propose" | "act_within_limits";
 
+export type Gap = { key: string; kind: "nominee" | "conflict" | "heir" | "relationship"; harm: number;
+  about: string; text: string };
+
 export type MapNode = { id: string; label: string; type: string;
   group: "owner" | "person" | "mentioned" | "story" | "wish" | "account" | "institution";
   description?: string; kept_at?: string | null; verified?: boolean };
@@ -184,6 +187,9 @@ export const api = {
   archive: () => request<{ moments: Moment[]; inventory: InventoryItem[] }>(o("/archive")),
   /** The owner's kept knowledge as a graph, for the demo's live knowledge map. */
   knowledgeMap: () => request<KnowledgeMap>(o("/knowledge-map")),
+  /** What's missing, found by fixed rules (PR-7.10), most harmful first. */
+  gaps: () => request<{ gaps: Gap[] }>(o("/gaps")),
+  skipGap: (key: string) => request<{ gaps: Gap[] }>(o(`/gaps/${encodeURIComponent(key)}/skip`), { method: "POST" }),
 
   captureAudio: (audio: Blob, name: string) =>
     request<{ autonomy: Autonomy; language: string; transcript: string; proposals: Moment[] }>(

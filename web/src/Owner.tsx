@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type Case, type InventoryItem, type Moment, type Task, type VaultItem } from "./api";
+import { api, type Case, type Gap, type InventoryItem, type Moment, type Task, type VaultItem } from "./api";
 import Conversation from "./Conversation";
 import { Card, ErrorLine, useAction } from "./ui";
 import { encryptSecret, keyFingerprint, ownerDataKey, wrapForRecipient } from "./vaultCrypto";
@@ -22,6 +22,7 @@ export default function Owner() {
       ) : (
         <>
           <NextSteps onTalk={() => setTab("talk")} />
+          <MissingPieces />
           <People />
           <WeeklyReview />
           <div id="legal"><WishesAndLegal /></div>
@@ -51,6 +52,29 @@ function AliveAlert() {
       <button onClick={() => run(async () => { await api.ownerAlive(); setOpen(null); })}>I'm OK, cancel this</button>
       <ErrorLine error={error} />
     </section>
+  );
+}
+
+/** Gaps found by fixed rules (PR-7.10). Saathi may gently ask about the top ones; Skip means
+ * "I'd rather not, or I don't know", and Saathi never asks about it again. */
+function MissingPieces() {
+  const [gaps, setGaps] = useState<Gap[] | null>(null);
+  const { error, run } = useAction();
+  useEffect(() => { run(async () => setGaps((await api.gaps()).gaps)); }, []);
+  if (!gaps || gaps.length === 0) return null;
+  return (
+    <Card title="Missing pieces" level="act_within_limits">
+      <p className="muted">These would help your family most. Saathi may gently ask about the first ones when the moment is right. Skip any you'd rather not answer.</p>
+      <ul className="list">
+        {gaps.map((g) => (
+          <li key={g.key} className="row">
+            <span>{g.text}</span>
+            <button className="secondary" onClick={() => run(async () => setGaps((await api.skipGap(g.key)).gaps))}>Skip</button>
+          </li>
+        ))}
+      </ul>
+      <ErrorLine error={error} />
+    </Card>
   );
 }
 
