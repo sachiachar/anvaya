@@ -233,7 +233,7 @@ function OpenVault() {
 function AskAssistant() {
   const [q, setQ] = useState("");
   const [session, setSession] = useState<string | undefined>();
-  const [thread, setThread] = useState<{ q: string; a: string; sources: string[] }[]>([]);
+  const [thread, setThread] = useState<{ q: string; a: string; sources: { id: string; title: string }[] }[]>([]);
   const { busy, error, run } = useAction();
   const suggestions = ["What insurance did Papa have?", "पापा ने पैसे बचाने के बारे में क्या कहा था?", "Did Papa have any crypto?"];
 
@@ -255,7 +255,7 @@ function AskAssistant() {
           <li key={i}>
             <p className="q">{t.q}</p>
             <p className="a">{t.a}</p>
-            {t.sources.length > 0 && <p className="muted">Sources: {t.sources.join(", ")}</p>}
+            {t.sources.length > 0 && <p className="muted">From what Vikram kept: {t.sources.map((s) => s.title).join(" · ")}</p>}
           </li>
         ))}
       </ul>

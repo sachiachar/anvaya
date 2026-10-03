@@ -10,6 +10,7 @@
 - A gentle notice when the owner is close to, or has reached, today's allowance. Near the limit for spoken replies, replies stop being read aloud automatically, and the owner can turn it back on.
 
 **Keeping what matters**
+- After the handover, the family's assistant reads everything Vikram kept, so it understands questions worded differently or asked in another language ("Where are Papa's documents?" finds the papers in the blue folder). Each answer names the kept items it came from.
 - Everything the owner keeps is saved as a small open-format document (Open Knowledge Format), with where it came from and that the owner confirmed it. Changing a kept item keeps the earlier version, marked as replaced. Long account numbers keep only their last 4 digits.
 - Demo copies made before this change start again once, from the beginning, the next time they're opened.
 

@@ -248,7 +248,7 @@ export const api = {
     request<{ case: Case }>(`/admin/cases/${id}/confirm-authority`, json({ reviewer, override_reason })),
 
   ask: (question: string, session_id?: string) =>
-    request<{ answer: string; sources: string[]; tools_used: string[]; session_id: string }>(
+    request<{ answer: string; sources: { id: string; title: string }[]; tools_used: string[]; session_id: string }>(
       o("/ask"), json({ question, session_id })),
   settlement: () =>
     request<{
