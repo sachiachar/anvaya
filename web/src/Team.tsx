@@ -109,7 +109,34 @@ function Check({ title, check }: { title: string; check: DocumentCheck }) {
       <p className="verdict">{v.text} · likelihood genuine {Math.round(check.confidence * 100)}%</p>
       <p>Looks like: {check.document_type}{check.person_named ? ` · names ${check.person_named}` : ""}{check.key_date ? ` · ${check.key_date}` : ""}</p>
       {check.concerns.length > 0 && <ul>{check.concerns.map((x) => <li key={x}>{x}</li>)}</ul>}
+      {check.guide && check.signs && check.signs.length > 0 && <Signs check={check} />}
     </div>
+  );
+}
+
+const RESULT = { found: "Found", ruled_out: "Ruled out", cant_tell: "Can't tell" } as const;
+
+/** Each warning sign from the fraud reference guide, with what the check saw. Found signs open by default. */
+function Signs({ check }: { check: DocumentCheck }) {
+  const signs = check.signs ?? [];
+  const found = signs.filter((s) => s.result === "found").length;
+  return (
+    <details open={found > 0}>
+      <summary>
+        Warning signs: {found} found of {signs.length} · {check.guide?.title}, version {check.guide?.version}
+      </summary>
+      <ul className="signs">
+        {signs.map((s) => (
+          <li key={s.id} className={s.result}>
+            <span className="result">{RESULT[s.result]}</span>
+            {s.look_for}
+            {s.note && <> · <em>{s.note}</em></>}
+            <br />
+            <small>{s.projection ? "Projection, " : ""}{s.trust === "human-reviewed" ? "reviewed by our team" : "from cited sources, not yet reviewed"}</small>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
