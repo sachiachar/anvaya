@@ -109,6 +109,35 @@ flowchart LR
 
 **One companion everywhere.** `loops.persona` defines Saathi once: warm, addresses the owner as "{first name} ji", matches their language, honest about what is saved, no legal advice, and asks who unknown people are. Both the typed chat and the live call use it.
 
+### 4.1 Guardian layer (planned for the prototype release)
+
+Fraud can enter at any loop, not only at activation, so a **guardian** watches every loop and corrects course before an action takes effect. It is tracked as PR-2 ([#2](https://github.com/sachiachar/anvaya/issues/2)).
+
+```mermaid
+flowchart LR
+    loop["Any loop<br/>(conversation, curation, recipient change,<br/>activation, release, handover)"] -->|"event: who, action,<br/>data, autonomy, device"| guard["Guardian"]
+    rules["Fixed rules"] --> guard
+    gem["Gemini detectors<br/>(pressure, probing, synthetic audio,<br/>hidden instructions)"] --> guard
+    kb[("Fraud reference guides<br/>researched + dreamt")] --> guard
+    guard -->|"continue · add a check ·<br/>reduce autonomy · pause · block"| loop
+    guard --> team["Team: Guardian page<br/>review, reverse, measure"]
+```
+
+| Part | What it does |
+| --- | --- |
+| **Event record** | Every loop records what it is about to do (who, action, data without secrets, autonomy level, device) before it takes effect. |
+| **Detectors** | Fixed rules for hard facts, for example the owner was active recently, a recipient change came from a new device, or a certificate was used before. Gemini detectors for softer signals: pressure in a conversation, probing questions, synthetic or replayed audio, hidden instructions in documents. Fraud reference guides for each document type and country, kept current by a research agent (Gemini with Google Search) and red-teamed by a dreaming agent. |
+| **Responses** | Continue; add a check (key code, liveness phrase, delay); reduce autonomy one level (Act within limits → Propose → a person decides); pause for a reviewer and alert the owner; block. A readable policy file maps risk to response. |
+| **Enforcement** | Saving, recipient changes, release and the handover assistant ask the guardian first and obey. The guardian runs with its own permissions, agents can't bypass it, and it has no vault access. |
+| **Governance** | A Guardian page shows every intervention with its reason. People confirm or reverse each one, and the decision is logged. It also shows false-alarm rates, reviewer pattern analytics, and the dreaming agent's safeguard coverage map. |
+
+**Rules for the guardian:**
+- It never approves or rejects a case; people decide.
+- Hard rules are fixed rules, never the model's judgment.
+- Unconfirmed scenarios can only raise "needs attention".
+- Interventions are explained and feel like care, not accusation.
+- Voice alone never authorises an important action, because cloned voices can't be reliably detected.
+
 ## 5. Data model
 
 | Collection | Key fields | Notes |

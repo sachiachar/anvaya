@@ -83,6 +83,22 @@ Anvaya doesn't replace your settlement process, and it doesn't certify legal hei
 - **Your institution** remains responsible for the settlement decision, as the regulations require.
 - **The family** receives guidance and draft letters, never legal advice. Legal help comes only from licensed partners.
 
+## Fraud protection at every step
+
+Fraud doesn't only arrive with a forged certificate at the end. It can enter at any point in the journey. Anvaya runs a **guardian**: an independent layer of checks that watches every step and corrects course before anything takes effect.
+
+| Where fraud can enter | What the guardian does |
+| --- | --- |
+| **Someone else on the customer's phone, or a cloned voice** | A voice alone never authorises anything important. Important actions need confirmation on the customer's own device, and high-risk requests need a spoken random phrase. Suspicious audio and new devices raise the risk level. |
+| **Pressure on an elderly customer** | Signs that someone is pushing the customer to change their wishes or recipient put the change on hold. The customer is checked with privately, later. This is a duty of care your teams will recognise. |
+| **A sudden change of recipient or nominee** | Changes from a new device, after a long quiet period, or while a case is open get a cooling-off delay and a separate confirmation. They are blocked during an open claim. |
+| **A forged certificate or false claimant** | Checks tuned to each document type and country, and refreshed from research into new forgery tactics; fixed rules (customer active recently, impossible dates, wrong number format, a certificate used before); then two independent reviewers. |
+| **A false report of passing** | The customer is told straight away, with a one-tap cancel link, and a waiting period follows. |
+| **A family member probing for more than they're entitled to** | Questions stay within the recipient's entitlement. Hidden instructions in uploaded documents are caught. Every question is kept for audit. |
+| **An insider** | Cases are assigned to reviewers at random. Reviewers linked to a case are excluded. Unusual reviewer patterns, such as frequent overrides or the same pair appearing repeatedly, trigger a third check. |
+
+**How it responds:** continue; add a check; reduce what the service may do on its own; pause for a reviewer and alert the customer; or block. **People decide.** Every intervention is explained, logged, open to review, can be reversed, and is measured. The service also red-teams itself: it regularly imagines new ways to get around each safeguard, and shows your risk team which safeguard catches each one, and which nothing catches yet.
+
 ## What you get, and how we'll measure it
 
 | What you want | How Anvaya delivers it | What a pilot measures |
@@ -90,7 +106,7 @@ Anvaya doesn't replace your settlement process, and it doesn't certify legal hei
 | **More complete nominations** | Saathi notices missing or outdated nominees and takes the customer straight into your own nominee-update journey | Share of pilot customers with a complete nomination, before and after |
 | **Faster settlement** | Complete, pre-checked files mean the settlement clock (15 days in India) starts sooner and finishes on time | Days from first contact to complete file; share settled within the regulatory deadline |
 | **Fewer rejected or reopened claims** | Documents and authority are checked before the file reaches you | Share of files needing more documents |
-| **Less fraud** | Forgery checks, two-person review, a waiting period and owner cancellation | Suspect cases caught before reaching you |
+| **Less fraud, at every step** | A guardian watches every step of the journey, not only the claim: forgery checks, two independent reviewers, owner alerts, protection against pressure on elderly customers, cloned voices and insider collusion | Suspect cases caught before reaching you; guardian interventions and false-alarm rate |
 | **Fewer unclaimed balances** | Every account the customer mentions lands on the family's checklist | Accounts claimed that the family didn't know about |
 | **The next generation** | The heir's first real experience of your institution is a kind and helpful one | Heir retention after settlement |
 | **Engaged customers** | A warm, useful reason to open your app, in the customer's own language | Sign-up and repeat use |
@@ -199,7 +215,7 @@ Which law applies, and in what order, stays with licensed lawyers.
 | **Scope** | One customer segment where the value is clearest, for example savings or life customers aged 50 and over, in two or three languages |
 | **Length** | Six months |
 | **Integration** | Branded app plus the claims connection; no core-system changes |
-| **Success measures** | Uptake at each trigger moment, nomination completeness, days to complete file, share settled within the regulatory deadline, files needing more documents, sign-up and repeat use, customer satisfaction |
+| **Success measures** | Guardian interventions and false-alarm rate, uptake at each trigger moment, nomination completeness, days to complete file, share settled within the regulatory deadline, files needing more documents, sign-up and repeat use, customer satisfaction |
 | **Before live data** | Your security review, an independent penetration test, and data kept in-country where required (India regions for Indian institutions) |
 | **Pricing** | A fixed pilot fee, credited against the first year's licence if you continue |
 
@@ -217,7 +233,7 @@ Which law applies, and in what order, stays with licensed lawyers.
 
 The working prototype covers the conversation, next steps, the vault, the two-reviewer verification and waiting period, and the family's questions and letters. The marketplace is shown with one mocked legal partner.
 
-**Not yet built:** prompts at trigger moments and notifications, the claims connection and packet format, single sign-on and in-app embedding, per-role permissions, India data residency, real recordings and voice letters, and the full partner catalogue. See [release-notes.md](release-notes.md).
+**Not yet built:** the guardian layer across every step (in progress for the prototype release), prompts at trigger moments and notifications, the claims connection and packet format, single sign-on and in-app embedding, per-role permissions, India data residency, real recordings and voice letters, and the full partner catalogue. See [release-notes.md](release-notes.md).
 
 ## Let's talk
 

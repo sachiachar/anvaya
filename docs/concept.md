@@ -180,7 +180,7 @@ The marketplace doesn't replace Anvaya's own vault. The vault keeps secrets such
 | Faster settlement | Complete, pre-checked files, so the settlement clock (15 days in India) starts sooner and finishes on time |
 | Fewer rejected or reopened claims | Documents and authority are checked before the file reaches the institution |
 | Fewer unclaimed balances | Every account the customer mentions lands on the family's checklist |
-| Less fraud | Forgery checks, a two-person rule, a waiting period, and an owner who can cancel |
+| Less fraud, at every step | A guardian watches the whole journey: forgery checks, two independent reviewers, owner alerts, and protection against pressure, cloned voices and insider collusion |
 | Keeping the next generation | The heir's first real experience of the institution is a kind and helpful one |
 | Engaged customers | A warm, genuinely useful reason to open the app, in the customer's own language |
 
@@ -262,7 +262,7 @@ For costs, margins and the assumptions behind them, see [business-model.md](busi
 | Memorial chatbots that imitate the person | **Never** clones a voice or invents answers; only the person's own words, and their **real recorded voice** when they chose to keep it |
 | Built afterwards, without the person's consent | Built **by the person, while they are here**, with their approval for every item |
 | The company can read your data | The vault is locked on your phone; not the company, not the bank, not Saathi can open it |
-| One person can unlock everything | Forgery checks, two reviewers, a waiting period, and the owner can cancel |
+| One person can unlock everything | A guardian at every step, two independent reviewers, a waiting period, and the owner hears first and can cancel |
 | Separate services the family must find alone | Vetted partners, offered only when a real gap needs one |
 | Claims start from scratch at every institution | Claims arrive pre-checked, with a full review record |
 
@@ -274,6 +274,7 @@ For costs, margins and the assumptions behind them, see [business-model.md](busi
 - **No paid influence.** Partners can't buy a better place or a recommendation.
 - **Your real voice, never a copy.** Your family can hear the recordings you chose to keep and the voice letters you left. Anvaya never clones a voice or builds an avatar.
 - **Your secrets stay locked** on your phone until the right person, and only that person, receives them after careful checks.
+- **Watched over at every step.** We look out for anyone trying to misuse what you leave, all along the way, and you always hear from us first.
 - **Other people's privacy is respected.** Family members can ask to be added. While you are here, only you can let them in.
 
 ## Security, privacy and continuity
@@ -290,6 +291,22 @@ For costs, margins and the assumptions behind them, see [business-model.md](busi
 - **Honest about where we are.** Anvaya is not yet certified. An independent penetration test comes before any live customer data, and ISO 27001 and SOC 2 are on the roadmap.
 - **Built to outlast us.** A succession service must outlive its vendor: the software and release keys are to be held in escrow, records can be exported at any time in an open format, and institutions get exit support.
 
+## Protected at every step: the guardian
+
+Fraud can enter anywhere in the journey, not only with a forged certificate at the end. So a **guardian**, an independent layer of checks, watches every step and corrects course before anything takes effect.
+
+| Where fraud can enter | What the guardian does |
+| --- | --- |
+| Someone else on the owner's phone, or a cloned voice | Voice alone never authorises an important action; it needs confirmation on the owner's own device, plus a spoken random phrase for high-risk requests |
+| Pressure from someone close to the owner | The change is held, and Saathi checks with the owner privately, later; the owner stays in charge |
+| A sudden change of recipient or nominee | A cooling-off delay and a separate confirmation; blocked during an open case |
+| A forged certificate or false claimant | Checks tuned to each document type and country, kept current by research into new tactics; fixed rules; two independent reviewers |
+| A false report of passing | The owner is told straight away, with a one-tap cancel link |
+| A family member probing for too much | Questions stay within the recipient's entitlement, and every question is kept for audit |
+| An insider | Random case assignment, exclusion of reviewers linked to a case, and checks on unusual reviewer patterns |
+
+The guardian can **continue, add a check, reduce what Saathi may do on its own, pause for a reviewer, or block**. It never approves or rejects anything itself: people decide, and every intervention is explained, logged and reversible. It also red-teams itself, regularly imagining new ways around each safeguard and showing which safeguard catches each one.
+
 ## What Saathi does, and what stays with people
 
 Saathi is not a set of screens. It is a companion with clear limits on what it may do by itself:
@@ -300,13 +317,14 @@ Saathi is not a set of screens. It is a companion with clear limits on what it m
 | Finds gaps and matches them to kinds of partners | Saathi suggests; **you choose** |
 | Anything that gets saved or shared | Saathi suggests; **you decide** |
 | Checks certificates and legal proof for forgery | The checks assist; **a person decides** |
+| Watches every step for misuse (the guardian) | Adds checks, pauses or blocks; **people review and can reverse** |
 | Answers the family's questions and drafts claims | Only from what was recorded, always with sources |
 
 ## Where we are today
 
 The prototype already covers the conversation, next steps, the vault, the two-reviewer verification and waiting period, and the family's questions and letters. The marketplace is shown with one mocked legal partner.
 
-**Not yet built:** prompts at trigger moments and notifications, real recordings and voice letters, the claims connection and claim-file format, single sign-on and in-app embedding, per-role permissions, India data residency, and the full partner catalogue. See [release-notes.md](release-notes.md).
+**Not yet built:** the guardian layer across every step (in progress for the prototype release), prompts at trigger moments and notifications, real recordings and voice letters, the claims connection and claim-file format, single sign-on and in-app embedding, per-role permissions, India data residency, and the full partner catalogue. See [release-notes.md](release-notes.md).
 
 
 ## Sources

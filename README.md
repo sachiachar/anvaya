@@ -43,8 +43,35 @@ Sources and dates are in [docs/concept.md](docs/concept.md#sources).
 3. **Secure vault.** Passwords are encrypted on the phone. The owner chooses who receives them.
 4. **Careful handover.** After a death, the AI pre-checks the certificate, two different reviewers confirm, and a waiting period lets the owner cancel.
 5. **For the family.** The chosen person unlocks the vault on their phone, asks Saathi questions (answers only from what was recorded, with sources), and gets a claims checklist with draft letters.
+6. **Guardian at every step** *(in progress)*. An independent layer watches every agent step for fraud and corrects course before anything takes effect (see below).
 
 **AI-first:** every part is a loop the AI runs, with clear limits. Routine work runs on its own; anything saved or shared is only proposed until a person says yes; death and legal checks are only assisted, and people decide.
+
+## Guardian layer (in progress)
+
+Fraud can enter at any step of agentic execution, not only at the handover. The **guardian** watches every loop and course-corrects before an action takes effect. Design: [architecture.md §4.1](docs/architecture.md#41-guardian-layer-planned-for-the-prototype-release).
+
+- **Observe:** every loop records an event before it acts: who, action, data without secrets, autonomy level, device.
+- **Detect:**
+  - fixed rules for hard facts;
+  - Gemini detectors for pressure in conversations, probing questions, synthetic audio and prompt injection;
+  - fraud reference guides for each document type and country, kept current by a research agent (Gemini with Google Search grounding) and red-teamed by a dreaming agent that also produces a safeguard coverage map.
+- **Intervene:** continue, add a check, reduce autonomy one level, pause for a reviewer, or block. Enforced where actions happen, independent of the agents, with no vault access.
+- **Govern:** people review and can reverse every intervention. Interventions, false alarms and reviewer patterns are measured.
+
+The guardian never approves or rejects a case; people decide.
+
+## Prototype release plan
+
+Tracked in the [Prototype release milestone](https://github.com/sachiachar/anvaya/milestone/1), due 18 October 2026.
+
+| ID | Requirement | Issue |
+| --- | --- | --- |
+| PR-1 | Judges can use the live demo | [#1](https://github.com/sachiachar/anvaya/issues/1) |
+| PR-2 | Guardian layer: catch fraud at every agent step (PR-2.1 to PR-2.11) | [#2](https://github.com/sachiachar/anvaya/issues/2) |
+| PR-3 | Claim file for banks and insurers, with a Bank view | [#10](https://github.com/sachiachar/anvaya/issues/10) |
+| PR-4 | Real voice recordings and voice letters | [#11](https://github.com/sachiachar/anvaya/issues/11) |
+| PR-5 | Submission package for the judges | [#3](https://github.com/sachiachar/anvaya/issues/3) |
 
 ## Architecture
 

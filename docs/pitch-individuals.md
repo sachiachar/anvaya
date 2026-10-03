@@ -68,6 +68,17 @@ If you choose one, and only if you agree, Saathi sends them a short summary so y
 - Where you kept a recording, Saathi offers to **play your real voice** telling the story. And each **voice letter** reaches the person it was meant for.
 - Saathi prepares a **checklist and draft claim letters** for every bank and insurer, and trusted partners are there for what comes next.
 
+## Looked after at every step
+
+Something this precious needs watching over, not just at the end, but all along the way.
+
+- **You hear first.** If anyone ever reports your passing, we tell you straight away, with a link to cancel. One tap, and nothing moves.
+- **Big changes take a breath.** Changing who receives your vault, or who your nominee is, takes a short pause and your own confirmation. If the change comes from a phone we haven't seen before, we check with you first.
+- **Your voice alone can't change anything important.** We always ask you to confirm on your own screen, so even a copy of your voice could never take over.
+- **No one can pressure you through us.** If it ever seems someone is pushing you to change your wishes, Saathi won't confront anyone. It simply holds the change, and checks with you privately, later, when you're alone. You stay in charge.
+- **We watch ourselves too.** Two different people approve every handover. They can't pick which cases they review, and we keep an eye out for anything unusual in how our own team works.
+- **Our checks keep learning.** The tricks people try change over time, so our checks are updated as new ones appear.
+
 ## Vikram's story
 
 > **Vikram, 58, Bengaluru**, opens Anvaya one evening and taps the microphone.
@@ -92,6 +103,7 @@ If you choose one, and only if you agree, Saathi sends them a short summary so y
 - **No advice we aren't licensed to give.** Legal and financial advice comes only from licensed partners.
 - **No paid influence.** Partners can't buy a better place or a recommendation.
 - **Your secrets stay locked** until the right person, and only that person, receives them after careful checks.
+- **Watched over all along the way.** We look out for anyone trying to misuse what you leave, at every step, and you always hear from us first.
 - **Your family's privacy matters too.** Family members can ask to be added. While you are here, only you can let them in.
 
 ## What it costs
