@@ -12,6 +12,7 @@ import json
 import re
 
 from .config import settings
+from .fraud_guides import Guide, signs_for_check
 from .gemini import generate_json
 from .schemas import (
     CaptureResult,
@@ -288,11 +289,25 @@ async def find_legal_needs(owner: dict, wishes: list[dict], inventory: list[dict
     )
 
 
-async def check_document(image: bytes, mime_type: str, expected: str, person: str) -> DocumentCheck:
+def _guide_prompt(guide: Guide) -> str:
+    """The guide's warning signs, as the check receives them (PR-2.3.4)."""
+    lines = [f"Reference guide: {guide.title}, version {guide.version}. Report a result for every sign:"]
+    for s in signs_for_check(guide):
+        kind = " (projection: imagined and validated, not yet seen in a real case)" if s.projection else ""
+        lines.append(f"- {s.id}{kind}: look for: {s.look_for}. A genuine document: {s.genuine}.")
+    return "\n".join(lines)
+
+
+async def check_document(image: bytes, mime_type: str, expected: str, person: str,
+                         guide: Guide | None = None) -> DocumentCheck:
     """Activation loop (Assist): pre-check a death certificate or proof of legal authority.
 
+    With a fraud reference guide, it reports sign by sign what it found (PR-2.3.5).
     The result is shown to our team; a person always makes the decision.
     """
+    prompt = f"Expected document: {expected}. Expected person: {person}."
+    if guide:
+        prompt += "\n\n" + _guide_prompt(guide)
     return await generate_json(
         agent="activation.checker",
         model=settings.pro_model,
@@ -301,28 +316,51 @@ async def check_document(image: bytes, mime_type: str, expected: str, person: st
         system=(
             "You pre-screen documents for a human reviewer. Report what the document is, "
             "who it names, and anything that looks inconsistent, altered or incomplete. "
+            "When a reference guide is given, report each of its warning signs as found, "
+            "ruled out, or can't tell; say can't tell when the image doesn't show enough. "
             "Set confidence to the probability that the document is genuine, of the expected "
             "type, and names the expected person; not how sure you are of your description. "
             "You never approve anything yourself. " + PRIVACY_RULES
         ),
-        prompt=f"Expected document: {expected}. Expected person: {person}.",
+        prompt=prompt,
     )
 
 
-def review_summary(check: DocumentCheck) -> dict:
+def _named_signs(check: DocumentCheck, guide: Guide | None) -> list[dict]:
+    """One row per guide sign, in the guide's order. Signs the model invented are dropped;
+    signs it skipped show as "can't tell"."""
+    if not guide:
+        return []
+    reported = {r.sign_id: r for r in check.signs}
+    rows = []
+    for s in signs_for_check(guide):
+        r = reported.get(s.id)
+        rows.append({"id": s.id, "look_for": s.look_for, "trust": s.trust, "projection": s.projection,
+                     "result": r.result if r else "cant_tell", "note": r.note if r else "Not reported"})
+    return rows
+
+
+def review_summary(check: DocumentCheck, guide: Guide | None = None) -> dict:
     """Turn a model pre-check into what the reviewer sees, with rules the model can't override.
 
     - Wrong kind of document: confidence 0, verdict "not_valid".
     - Right kind but a different person: confidence capped at 0.3, "needs_attention".
-    - Any concern, or confidence under 0.8: "needs_attention".
+    - A human-reviewed warning sign found: confidence capped at 0.5, "needs_attention".
+    - Any sign found, any concern, or confidence under 0.8: "needs_attention".
     - Otherwise: "likely_valid". A person still makes the decision.
     """
     summary = check.model_dump()
+    signs = _named_signs(check, guide)
+    summary["signs"] = signs
+    summary["guide"] = {"key": guide.key, "title": guide.title, "version": guide.version} if guide else None
+    found = [s for s in signs if s["result"] == "found"]
     if not check.is_expected_type:
         summary.update(confidence=0.0, verdict="not_valid")
     elif not check.matches_expected_person:
         summary.update(confidence=min(check.confidence, 0.3), verdict="needs_attention")
-    elif check.concerns or check.confidence < 0.8:
+    elif any(s["trust"] == "human-reviewed" for s in found):
+        summary.update(confidence=min(check.confidence, 0.5), verdict="needs_attention")
+    elif found or check.concerns or check.confidence < 0.8:
         summary["verdict"] = "needs_attention"
     else:
         summary["verdict"] = "likely_valid"

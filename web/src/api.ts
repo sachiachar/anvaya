@@ -49,6 +49,18 @@ export type DocumentCheck = {
   /** Likelihood the document is genuine, of the right type, for the right person. */
   confidence: number;
   verdict: "likely_valid" | "needs_attention" | "not_valid";
+  /** One result per warning sign in the fraud reference guide (PR-2.3.5). Older cases have none. */
+  signs?: SignFinding[];
+  guide?: { key: string; title: string; version: number } | null;
+};
+
+export type SignFinding = {
+  id: string;
+  look_for: string;
+  result: "found" | "ruled_out" | "cant_tell";
+  note: string;
+  trust: "human-reviewed" | "machine-confirmed" | "unverified";
+  projection: boolean;
 };
 
 export type Case = {

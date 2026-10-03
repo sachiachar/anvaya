@@ -63,6 +63,7 @@ flowchart LR
 | Module | Responsibility |
 | --- | --- |
 | `main.py` | HTTP routes under `/api`, the live-call WebSocket, access gating, readable error handling for Gemini failures |
+| `fraud_guides.py` | Fraud reference guides (PR-2.3): what a genuine document looks like and how forgeries are made, for each document and country. Every item carries a knowledge label (observed, derived, simulated, validated, invalidated). Every version is kept in Firestore; a copy built into the code is used if none is saved or Firestore is down. Only checked knowledge reaches the certificate check. Design: `docs/proposals/fraud-foresight.md` |
 | `loops.py` | One Gemini step per loop. Also holds the shared **Saathi persona**, the live-call instructions, and `reply_problems`, which checks every typed reply for wrong language or script, false "saved" claims and "shall I add" questions, and rewrites it once if needed |
 | `live.py` | Live-call relay between the browser and the Gemini Live API; captions; saves each exchange and extracts cards |
 | `speech.py` | Natural voice for typed replies (Gemini TTS), falling back through a list of TTS models, each with its own quota |
@@ -95,7 +96,7 @@ flowchart LR
 | Curation | `proposals.save_*`, `proposals.approve` | Cards → merged or updated archive items | Propose | Owner taps Keep |
 | Readiness → next steps | `loops.assess_readiness` + `tasks.refresh` | Archive, vault state, closed steps → score + up to 5 actionable steps | Act within limits | Owner acts, marks done or dismisses |
 | Planning | `loops.find_legal_needs` | Wishes + inventory → legal needs | Propose | Owner consent before `legal-handoff` |
-| Activation | `loops.check_document` + `loops.review_summary` | Certificate or proof image → verdict + likelihood genuine | Assist | Two reviewers; override needs a reason |
+| Activation | `loops.check_document` + `loops.review_summary` | Certificate or proof image, with the fraud reference guide → verdict, likelihood genuine and a result for each warning sign | Assist | Two reviewers; override needs a reason |
 | Handover | `executor_agent.ask` (ADK) | Question → answer with cited sources | Act within limits | Only after release |
 | Settlement | `loops.plan_settlement` | Inventory → checklist + draft letters | Propose | Executor reviews and sends |
 
@@ -103,7 +104,7 @@ flowchart LR
 
 - *Replies* (`loops.reply_problems`): reply in the script of the owner's latest message; never claim "noted" or "saved"; never ask "shall I add". A reply that breaks a rule is regenerated once with the broken rule named. Live audio can't be regenerated, so there the rules live in the instructions only.
 - *Cards* (`proposals`): a repeat of a kept item adds nothing. A follow-up detail becomes an update card and **combines** with the saved summary instead of replacing it. The same institution and last 4 digits update the same card.
-- *Documents* (`loops.review_summary`): the wrong document type scores 0 %; the wrong person is capped at 30 %; any concern means "Needs a closer look".
+- *Documents* (`loops.review_summary`): the wrong document type scores 0 %; the wrong person is capped at 30 %; a warning sign our team has reviewed, if found, caps it at 50 %; any concern or any warning sign found means "Needs a closer look". Every sign in the guide gets a result (found, ruled out or can't tell); signs the model invents are dropped. Imagined (`simulated`) signs never reach the check, and projections are at most a third of its signs.
 - *Next steps* (`tasks`): near-duplicates are merged, except when they name different institutions (LIC vs SBI); done or dismissed steps never come back, even reworded; at most 5 steps are open.
 - *Structured output*: every Gemini call returns a Pydantic schema, so the app never parses free text.
 

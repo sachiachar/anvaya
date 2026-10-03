@@ -72,7 +72,7 @@ export type Scenario = { id: string; at: number; scenario: string; safeguard: st
   evidence: number };
 
 export type Guide = { id: string; title: string; version: number; trust_tier: string; sources: number;
-  signals: number; researched_at: number; status: "current" | "research_requested" };
+  signals: number; researched_at: number | null; status: "current" | "research_requested" };
 
 export type DemoCopy = { id: string; user_key: string; created_at: number; last_used_at: number;
   allowance_used: number; status: string; reset_at?: number | null; is_you: boolean;

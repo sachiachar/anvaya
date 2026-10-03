@@ -117,6 +117,14 @@ code, .cipher { font-size: 0.8rem; overflow-wrap: anywhere; }
 .check-box.bad .verdict { color: var(--danger); }
 .check-box.attention .verdict { color: var(--warn); }
 .check-box.good .verdict { color: var(--ok); }
+.check-box details { margin-top: 6px; }
+.check-box summary { cursor: pointer; }
+.signs { list-style: none; padding: 0; margin: 6px 0; display: grid; gap: 4px; }
+.signs .result { font-weight: 700; margin-right: 6px; }
+.signs .found .result { color: var(--danger); }
+.signs .ruled_out .result { color: var(--ok); }
+.signs .cant_tell .result { color: var(--muted); }
+.signs small { opacity: 0.8; }
 
 .steps { padding-left: 20px; display: grid; gap: 8px; }
 .steps li.done { color: var(--ok); }

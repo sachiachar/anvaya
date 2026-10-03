@@ -18,7 +18,7 @@ from google.auth.exceptions import DefaultCredentialsError
 from google.genai import errors as genai_errors
 from pydantic import BaseModel, ValidationError
 
-from . import auth, demo, escrow, knowledge, live, loops, media, proposals, release, speech, tasks
+from . import auth, demo, escrow, fraud_guides, knowledge, live, loops, media, proposals, release, speech, tasks
 from .config import settings
 from .executor_agent import UnknownSession, ask
 from .governance import core as governance_core
@@ -583,9 +583,12 @@ async def report_death(owner_id: str, certificate: UploadFile = File(...)) -> di
     if open_case(owner_id):
         raise HTTPException(409, "a case is already open")
     data = await certificate.read()
+    expected = "death certificate"
+    key = fraud_guides.key_for(expected, owner.get("country") or "India")
+    guide = fraud_guides.current(key) if key else None
     check = await loops.check_document(data, certificate.content_type or "image/jpeg",
-                                       "death certificate", owner["name"])
-    case = release.new_case(new_id("case"), owner_id, loops.review_summary(check))
+                                       expected, owner["name"], guide)
+    case = release.new_case(new_id("case"), owner_id, loops.review_summary(check, guide))
     case["reported_by"] = demo.person()["name"]
     return {"autonomy": ASSIST, "case": store.put("cases", case)}
 

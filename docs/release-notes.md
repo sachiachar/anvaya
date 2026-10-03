@@ -23,6 +23,10 @@
 - Each person who signs in gets their own private copy of the demo. Nobody else can see or change it, and "Reset my demo" restores only your own copy, including its recordings.
 - The app is now called Anvaya, at https://anvaya-saathi.web.app, with a new logo, icons and navy theme. The old address redirects there.
 
+**Checking a certificate of passing**
+- Reviewers now see the check sign by sign: for an Indian certificate of passing, it looks for eight known warning signs, such as a missing or mismatched QR code, a pasted signature, impossible dates or the wrong issuing office, and says for each whether it found it, ruled it out or couldn't tell.
+- Any warning sign found means "Needs a closer look". The signs come from a fraud reference guide with cited sources, shown on the Fraud page of the admin portal.
+
 **Governance and the admin portal**
 - A separate platform admin portal for the Anvaya team, at https://anvaya-admin.web.app. It shows:
   - actual spend against the monthly budget, with a forecast, in US dollars, read from Google Cloud billing (up to yesterday);
