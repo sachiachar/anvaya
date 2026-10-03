@@ -32,7 +32,7 @@ def overview() -> dict:
     today = datetime.now(timezone.utc)
     month = today.strftime("%Y-%m")
     month_days = [d for d in days if d["day"].startswith(month)]
-    mtd = sum(a["cost_inr"] for d in month_days for a in d["agents"].values())
+    mtd = sum(a.get("cost_usd", 0.0) for d in month_days for a in d["agents"].values())
     days_in_month = calendar.monthrange(today.year, today.month)[1]
     forecast = mtd / max(len(month_days), 1) * days_in_month
 
@@ -40,23 +40,23 @@ def overview() -> dict:
         out: dict[str, float] = {}
         for d in days:
             for k, v in d[key].items():
-                out[k] = out.get(k, 0.0) + (v["cost_inr"] if isinstance(v, dict) else v)
+                out[k] = out.get(k, 0.0) + (v.get("cost_usd", 0.0) if isinstance(v, dict) else v)
         return {k: round(v, 2) for k, v in sorted(out.items(), key=lambda kv: -kv[1])}
 
     tenants = {}
     for t in TENANTS:
         latest = next((d["tenants"][t] for d in reversed(days) if t in d["tenants"]), {"active_users": 0})
-        tenants[t] = {"cost_inr_30d": round(sum(d["tenants"].get(t, {}).get("cost_inr", 0) for d in days), 2),
+        tenants[t] = {"cost_usd_30d": round(sum(d["tenants"].get(t, {}).get("cost_usd", 0) for d in days), 2),
                       "active_users_today": small(latest["active_users"])}
     s = platform_settings()
     return {
         "seeded": bool(s.get("seeded_at")),
-        "currency": "INR",
-        "budget_inr": settings.monthly_budget_inr,
-        "month_to_date_inr": round(mtd, 2),
-        "forecast_inr": round(forecast, 2),
+        "currency": "USD",
+        "budget_usd": settings.monthly_budget_usd,
+        "month_to_date_usd": round(mtd, 2),
+        "forecast_usd": round(forecast, 2),
         "days_counted": len(month_days),
-        "daily": [{"day": d["day"], "cost_inr": round(sum(a["cost_inr"] for a in d["agents"].values()), 2)}
+        "daily": [{"day": d["day"], "cost_usd": round(sum(a.get("cost_usd", 0.0) for a in d["agents"].values()), 2)}
                   for d in days],
         "by_agent": total("agents"),
         "by_model": total("models"),
@@ -81,7 +81,7 @@ def agents_view() -> list[dict]:
             "tokens_in": sum(r["tokens_in"] for r in rows),
             "tokens_out": sum(r["tokens_out"] for r in rows),
             "minutes": round(sum(r["minutes"] for r in rows), 1),
-            "cost_inr": round(sum(r["cost_inr"] for r in rows), 2),
+            "cost_usd": round(sum(r.get("cost_usd", 0.0) for r in rows), 2),
             "error_rate": round(sum(r["errors"] for r in rows) / calls, 4) if calls else 0.0,
             "blocked": sum(1 for b in blocked if b["agent"] == a["id"]),
         }})

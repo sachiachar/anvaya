@@ -96,23 +96,23 @@ function Bar({ value, max, label }: { value: number; max: number; label: string 
 }
 
 function DailyChart({ daily, budgetPerDay }: { daily: Overview["daily"]; budgetPerDay: number }) {
-  const max = Math.max(budgetPerDay * 1.2, ...daily.map((d) => d.cost_inr));
+  const max = Math.max(budgetPerDay * 1.2, ...daily.map((d) => d.cost_usd));
   const w = 720, h = 180, gap = 4;
   const bw = (w - gap * (daily.length - 1)) / daily.length;
   const y = (v: number) => h - (v / max) * h;
-  const total = daily.reduce((s, d) => s + d.cost_inr, 0);
+  const total = daily.reduce((s, d) => s + d.cost_usd, 0);
   return (
     <figure className="pa-chart">
       <svg viewBox={`0 0 ${w} ${h + 24}`} role="img"
-        aria-label={`Daily model spend for the last ${daily.length} days, ${fmt.inr(total)} in total, against a daily budget of ${fmt.inr(budgetPerDay)}.`}>
+        aria-label={`Daily model spend for the last ${daily.length} days, ${fmt.usd(total)} in total, against a daily budget of ${fmt.usd(budgetPerDay)}.`}>
         {daily.map((d, i) => (
-          <rect key={d.day} x={i * (bw + gap)} y={y(d.cost_inr)} width={bw} height={h - y(d.cost_inr)}
-            className={d.cost_inr > budgetPerDay ? "over" : "under"} rx={2}>
-            <title>{`${d.day}: ${fmt.inr(d.cost_inr)}${d.cost_inr > budgetPerDay ? " (over the daily budget)" : ""}`}</title>
+          <rect key={d.day} x={i * (bw + gap)} y={y(d.cost_usd)} width={bw} height={h - y(d.cost_usd)}
+            className={d.cost_usd > budgetPerDay ? "over" : "under"} rx={2}>
+            <title>{`${d.day}: ${fmt.usd(d.cost_usd)}${d.cost_usd > budgetPerDay ? " (over the daily budget)" : ""}`}</title>
           </rect>
         ))}
         <line x1={0} x2={w} y1={y(budgetPerDay)} y2={y(budgetPerDay)} className="budget" />
-        <text x={w} y={y(budgetPerDay) - 6} textAnchor="end" className="budget-label">Daily budget {fmt.inr(budgetPerDay)}</text>
+        <text x={w} y={y(budgetPerDay) - 6} textAnchor="end" className="budget-label">Daily budget {fmt.usd(budgetPerDay)}</text>
         <text x={0} y={h + 20} className="axis">{daily[0]?.day}</text>
         <text x={w} y={h + 20} textAnchor="end" className="axis">{daily[daily.length - 1]?.day}</text>
       </svg>
@@ -132,8 +132,8 @@ export function OverviewPage({ me }: { me: Me }) {
   const { data: o, error, reload } = useLoad(load);
   const [switchTo, setSwitchTo] = useState<KillSwitchState>("off");
   if (!o) return <Loading error={error} />;
-  const used = o.month_to_date_inr / o.budget_inr;
-  const forecastPct = o.forecast_inr / o.budget_inr;
+  const used = o.month_to_date_usd / o.budget_usd;
+  const forecastPct = o.forecast_usd / o.budget_usd;
   const agentMax = Math.max(...Object.values(o.by_agent));
   return (
     <>
@@ -141,13 +141,13 @@ export function OverviewPage({ me }: { me: Me }) {
       <div className="pa-kpis">
         <div className="pa-kpi">
           <span>Spend this month</span>
-          <strong>{fmt.inr(o.month_to_date_inr)}</strong>
-          <Bar value={o.month_to_date_inr} max={o.budget_inr} label={`${fmt.pct(used)} of the monthly budget`} />
-          <em>{fmt.pct(used)} of {fmt.inr(o.budget_inr)} budget</em>
+          <strong>{fmt.usd(o.month_to_date_usd)}</strong>
+          <Bar value={o.month_to_date_usd} max={o.budget_usd} label={`${fmt.pct(used)} of the monthly budget`} />
+          <em>{fmt.pct(used)} of {fmt.usd(o.budget_usd)} budget</em>
         </div>
         <div className="pa-kpi">
           <span>Forecast for the month</span>
-          <strong>{fmt.inr(o.forecast_inr)}</strong>
+          <strong>{fmt.usd(o.forecast_usd)}</strong>
           <em className={forecastPct > 1 ? "pa-warn" : ""}>{forecastPct > 1 ? `Over budget by ${fmt.pct(forecastPct - 1)}` : `${fmt.pct(forecastPct)} of budget`}</em>
         </div>
         <a className="pa-kpi" href="#/approvals"><span>Budget requests waiting</span><strong>{o.pending_approvals}</strong><em>Review in Approvals</em></a>
@@ -172,7 +172,7 @@ export function OverviewPage({ me }: { me: Me }) {
       </Section>
 
       <Section title="Daily model spend, last 30 days">
-        <DailyChart daily={o.daily} budgetPerDay={o.budget_inr / 30} />
+        <DailyChart daily={o.daily} budgetPerDay={o.budget_usd / 30} />
       </Section>
 
       <div className="pa-grid2">
@@ -181,8 +181,8 @@ export function OverviewPage({ me }: { me: Me }) {
             {Object.entries(o.by_agent).map(([agent, cost]) => (
               <li key={agent}>
                 <span className="pa-mono">{agent}</span>
-                <Bar value={cost} max={agentMax} label={`${agent}: ${fmt.inr(cost)}`} />
-                <span>{fmt.inr(cost)}</span>
+                <Bar value={cost} max={agentMax} label={`${agent}: ${fmt.usd(cost)}`} />
+                <span>{fmt.usd(cost)}</span>
               </li>
             ))}
           </ul>
@@ -191,14 +191,14 @@ export function OverviewPage({ me }: { me: Me }) {
           <Section title="Spend by model, 30 days">
             <table>
               <thead><tr><th>Model</th><th className="num">Spend</th></tr></thead>
-              <tbody>{Object.entries(o.by_model).map(([m, c]) => <tr key={m}><td className="pa-mono">{m}</td><td className="num">{fmt.inr(c)}</td></tr>)}</tbody>
+              <tbody>{Object.entries(o.by_model).map(([m, c]) => <tr key={m}><td className="pa-mono">{m}</td><td className="num">{fmt.usd(c)}</td></tr>)}</tbody>
             </table>
           </Section>
           <Section title="Tenants">
             <table>
               <thead><tr><th>Tenant</th><th className="num">Spend, 30 days</th><th className="num">Active today</th></tr></thead>
               <tbody>{Object.entries(o.by_tenant).map(([t, v]) => (
-                <tr key={t}><td>{fmt.label(t)}</td><td className="num">{fmt.inr(v.cost_inr_30d)}</td>
+                <tr key={t}><td>{fmt.label(t)}</td><td className="num">{fmt.usd(v.cost_usd_30d)}</td>
                   <td className="num">{v.active_users_today ?? "fewer than 5"}</td></tr>
               ))}</tbody>
             </table>
@@ -243,7 +243,7 @@ export function AgentsPage() {
                 <td className="pa-mono pa-nowrap">{a.tools.length ? a.tools.map((x) => <div key={x}>{x}</div>) : "none"}</td>
                 <td>{fmt.label(a.budget_class)}</td>
                 <td className="num">{fmt.num(a.usage_30d.calls)}{a.usage_30d.minutes ? ` (${fmt.num(a.usage_30d.minutes)} min)` : ""}</td>
-                <td className="num">{fmt.inr(a.usage_30d.cost_inr)}</td>
+                <td className="num">{fmt.usd(a.usage_30d.cost_usd)}</td>
                 <td className="num">{fmt.pct(a.usage_30d.error_rate)}</td>
                 <td className="num">{a.usage_30d.blocked}</td>
               </tr>

@@ -111,18 +111,19 @@ def platform_settings() -> dict:
 
 # ---- Prices ------------------------------------------------------------------
 
-# Model prices in INR (US$1 = INR 88), from Google's published Gemini prices
-# (docs/business-model.md): per million tokens in and out, or per minute of live audio.
+# Model prices in US dollars, as Google publishes them (Gemini API pricing): per million
+# tokens in and out, or per minute of live audio. A dated, versioned price file replaces
+# this table in #44 (F-10.1).
 PRICE = {
-    "gemini-3.1-flash-lite": (22.0, 132.0),
-    "gemini-3.5-flash-lite": (22.0, 132.0),
-    "gemini-3.8-flash": (66.0, 330.0),
-    "gemini-3.8-flash-lite-tts": (44.0, 528.0),
+    "gemini-3.1-flash-lite": (0.25, 1.50),
+    "gemini-3.5-flash-lite": (0.25, 1.50),
+    "gemini-3.8-flash": (0.75, 3.75),
+    "gemini-3.8-flash-lite-tts": (0.50, 6.00),
 }
-LIVE_INR_PER_MINUTE = 2.64
+LIVE_USD_PER_MINUTE = 0.03
 
 
-def cost_inr(model: str, tokens_in: int, tokens_out: int) -> float:
+def cost_usd(model: str, tokens_in: int, tokens_out: int) -> float:
     p_in, p_out = PRICE.get(model, PRICE["gemini-3.1-flash-lite"])
     return tokens_in / 1e6 * p_in + tokens_out / 1e6 * p_out
 
@@ -162,22 +163,22 @@ def _today() -> str:
 
 
 def record_usage(agent: str, model: str, tenant: str, *, tokens_in: int = 0, tokens_out: int = 0,
-                 minutes: float = 0.0, cost_inr: float = 0.0, error: bool = False) -> None:
+                 minutes: float = 0.0, cost_usd: float = 0.0, error: bool = False) -> None:
     """Add one model call to today's ledger (the gateway calls this after every call)."""
     day_id = _today()
     day = store.get("usage_days", day_id) or {"id": day_id, "day": day_id, "agents": {}, "tenants": {},
                                                "models": {}}
     row = day["agents"].setdefault(agent, {"calls": 0, "tokens_in": 0, "tokens_out": 0, "minutes": 0.0,
-                                           "cost_inr": 0.0, "errors": 0})
+                                           "cost_usd": 0.0, "errors": 0})
     row["calls"] += 1
     row["tokens_in"] += tokens_in
     row["tokens_out"] += tokens_out
     row["minutes"] = round(row["minutes"] + minutes, 1)
-    row["cost_inr"] = round(row["cost_inr"] + cost_inr, 4)
+    row["cost_usd"] = round(row["cost_usd"] + cost_usd, 6)
     row["errors"] += int(error)
-    day["models"][model] = round(day["models"].get(model, 0.0) + cost_inr, 4)
-    t = day["tenants"].setdefault(tenant, {"cost_inr": 0.0, "active_users": 0})
-    t["cost_inr"] = round(t["cost_inr"] + cost_inr, 4)
+    day["models"][model] = round(day["models"].get(model, 0.0) + cost_usd, 6)
+    t = day["tenants"].setdefault(tenant, {"cost_usd": 0.0, "active_users": 0})
+    t["cost_usd"] = round(t["cost_usd"] + cost_usd, 6)
     store.put("usage_days", day)
 
 

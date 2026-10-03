@@ -10,15 +10,15 @@ export type Me = { email: string | null; key: string; role: Role; permissions: P
 
 export type Overview = {
   seeded: boolean;
-  currency: "INR";
-  budget_inr: number;
-  month_to_date_inr: number;
-  forecast_inr: number;
+  currency: "USD";
+  budget_usd: number;
+  month_to_date_usd: number;
+  forecast_usd: number;
   days_counted: number;
-  daily: { day: string; cost_inr: number }[];
+  daily: { day: string; cost_usd: number }[];
   by_agent: Record<string, number>;
   by_model: Record<string, number>;
-  by_tenant: Record<string, { cost_inr_30d: number; active_users_today: number | null }>;
+  by_tenant: Record<string, { cost_usd_30d: number; active_users_today: number | null }>;
   kill_switch: KillSwitchState;
   quota: { rpm_limit: number; rpm_peak: number; tpm_limit: number; tpm_peak: number } | null;
   pending_approvals: number;
@@ -35,7 +35,7 @@ export type Agent = {
   limits: Record<string, number>;
   budget_class: string;
   safety_critical: boolean;
-  usage_30d: { calls: number; tokens_in: number; tokens_out: number; minutes: number; cost_inr: number;
+  usage_30d: { calls: number; tokens_in: number; tokens_out: number; minutes: number; cost_usd: number;
     error_rate: number; blocked: number };
 };
 
@@ -89,11 +89,11 @@ export const platform = {
 
 // ---- Formatting ----------------------------------------------------------------
 
-const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
-const num = new Intl.NumberFormat("en-IN");
+const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const num = new Intl.NumberFormat("en-US");
 
 export const fmt = {
-  inr: (v: number) => inr.format(v),
+  usd: (v: number) => usd.format(v),
   num: (v: number) => num.format(Math.round(v)),
   pct: (v: number) => `${(v * 100).toFixed(v < 0.1 ? 1 : 0)}%`,
   when: (t: number) => new Date(t * 1000).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),

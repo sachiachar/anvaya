@@ -82,7 +82,7 @@ async def generate_json(
     t_in = (usage.prompt_token_count or 0) if usage else 0
     t_out = ((usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)) if usage else 0
     governance.record_usage(agent, used, "direct", tokens_in=t_in, tokens_out=t_out,
-                            cost_inr=governance.cost_inr(used, t_in, t_out))
+                            cost_usd=governance.cost_usd(used, t_in, t_out))
 
     if isinstance(response.parsed, schema):
         return response.parsed

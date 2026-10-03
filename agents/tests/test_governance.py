@@ -155,4 +155,15 @@ def test_generate_json_names_its_agent_and_records_usage(client, monkeypatch):
     asyncio.run(gemini.generate_json(model="gemini-3.1-flash-lite", schema=DocumentCheck, prompt="p",
                                      agent="activation.checker"))
     row = store.get("usage_days", day)["agents"]["activation.checker"]
-    assert row["calls"] == calls_before + 1 and row["tokens_in"] >= 1000 and row["cost_inr"] > 0
+    assert row["calls"] == calls_before + 1 and row["tokens_in"] >= 1000 and row["cost_usd"] > 0
+
+
+def test_portal_reports_in_us_dollars_and_reseeds_old_rupee_data(client):
+    from app.governance import seed as seeding
+
+    o = client.get("/api/platform/overview", headers=h("admin")).json()
+    assert o["currency"] == "USD" and o["budget_usd"] == settings.monthly_budget_usd
+    assert 0 < o["month_to_date_usd"] < o["budget_usd"]  # dollars, not rupees
+    store.update("platform_settings", "settings", {"data_version": 1})  # data written in rupees
+    seeding.ensure_seeded()
+    assert core.platform_settings()["data_version"] == seeding.DATA_VERSION

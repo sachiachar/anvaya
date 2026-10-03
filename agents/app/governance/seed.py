@@ -11,8 +11,10 @@ import time
 from datetime import datetime, timezone
 
 from ..store import new_id, store
-from .core import LIVE_INR_PER_MINUTE, PRICE, platform_settings, registry, user_key
+from .core import LIVE_USD_PER_MINUTE, PRICE, platform_settings, registry, user_key
 
+# Version of the seeded data's format; version 2 keeps all costs in US dollars.
+DATA_VERSION = 2
 # Demo tenants and their number of users.
 TENANTS = {"direct": 20, "demo-bank": 18, "judges": 8}
 # Typical daily calls per active user, and tokens per call (in, out).
@@ -57,10 +59,10 @@ def seed(now: float | None = None) -> None:
                     continue
                 model = a["models"]["primary"]
                 row = day["agents"].setdefault(agent_id, {"calls": 0, "tokens_in": 0, "tokens_out": 0,
-                                                          "minutes": 0.0, "cost_inr": 0.0, "errors": 0})
+                                                          "minutes": 0.0, "cost_usd": 0.0, "errors": 0})
                 if agent_id == "saathi.voice":
                     minutes = calls * rng.uniform(4, 11)
-                    cost = minutes * LIVE_INR_PER_MINUTE
+                    cost = minutes * LIVE_USD_PER_MINUTE
                     row["minutes"] = round(row["minutes"] + minutes, 1)
                 else:
                     t_in, t_out = calls * tin, calls * tout
@@ -70,15 +72,15 @@ def seed(now: float | None = None) -> None:
                     row["tokens_out"] += t_out
                 row["calls"] += calls
                 row["errors"] += sum(1 for _ in range(calls) if rng.random() < 0.012)
-                row["cost_inr"] = round(row["cost_inr"] + cost, 2)
-                day["models"][model] = round(day["models"].get(model, 0.0) + cost, 2)
+                row["cost_usd"] = round(row["cost_usd"] + cost, 4)
+                day["models"][model] = round(day["models"].get(model, 0.0) + cost, 4)
                 tenant_cost += cost
-            day["tenants"][tenant] = {"cost_inr": round(tenant_cost, 2), "active_users": active}
+            day["tenants"][tenant] = {"cost_usd": round(tenant_cost, 4), "active_users": active}
         if back % 7 == 3:  # the weekly fraud research and dreaming runs
             for agent_id in ("fraud.researcher", "fraud.dreamer"):
-                cost = rng.uniform(18, 40)
+                cost = rng.uniform(0.2, 0.45)
                 day["agents"][agent_id] = {"calls": rng.randint(8, 16), "tokens_in": 0, "tokens_out": 0,
-                                           "minutes": 0.0, "cost_inr": round(cost, 2), "errors": 0}
+                                           "minutes": 0.0, "cost_usd": round(cost, 4), "errors": 0}
                 day["models"]["gemini-3.8-flash"] = round(day["models"].get("gemini-3.8-flash", 0) + cost, 2)
         store.put("usage_days", day)
 
@@ -169,14 +171,15 @@ def seed(now: float | None = None) -> None:
                                   "allowance_used": round(rng.uniform(0.1, 0.95), 2), "status": "active"})
 
     store.put("platform_settings", {
-        "id": "settings", "seeded_at": now, "kill_switch": "off", "kill_switch_reason": None,
+        "id": "settings", "data_version": DATA_VERSION, "seeded_at": now, "kill_switch": "off", "kill_switch_reason": None,
         # Gemini quota headroom: seeded until Cloud Monitoring is read (PR-10.5).
         "quota": {"rpm_limit": 1000, "rpm_peak": 212, "tpm_limit": 4_000_000, "tpm_peak": 640_000},
     })
 
 
 def ensure_seeded() -> None:
-    if not platform_settings():
+    """Seed on first use, and re-seed data written in an older format (version 1 was in rupees)."""
+    if platform_settings().get("data_version") != DATA_VERSION:
         seed()
 
 
