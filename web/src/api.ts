@@ -38,6 +38,7 @@ export type Moment = {
   places: string[];
   year: string | null;
   language?: string;
+  intended_for?: string[];
 };
 
 export type InventoryItem = {
@@ -49,6 +50,8 @@ export type InventoryItem = {
   nominee_or_beneficiary: string | null;
   approximate_value: string | null;
   missing_fields: string[];
+  papers_at?: string | null;
+  intended_for?: string | null;
 };
 
 export type DocumentCheck = {

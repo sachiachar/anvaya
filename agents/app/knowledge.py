@@ -131,7 +131,73 @@ def _description(collection: str, item: dict) -> str:
     return f"{item.get('name', '')}, {item.get('relationship', '')} of the owner"
 
 
-def _body(collection: str, item: dict, title: str, description: str) -> str:
+# ---- Typed links (PR-7.3, PR-7.9) -------------------------------------------------------------
+#
+# Links are frontmatter fields with a meaning (OKF allows extra keys), each a list of bundle paths,
+# and the same links appear in the body as ordinary Markdown links, so any OKF reader sees the
+# graph. They're worked out from what the card says, against the people the owner kept:
+#   account or policy -> nominee, holder;  property or wish -> intended_for;  story -> people.
+# A full name must match a kept person; a single word ("Ajay") matches a first name only if
+# exactly one kept person has it. Unmatched names stay in the card, just without a link.
+
+LINK_LABELS = {"nominee": "Nominee", "holder": "Holder", "intended_for": "Meant for", "people": "Mentions"}
+# Fields whose presence (never their value) the graph records, for the gap check (PR-7.10).
+HAS_FIELDS = ("nominee_or_beneficiary", "holder_name", "intended_for", "papers_at")
+_SPLIT = re.compile(r"\s*(?:,|;|&|\band\b)\s*", re.IGNORECASE)
+
+
+def _key(name: str) -> str:
+    return re.sub(r"\s+", " ", name or "").strip().lower()
+
+
+def _names(value: Any) -> list[str]:
+    values = value if isinstance(value, list) else [value]
+    return [n for v in values if isinstance(v, str) for n in _SPLIT.split(v) if n.strip()]
+
+
+def _people(cat: dict) -> tuple[dict[str, str], dict[str, list[str]]]:
+    """Kept people (current versions): full name -> path, and first name -> paths."""
+    full: dict[str, str] = {}
+    first: dict[str, list[str]] = {}
+    for c in cat.get("concepts", {}).values():
+        if c["collection"] == "people" and c["graph"]["status"] == "stable":
+            name, path = _key(c["record"].get("name", "")), f"/{c['path']}"
+            if name:
+                full.setdefault(name, path)
+                first.setdefault(name.split(" ")[0], []).append(path)
+    return full, first
+
+
+def _resolve(name: str, people: tuple[dict[str, str], dict[str, list[str]]]) -> str | None:
+    full, first = people
+    key = _key(name)
+    if key in full:
+        return full[key]
+    matches = first.get(key, []) if " " not in key else []
+    return matches[0] if len(matches) == 1 else None
+
+
+def links_for(collection: str, record: dict, cat: dict) -> dict[str, list[str]]:
+    """The typed links of a kept item, as bundle paths of kept people."""
+    people = _people(cat)
+    fields = {"inventory": {"nominee": "nominee_or_beneficiary", "holder": "holder_name", "intended_for": "intended_for"},
+              "moments": {"people": "people", "intended_for": "intended_for"}}.get(collection, {})
+    links: dict[str, list[str]] = {}
+    for link, field_name in fields.items():
+        paths = sorted({p for n in _names(record.get(field_name)) if (p := _resolve(n, people))})
+        if paths:
+            links[link] = paths
+    return links
+
+
+def _link_lines(links: dict[str, list[str]], cat: dict | None) -> list[str]:
+    titles = {f"/{c['path']}": c["title"] for c in (cat or {}).get("concepts", {}).values()}
+    return [f"- {LINK_LABELS.get(link, link)}: [{titles.get(path, path)}]({path})"
+            for link, paths in links.items() for path in paths]
+
+
+def _body(collection: str, item: dict, title: str, description: str,
+          links: dict[str, list[str]] | None = None, cat: dict | None = None) -> str:
     lines = [f"# {title}", "", description]
     if collection == "moments" and item.get("quote"):
         lines += ["", "In their own words:", "", *[f"> {q}" for q in item["quote"].splitlines()]]
@@ -139,13 +205,18 @@ def _body(collection: str, item: dict, title: str, description: str) -> str:
         rows = [("Institution", item.get("institution")), ("Product", item.get("product")),
                 ("Account", item.get("account_hint")), ("Holder", item.get("holder_name")),
                 ("Nominee or beneficiary", item.get("nominee_or_beneficiary")),
-                ("Approximate value", item.get("approximate_value"))]
+                ("Approximate value", item.get("approximate_value")), ("Papers kept at", item.get("papers_at")),
+                ("Meant for", item.get("intended_for"))]
         lines += ["", *[f"- **{k}:** {v}" for k, v in rows if v]]
+    if collection == "moments" and item.get("intended_for"):
+        lines += ["", f"Meant for: {', '.join(item['intended_for'])}"]
+    if links:
+        lines += ["", "Linked to:", *_link_lines(links, cat)]
     return "\n".join(lines) + "\n"
 
 
 def concept(collection: str, item: dict, owner_id: str, *, at: float,
-            generated_by: str | None = None, verified: bool = True) -> tuple[dict, str]:
+            generated_by: str | None = None, verified: bool = True, cat: dict | None = None) -> tuple[dict, str]:
     """The concept for a kept item: (frontmatter, Markdown body). Content is masked."""
     if collection not in COLLECTIONS:
         raise NotKnowledge(collection)
@@ -171,14 +242,14 @@ def concept(collection: str, item: dict, owner_id: str, *, at: float,
         "status": "stable",
         "id": record["id"],
         "collection": collection,
-        "links": {},  # typed links (PR-7.9)
+        "links": links_for(collection, record, cat or {}),  # typed links (PR-7.9)
         "record": record,  # the card's fields, so the catalog can always be rebuilt from the files
     }
     if verified:
         front["verified"] = {"by": f"human:owner-{owner_id}", "at": _iso(at)}
     if okf_type in ("Bank Account", "Insurance Policy", "Investment", "Retirement Account", "Loan"):
         front["stale_after"] = _iso(at + STALE_AFTER_DAYS * 86400)
-    return front, _body(collection, record, title, description)
+    return front, _body(collection, record, title, description, front["links"], cat)
 
 
 def render(front: dict, body: str) -> str:
@@ -200,7 +271,10 @@ def _entry(front: dict, path: str) -> dict:
     """What the catalog keeps per concept: its graph part apart from its content."""
     return {
         "path": path,
-        "graph": {"type": front["type"], "status": front.get("status", "stable"), "links": front.get("links", {})},
+        # The graph part: what a fixed-code reader may use (gap check, fraud cues). Types, status,
+        # links between kept items, and which key fields are present; never names, text or sources.
+        "graph": {"type": front["type"], "status": front.get("status", "stable"), "links": front.get("links", {}),
+                  "has": [f for f in HAS_FIELDS if (front.get("record") or {}).get(f)]},
         "collection": front["collection"],
         "title": front.get("title", ""),
         "description": front.get("description", ""),
@@ -286,7 +360,8 @@ def commit(collection: str, item: dict, owner_id: str, *, replaces: str | None =
     """Keep: write the item as a concept, mark the version it replaces deprecated, and rebuild
     the index and log. Returns the kept item, as readers see it."""
     at = at or time.time()
-    front, body = concept(collection, item, owner_id, at=at, generated_by=generated_by, verified=verified)
+    front, body = concept(collection, item, owner_id, at=at, generated_by=generated_by, verified=verified,
+                          cat=catalog(owner_id))
     path = _write(owner_id, front, body)
     events = [_event(owner_id, at, "Update" if replaces else "Creation", front, path)]
     old_front: dict | None = None
@@ -306,8 +381,48 @@ def commit(collection: str, item: dict, owner_id: str, *, replaces: str | None =
         cat["events"] = (cat.get("events", []) + events)[-MAX_EVENTS:]
 
     _change_catalog(owner_id, change)
+    if collection == "people":
+        relink(owner_id)  # items that name this person (or an earlier version of them) link to it now
     write_indexes(owner_id)
     return as_item(front["id"], _entry(front, path), owner_id)
+
+
+def relink(owner_id: str) -> int:
+    """Work out every current item's links again (after a person is kept or replaced), and rewrite
+    the items whose links changed. Not a new version: the item says the same; only its links do.
+    Safe alongside other Keeps: a file is rewritten only if it hasn't changed since it was read,
+    and the catalog update touches only the links of entries that are still current."""
+    cat, _ = _load(owner_id)
+    updates: dict[str, dict] = {}
+    for cid, entry in cat["concepts"].items():
+        if entry["graph"]["status"] != "stable" or entry["collection"] == "people":
+            continue
+        links = links_for(entry["collection"], entry["record"], cat)
+        if links == entry["graph"]["links"]:
+            continue
+        data, version = media.load_versioned(owner_id, f"{ROOT}/{entry['path']}")
+        if not data:
+            continue
+        front, _ = parse(data.decode())
+        if front.get("status", "stable") != "stable":
+            continue  # replaced meanwhile
+        front["links"] = links
+        body = _body(front["collection"], front.get("record", {}), front["title"], front["description"], links, cat)
+        try:
+            media.save_if(owner_id, f"{ROOT}/{entry['path']}", render(front, body).encode(), "text/markdown", version)
+        except media.Changed:
+            continue  # someone else changed it; their write wins
+        updates[cid] = links
+
+    def change(c: dict) -> None:
+        for cid, links in updates.items():
+            entry = c["concepts"].get(cid)
+            if entry and entry["graph"]["status"] == "stable":
+                entry["graph"]["links"] = links
+
+    if updates:
+        _change_catalog(owner_id, change)
+    return len(updates)
 
 
 # ---- index.md and log.md ------------------------------------------------------------------------
@@ -412,12 +527,14 @@ def for_reading(owner_id: str) -> list[dict]:
     title, whether the owner confirmed it, and its text. Rendered from the catalog in one read;
     only kept knowledge, never the conversation or the vault."""
     out = []
-    for cid, entry in sorted(catalog(owner_id)["concepts"].items(), key=lambda kv: kv[1]["path"]):
+    cat = catalog(owner_id)
+    for cid, entry in sorted(cat["concepts"].items(), key=lambda kv: kv[1]["path"]):
         if entry["graph"]["status"] != "stable":
             continue
         out.append({"id": cid, "path": f"/{entry['path']}", "type": entry["graph"]["type"], "title": entry["title"],
                     "confirmed": entry.get("verified", False),
-                    "text": _body(entry["collection"], entry["record"], entry["title"], entry["description"])})
+                    "text": _body(entry["collection"], entry["record"], entry["title"], entry["description"],
+                                  entry["graph"]["links"], cat)})
     return out
 
 
