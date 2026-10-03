@@ -463,7 +463,7 @@ export function FraudPage({ me }: { me: Me }) {
           <tbody>{data.guides.map((g: Guide) => (
             <tr key={g.id}>
               <td>{g.title}</td><td className="num">{g.version}</td><td>{fmt.label(g.trust_tier)}</td>
-              <td className="num">{g.sources}</td><td className="num">{g.signals}</td><td>{fmt.when(g.researched_at)}</td>
+              <td className="num">{g.sources}</td><td className="num">{g.signals}</td><td>{g.researched_at ? fmt.when(g.researched_at) : "Built in"}</td>
               <td>{g.status === "research_requested" ? <Status value="research_requested" /> : can(me, "review_fraud") && (
                 <button className="pa-small" onClick={() => platform.researchNow(g.id).then((r) => { setNote(r.message); reload(); })}>Research now</button>
               )}</td>

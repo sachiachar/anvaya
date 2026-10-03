@@ -114,12 +114,14 @@ def save_version(guide: Guide) -> Guide:
 
 
 def summary(guide: Guide) -> dict:
-    """The row the platform admin portal shows. Trust is the weakest trust among its signs."""
+    """The row the platform admin portal shows. Trust is the weakest trust among the signs the
+    check uses. A built-in guide not yet saved has no research date."""
     order = ["unverified", "machine-confirmed", "human-reviewed"]
-    weakest = min((s.trust for s in guide.signs), key=order.index, default="unverified")
+    used = signs_for_check(guide)
+    weakest = min((s.trust for s in used), key=order.index, default="unverified")
     return {"id": guide.key, "title": guide.title, "version": guide.version, "trust_tier": weakest,
-            "sources": len(guide.sources), "signals": len(signs_for_check(guide)),
-            "researched_at": guide.updated_at, "status": "current"}
+            "sources": len(guide.sources), "signals": len(used),
+            "researched_at": guide.updated_at or None, "status": "current"}
 
 
 def summaries() -> list[dict]:

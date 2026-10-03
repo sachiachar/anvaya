@@ -96,6 +96,14 @@ def test_with_nothing_saved_the_built_in_copy_is_used():
     assert fraud_guides.current(INDIA.key) == INDIA
 
 
+def test_portal_row_counts_only_signs_the_check_uses():
+    g = guide(sign("a", trust="human-reviewed"), sign("b", label="simulated", trust="unverified"),
+              sign("c", trust="unverified", status="retired"))
+    row = fraud_guides.summary(g)
+    assert row["trust_tier"] == "human-reviewed" and row["signals"] == 1
+    assert fraud_guides.summary(INDIA)["researched_at"] is None  # built in, never saved
+
+
 def test_when_the_store_is_down_the_built_in_copy_is_used(monkeypatch):
     fraud_guides.save_version(INDIA.model_copy(update={"signs": INDIA.signs[:2]}))
 
