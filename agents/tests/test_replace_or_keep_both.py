@@ -65,3 +65,12 @@ def test_edits_cant_point_a_card_at_another_item(client):
     card = proposals.save_moment(OWNER, REWORDED, {})
     r = decide(client, card, replace=True, edits={"looks_like": {"id": other["id"]}, "updates": other["id"]})
     assert r.status_code == 200 and knowledge.current(OWNER, other["id"])["title"] == "College days"
+
+
+def test_replace_needs_the_same_kind_and_a_refusal_changes_nothing(client):
+    kept = _keep("moments", WISH)
+    card = proposals.save_moment(OWNER, REWORDED, {})
+    r = decide(client, card, replace=True, edits={"kind": "story", "title": "Edited title"})
+    assert r.status_code == 409
+    assert proposals.store.get("moments", card["id"])["title"] == "SBI account for my wife"
+    assert knowledge.current(OWNER, kept["id"])["kind"] == "wish"

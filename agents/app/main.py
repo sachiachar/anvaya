@@ -298,14 +298,18 @@ def decide(doc_id: str, body: Decision) -> dict:
     # Edits change what a card says, never what it is or where it came from.
     safe_edits = {k: v for k, v in (body.edits or {}).items()
                   if k not in ("id", "owner_id", "status", "updates", "looks_like", "recording", "document")}
-    if safe_edits:
-        doc = store.update(body.collection, doc_id, safe_edits)
-    if body.replace:
+    replaces = None
+    if body.replace:  # checked before any edit is saved, so a refused Replace changes nothing
         target = (doc.get("looks_like") or {}).get("id")
         kept = knowledge.current(doc["owner_id"], target) if target else None
-        if not kept or not kept.get("concept", "").startswith(("stories/", "advice/", "practical/", "wishes/")):
-            raise HTTPException(409, "There's nothing kept for this card to replace.")
-        doc = store.update(body.collection, doc_id, {"updates": kept["id"]})
+        kind = safe_edits.get("kind", doc.get("kind"))
+        if body.collection != "moments" or not kept or kept.get("kind") != kind:
+            raise HTTPException(409, "There's nothing kept of the same kind for this card to replace.")
+        replaces = kept["id"]
+    if safe_edits:
+        doc = store.update(body.collection, doc_id, safe_edits)
+    if replaces:
+        doc = store.update(body.collection, doc_id, {"updates": replaces})
     return proposals.approve(body.collection, doc)
 
 

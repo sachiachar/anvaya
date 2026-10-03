@@ -171,12 +171,13 @@ export default function Conversation() {
             {t.attachment && <span className="attach">{ATTACHMENT_LABEL[t.attachment.kind]}</span>}
             <p>{t.text}</p>
             {t.proposals?.map((p) => <ProposalCard key={p.id} p={p} onDecide={decide} />)}
-            {(t.proposals?.filter((p) => p.status === "pending").length ?? 0) > 1 && (
+            {(t.proposals?.filter(plainKeep).length ?? 0) > 1 && (
               <button className="link keep-all" onClick={async () => {
-                // One at a time: family cards all update the same family list.
-                for (const p of t.proposals!.filter((x) => x.status === "pending")) await decide(p, "approve");
+                // One at a time: family cards all update the same family list. Cards that look like a
+                // kept item wait for the owner's own choice: Replace it or Keep both.
+                for (const p of t.proposals!.filter(plainKeep)) await decide(p, "approve");
               }}>
-                Keep all {t.proposals!.filter((p) => p.status === "pending").length}
+                Keep all {t.proposals!.filter(plainKeep).length}
               </button>
             )}
           </li>
@@ -228,6 +229,9 @@ export default function Conversation() {
     </div>
   );
 }
+
+/** A waiting card that a plain Keep is right for (not one asking "Replace it or Keep both"). */
+const plainKeep = (p: Proposal) => p.status === "pending" && !(p.looks_like && !p.updates);
 
 function ProposalCard({ p, onDecide }: {
   p: Proposal; onDecide: (p: Proposal, d: "approve" | "reject", replace?: boolean) => void;
