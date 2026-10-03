@@ -92,7 +92,7 @@ What's built is recorded as numbered requirements (P0-1 to P0-11) in the complet
 | Suggestion cards with Keep; merging and updates; next steps | Guardian layer: two real reviewers, owner alert with cancel, fraud reference guides, fixed checks and a reviewer trace (PR-2) |
 | Vault encrypted on the phone; recipient invitation with key code | Claim file for each institution and a Bank view (PR-3) |
 | Certificate pre-check by Gemini; two reviewers; waiting period; owner cancel | Accounts discovered and readiness checked at the source: simulated Account Aggregator flow and real statement upload (PR-11) |
-| Family's assistant (ADK) answering with cited sources; claims checklist and draft letters | Only the owner can reach their conversation; sensitive details masked; retention and deletion (PR-6) |
+| Family's assistant (ADK) reading what the owner kept, in any wording or language, with cited sources; claims checklist and draft letters | Only the owner can reach their conversation; sensitive details masked; retention and deletion (PR-6) |
 | Sign-in with Google; access requests | Kept knowledge as an OKF graph; gap questions (PR-7) |
 | A private demo for each person who signs in, with switching between Vikram, Priya, two reviewers and the platform admin, checked on the server (PR-1) | AI quality measured on a synthetic test set (PR-8); live "inside the agents" panel (PR-9) |
 | Agent gateway, limits per request, daily allowances, costs from Google Cloud billing, kill switch (PR-10) | Backstops, "ask for more" in the app, Model Armor (PR-10.5, 10.6, 10.8) |

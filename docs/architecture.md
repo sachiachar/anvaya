@@ -69,7 +69,7 @@ flowchart LR
 | `speech.py` | Natural voice for typed replies (Gemini TTS), falling back through a list of TTS models, each with its own quota |
 | `proposals.py` | Turns AI suggestions into cards: merges repeats, turns follow-up details into updates (without losing earlier facts), creates family cards, and applies Keep |
 | `tasks.py` | Next steps from the readiness loop: rewrites the open list, merges near-duplicates, never re-adds done or dismissed steps, at most 5 |
-| `executor_agent.py` | Google ADK agent for the handover (tools: `search_archive`, `list_inventory`) with a fallback model |
+| `executor_agent.py` | Google ADK agent for the handover, reading the owner's kept-knowledge bundle (PR-7.5): the whole bundle in its instructions while small, otherwise `index.md` with the tools `read_bundle_index`, `read_concept` and `list_accounts`; a fallback model |
 | `release.py` | Vault release state machine: two-person rule, override reasons, waiting period, owner cancel |
 | `escrow.py` | Cloud KMS wrap and unwrap of the vault key blob |
 | `gemini.py` | Shared Gemini client with retries and backoff; `generate_json` with Pydantic schemas and model fallback |
@@ -188,7 +188,7 @@ The portal is a separate entry point (`web/admin.html`), served by its own Fireb
   - it's kept only while useful;
   - it's never released in the handover;
   - the owner can delete it, by destroying its key.
-- **The family's assistant** reads the owner's `index.md` and the concepts it needs, or the whole kept bundle with context caching. It never reads the conversation.
+- **The family's assistant** (built, PR-7.5) gets the whole kept bundle in its instructions while it's under about 20,000 tokens, built fresh for each question from current versions only; above that, `index.md` and the concepts it opens. Kept text is fenced as information, never instructions. Every source shown is a real kept item, with its title. It never reads the conversation, another owner's bundle or the vault. Context caching can come later.
 - **The bundle is a graph.** Typed links in the frontmatter (`institution`, `nominee`, `papers_at`, `intended_for`, `covered_by`, `contact`) make each owner's bundle a small graph, built in memory after each Keep, with no graph database.
   - A fixed-rule check against the expected links for each type finds **gaps and conflicts**, ranked by impact on the family.
   - Saathi raises at most one gently, and "skip" is remembered.

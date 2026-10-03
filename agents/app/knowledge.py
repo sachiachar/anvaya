@@ -407,6 +407,20 @@ def current(owner_id: str, cid: str) -> dict | None:
     return None
 
 
+def for_reading(owner_id: str) -> list[dict]:
+    """The current concepts as the family's assistant reads them (PR-7.5): id, bundle path, type,
+    title, whether the owner confirmed it, and its text. Rendered from the catalog in one read;
+    only kept knowledge, never the conversation or the vault."""
+    out = []
+    for cid, entry in sorted(catalog(owner_id)["concepts"].items(), key=lambda kv: kv[1]["path"]):
+        if entry["graph"]["status"] != "stable":
+            continue
+        out.append({"id": cid, "path": f"/{entry['path']}", "type": entry["graph"]["type"], "title": entry["title"],
+                    "confirmed": entry.get("verified", False),
+                    "text": _body(entry["collection"], entry["record"], entry["title"], entry["description"])})
+    return out
+
+
 def family(owner_id: str) -> list[str]:
     """The owner's family as "Name (relationship)", from the kept Person concepts."""
     return [f"{p['name']} ({p['relationship']})" for p in items(owner_id, "people")]
