@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from . import knowledge
+from . import gaps, knowledge
 from .store import new_id, store
 
 
@@ -71,7 +71,10 @@ def known(owner_id: str) -> dict:
             f"{p['name']} ({p['relationship']}), waiting for confirmation"
             for p in store.list("people", owner_id=owner_id, status="pending")],
         "moments": [{"title": m["title"], "summary": m["summary"]} for m in _all("moments", owner_id)],
-        "inventory": [f"{i['institution']} {i['product']} {i['account_hint']}" for i in _all("inventory", owner_id)],
+        "inventory": [f"{i['institution']} {i['product']} {i['account_hint']} (nominee: "
+                      f"{i.get('nominee_or_beneficiary') or 'not recorded'})" for i in _all("inventory", owner_id)],
+        # PR-7.10: what's missing, found by fixed rules and ranked by harm; Saathi may raise one.
+        "open_gaps": gaps.top(owner_id),
     }
 
 
@@ -95,11 +98,23 @@ def save_moment(owner_id: str, moment: dict, source: dict[str, Any]) -> dict | N
     return _pending("moments", owner_id, moment, **source)
 
 
+def _match(owner_id: str, item: dict) -> list[dict]:
+    """Saved items this one is about: same institution and last 4 digits; or, if the model left
+    the digits out (e.g. "my wife is the SBI nominee"), the only saved item at that institution."""
+    saved = _all("inventory", owner_id)
+    same = [e for e in saved if _same_item(e, item)]
+    if same or _digits(item.get("account_hint")):
+        return same
+    at = [e for e in saved if _norm(e.get("institution")) == _norm(item.get("institution"))]
+    accounts = {e.get("id") for e in at if e["status"] != "pending"} | {e.get("updates") for e in at if e.get("updates")}
+    return at if len(accounts - {None}) <= 1 and at else []
+
+
 def save_inventory(owner_id: str, item: dict, source: dict[str, Any]) -> dict:
     """Merge into a matching pending proposal, or create a new one."""
-    for existing in _all("inventory", owner_id):
-        if not _same_item(existing, item):
-            continue
+    for existing in _match(owner_id, item):
+        if not _digits(item.get("account_hint")):
+            item = {**item, "account_hint": existing.get("account_hint")}
         if existing["status"] != "pending":
             return _pending("inventory", owner_id, item, updates=existing["id"], **source)
         merged = {**existing, **{k: v for k, v in item.items() if v not in (None, "", [])}}

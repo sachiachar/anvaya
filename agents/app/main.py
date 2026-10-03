@@ -18,7 +18,8 @@ from google.auth.exceptions import DefaultCredentialsError
 from google.genai import errors as genai_errors
 from pydantic import BaseModel, ValidationError
 
-from . import auth, demo, escrow, fraud_guides, knowledge, knowledge_map, live, loops, media, proposals, release, speech, tasks
+from . import (auth, demo, escrow, fraud_guides, gaps, knowledge, knowledge_map, live, loops, media, proposals,
+               release, speech, tasks)
 from .config import settings
 from .executor_agent import UnknownSession, ask
 from .governance import core as governance_core
@@ -314,6 +315,25 @@ def get_knowledge_map(owner_id: str) -> dict:
     """The owner's kept knowledge as a graph, for the demo's knowledge map (read-only)."""
     owner = owner_or_404(owner_id)
     return knowledge_map.build(owner_id, owner.get("name") or "Owner")
+
+
+@api.get("/owners/{owner_id}/gaps", dependencies=[Depends(demo.only("owner"))])
+def get_gaps(owner_id: str) -> dict:
+    """What's missing, found by fixed rules (PR-7.10), most harmful first. Saathi may ask about
+    the top two; the owner can skip any of them."""
+    owner_or_404(owner_id)
+    return {"gaps": gaps.find(owner_id)}
+
+
+@api.post("/owners/{owner_id}/gaps/{key}/skip", dependencies=[Depends(demo.only("owner"))])
+def skip_gap(owner_id: str, key: str) -> dict:
+    """The owner chose not to answer this one: Saathi never raises it again."""
+    owner_or_404(owner_id)
+    try:
+        gaps.skip(owner_id, key)
+    except KeyError as e:
+        raise HTTPException(404, "gap not found") from e
+    return {"gaps": gaps.find(owner_id)}
 
 
 # ---- Readiness and planning loops ---------------------------------------------
