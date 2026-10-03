@@ -29,7 +29,6 @@ export type Spend =
   | { available: false; reason: "not_configured" | "no_data" | "error"; message: string };
 
 export type Overview = {
-  seeded: boolean;
   spend: Spend;
   usage: {
     daily: ({ day: string } & Use)[];

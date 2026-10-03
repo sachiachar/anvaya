@@ -161,6 +161,7 @@ def test_generate_json_names_its_agent_and_records_usage(client, monkeypatch):
 def test_portal_shows_usage_not_estimates_and_reseeds_old_cost_data(client):
     from app.governance import seed as seeding
 
+    core.record_usage("saathi.chat", "gemini-3.1-flash-lite", "direct", tokens_in=10, tokens_out=5)
     o = client.get("/api/platform/overview", headers=h("admin")).json()
     assert o["spend"]["available"] is False  # no billing export in tests: no guessing
     assert o["usage"]["by_agent"]["saathi.chat"]["calls"] > 0
@@ -168,3 +169,33 @@ def test_portal_shows_usage_not_estimates_and_reseeds_old_cost_data(client):
     store.update("platform_settings", "settings", {"data_version": 2})  # data with estimated costs
     seeding.ensure_seeded()
     assert core.platform_settings()["data_version"] == seeding.DATA_VERSION
+
+
+def test_seed_never_writes_usage_or_blocked_calls_and_clears_old_samples():
+    store.put("usage_days", {"id": "2026-09-01", "day": "2026-09-01", "seeded": True, "agents": {}, "tenants": {}})
+    store.put("usage_days", {"id": "2026-09-02", "day": "2026-09-02", "agents": {}, "tenants": {}})  # real use
+    store.put("gateway_blocked", {"id": "blk_old", "seeded": True, "at": 1.0, "agent": "saathi.chat"})
+    seed()
+    assert store.get("usage_days", "2026-09-01") is None and store.get("gateway_blocked", "blk_old") is None
+    assert store.get("usage_days", "2026-09-02") is not None
+    assert not store.list("usage_days", seeded=True) and not store.list("gateway_blocked", seeded=True)
+    assert store.list("budget_requests", seeded=True) and store.list("guardian_events", seeded=True)
+
+
+def test_tenants_show_only_real_use_and_real_active_people(client):
+    for i in range(6):
+        core.set_current_user(f"tenant-test-{i}")
+        core.record_usage("saathi.chat", "gemini-3.1-flash-lite", "direct", tokens_in=10, tokens_out=5)
+    core.set_current_user(None)
+    tenants = client.get("/api/platform/overview", headers=h("admin")).json()["usage"]["by_tenant"]
+    assert set(tenants) == {"direct"}  # no sample tenants
+    assert tenants["direct"]["calls"] >= 6 and tenants["direct"]["active_users_today"] >= 6
+
+
+def test_reseeding_keeps_the_kill_switch(client):
+    assert client.post("/api/platform/kill-switch", headers=h("admin"),
+                       json={"state": "optional_paused", "reason": "spend spike"}).status_code == 200
+    seed()
+    assert core.kill_switch() == "optional_paused"
+    assert core.platform_settings()["kill_switch_reason"] == "spend spike"
+    store.update("platform_settings", "settings", {"kill_switch": "off", "kill_switch_reason": None})

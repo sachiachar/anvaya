@@ -13,7 +13,7 @@ from app.store import store
 
 def test_overlapping_calls_never_lose_a_count():
     seed()
-    before = store.get("usage_days", core._today())["agents"].get("saathi.chat", {"calls": 0, "tokens_in": 0})
+    before = (store.get("usage_days", core._today()) or {"agents": {}})["agents"].get("saathi.chat", {"calls": 0, "tokens_in": 0})
 
     def one_call():
         core.record_usage("saathi.chat", "gemini-3.1-flash-lite", "direct", tokens_in=100, tokens_out=10)

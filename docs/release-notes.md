@@ -52,7 +52,8 @@
 - The legal partner is mocked.
 - Live calls end after about 15 minutes (Gemini Live limit), and spoken replies can't be rule-checked like typed ones.
 - Free-tier Gemini keys run out quickly; turn on billing for demos.
-- The admin portal shows clearly labelled sample usage until enough real use is recorded. Spend appears only once Google Cloud billing has data; until then the portal says it isn't available yet.
+- Spend, use and refused calls in the admin portal are always real. Spend appears only once Google Cloud billing has data; until then the portal says it isn't available yet.
+- Budget requests, guardian interventions, fraud scenarios and guides, judges' demo copies and quota headroom are clearly labelled examples until those features are built.
 - Spend can't yet be split by agent or tenant on the bill; those show use instead.
 
 ### Next
