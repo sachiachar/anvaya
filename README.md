@@ -24,6 +24,8 @@ Built for the **AI Builder Cup 2026** · Track: **BFSI** · Google Gemini + Goog
 | [Demo script](docs/demo-script.md) | A timed 3-minute demo with the lines to say to Saathi |
 | [Libraries and services](docs/dependencies.md) | Every library, version and licence, and the Google services used, with the purpose of each |
 | [Brand](docs/brand.md) | The name, taglines by country and language, and the companion's name in each language |
+| [Proposal: agent governance](docs/proposals/agent-governance.md) | Agent identity, permissions, budgets and the admin portal (agreed, mostly built) |
+| [Proposal: fraud foresight](docs/proposals/fraud-foresight.md) | Imagining and checking fraud before it happens, and learning from kept knowledge without reading it (agreed, partly built) |
 
 ## The problem
 
@@ -93,7 +95,9 @@ What's built is recorded as numbered requirements (P0-1 to P0-11) in the complet
 | Vault encrypted on the phone; recipient invitation with key code | Claim file for each institution and a Bank view (PR-3) |
 | Certificate pre-check by Gemini; two reviewers; waiting period; owner cancel | Accounts discovered and readiness checked at the source: simulated Account Aggregator flow and real statement upload (PR-11) |
 | Family's assistant (ADK) reading what the owner kept, in any wording or language, with cited sources; claims checklist and draft letters | Only the owner can reach their conversation; sensitive details masked; retention and deletion (PR-6) |
-| Sign-in with Google; access requests | Kept knowledge as an OKF graph; gap questions (PR-7) |
+| Sign-in with Google; access requests | Reminders when accounts go stale, export of the kept knowledge, readiness as link coverage (F-7) |
+| Kept knowledge as an open-format (OKF) graph: Keep is the commit, items link to the people they name, Saathi asks gently about what's missing, and a live knowledge map (PR-7) | Fraud research that starts from common gaps in kept knowledge, counted but never read (fraud foresight, step 4) |
+| Certificate of passing checked sign by sign against a fraud reference guide; "Dream now" and "Research now" in the admin portal, checked against web sources (PR-2.3, 2.5, 2.6) | The guardian core: every step recorded, set responses, enforced where actions happen (PR-2.7) |
 | A private demo for each person who signs in, with switching between Vikram, Priya, two reviewers and the platform admin, checked on the server (PR-1) | AI quality measured on a synthetic test set (PR-8); live "inside the agents" panel (PR-9) |
 | Agent gateway, limits per request, daily allowances, costs from Google Cloud billing, kill switch (PR-10) | Backstops, "ask for more" in the app, Model Armor (PR-10.5, 10.6, 10.8) |
 | Platform admin portal with real data only, on desktop and phone (PR-12) | Judges acting as the platform admin in the portal (PR-12.9); the guardian core (PR-2.7) |
@@ -107,9 +111,9 @@ Tracked in the [Prototype release milestone](https://github.com/sachiachar/anvay
 | PR-1 | **Mostly built:** each judge gets a private demo and can switch between its people. Still to come: open sign-in, 30-day clean-up, guided tour | Must-have | [#1](https://github.com/sachiachar/anvaya/issues/1) |
 | PR-5 | Submission package for the judges | Must-have | [#3](https://github.com/sachiachar/anvaya/issues/3) |
 | PR-6 | Secure each owner's conversation (prototype: owner-only access, masking, retention) | Must-have | [#17](https://github.com/sachiachar/anvaya/issues/17) |
-| PR-2 | Guardian layer: catch fraud at every agent step (PR-2.1 to PR-2.8, PR-2.10). Built so far: two different reviewers inside the demo (PR-2.1) | High-value / trimmed | [#2](https://github.com/sachiachar/anvaya/issues/2) |
+| PR-2 | Guardian layer: catch fraud at every agent step (PR-2.1 to PR-2.8, PR-2.10). Built so far: two different reviewers inside the demo (PR-2.1), the India certificate guide (PR-2.3), and dreaming and research checked against web sources (PR-2.5, 2.6) | High-value / trimmed | [#2](https://github.com/sachiachar/anvaya/issues/2) |
 | PR-3 | Claim file for banks and insurers, with a Bank view | High-value | [#10](https://github.com/sachiachar/anvaya/issues/10) |
-| PR-7 | Kept knowledge as an OKF graph; Keep is the commit; gaps drive the conversation | High-value | [#18](https://github.com/sachiachar/anvaya/issues/18) |
+| PR-7 | **Built:** kept knowledge as an OKF graph; Keep is the commit; typed links; the family's assistant reads it; gaps drive the conversation; a live knowledge map | High-value | [#18](https://github.com/sachiachar/anvaya/issues/18) |
 | PR-8 | Measure AI quality on a synthetic test set and publish the numbers | High-value | [#22](https://github.com/sachiachar/anvaya/issues/22) |
 | PR-9 | Inside the agents: a live panel for judges | High-value | [#23](https://github.com/sachiachar/anvaya/issues/23) |
 | PR-12 | **Built:** platform admin portal: governance dashboard, approvals, guardian and fraud operations, demo management. Still to come: judges acting as the platform admin | High-value | [#42](https://github.com/sachiachar/anvaya/issues/42) |

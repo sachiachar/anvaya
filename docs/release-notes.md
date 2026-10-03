@@ -37,18 +37,14 @@
 **Knowledge map (demo)**
 - "Open the knowledge map" (on Vikram's screen) opens a second window that shows his kept knowledge as a map, filling in live: each story, wish, account and person appears the moment he taps Keep, linked to the people it mentions, its nominee and its bank or insurer.
 - People a story mentions but who aren't kept yet show as dotted circles, and an account or policy with no nominee is marked in red, so the gaps are easy to see.
+- It looks like Obsidian's graph view: a dark canvas where items settle into place, bigger circles for items with more links, scroll to zoom, drag to move, and hover to light up an item's links. It zooms to fit until you move it, and "Fit the whole map" brings that back.
+- A wish or story links to the people it names in its own words, including "my wife" or "my daughter", and to the accounts and banks it mentions. "Transfer of SBI account to my wife" links to the SBI account and to his wife.
+- Someone related through another person now hangs off that person: "Kavya, wife of my brother-in-law" links to Bhaskar, not straight to Vikram. "Bhaskar's son" works the same way.
 
 **Saathi asks about what's missing**
 - Saathi now knows what is missing from Vikram's plan and gently asks about the most important piece when the moment fits: one at a time, never pressing. It might be an account with no nominee, a wish that gives an account to someone other than its nominee, a flat nobody is named to receive, or someone whose relationship isn't known.
 - "Missing pieces" on My plan lists them, most important first. Skip any you'd rather not answer, and Saathi won't ask about it again.
 - Telling Saathi who the nominee of an account is now updates that account, rather than becoming a wish, even if you only name the bank ("my wife is the SBI nominee").
-
-**Knowledge map, take two**
-- The map now looks like Obsidian's graph view: a dark canvas where items settle into place, bigger circles for items with more links, scroll to zoom, drag to move, and hover to light up an item's links. It zooms to fit until you move it, and "Fit the whole map" brings that back.
-- More connections: a wish or story now links to the people it names in its own words, including "my wife" or "my daughter", and to the accounts and banks it mentions. "Transfer of SBI account to my wife" links to the SBI account and to his wife.
-
-**Knowledge map: family through family**
-- Someone related through another person now hangs off that person: "Kavya, wife of my brother-in-law" links to Bhaskar, not straight to Vikram. "Bhaskar's son" works the same way.
 
 **Governance and the admin portal**
 - A separate platform admin portal for the Anvaya team, at https://anvaya-admin.web.app. It shows:
@@ -81,7 +77,7 @@
 
 **Documents**
 - New concept document and two pitches: one for people and families, one for banks and insurers. They cite figures for India and Asia, and regulatory deadlines. Branded PDFs are included.
-- A business model with costs and margins, a brand guide, a proposal for governing the agents, and the guardian layer and storage design in the architecture document.
+- A business model with costs and margins, a brand guide, a proposal for governing the agents, a proposal for finding fraud before it happens ("fraud foresight"), and the guardian layer and storage design in the architecture document.
 
 ### Known limitations
 - One signed-in person plays everyone in their demo copy through the switcher; in a real service each person would sign in separately. The admin portal has its own roles.
@@ -90,11 +86,12 @@
 - Live calls end after about 15 minutes (Gemini Live limit), and spoken replies can't be rule-checked like typed ones.
 - Free-tier Gemini keys run out quickly; turn on billing for demos.
 - Spend, use and refused calls in the admin portal are always real. Spend appears only once Google Cloud billing has data; until then the portal says it isn't available yet.
-- The admin portal shows only real data. Budget requests, guardian interventions, fraud scenarios and guides, and quota headroom stay empty until those features record them.
+- The admin portal shows only real data. Budget requests and guardian interventions stay empty until "ask for more" and the guardian core are built, and quota headroom until it's read from Cloud Monitoring.
+- Fraud research and the checks behind "Dream now" need an Exa key (`EXA_API_KEY`); without it, a run says web search isn't set up yet. Imagined scenarios no source confirms can only be discarded, and fade after three runs.
 - Spend can't yet be split by agent or tenant on the bill; those show use instead.
 
 ### Next
-Opening the demo to every judge, with a guided tour · "ask for more" in the app · judges acting as the platform admin in the portal · guardian checks at every step · a claim file and bank view · accounts checked at the source · kept knowledge with gentle questions about what's missing · measured AI quality.
+Opening the demo to every judge, with a guided tour · "ask for more" in the app · judges acting as the platform admin in the portal · guardian checks at every step · fraud research that starts from common gaps in kept knowledge (counted, never read) · a claim file and bank view · accounts checked at the source · measured AI quality.
 
 ## Prototype 0.1 · 28 September 2026 (AI Builder Cup 2026)
 
