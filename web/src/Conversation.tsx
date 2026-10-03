@@ -240,11 +240,13 @@ function ProposalCard({ p, onDecide }: { p: Proposal; onDecide: (p: Proposal, d:
   } else if (p.collection === "moments") {
     const m = p as Moment;
     title = `${prefix}${m.kind}: ${m.title}`;
-    detail = m.summary;
+    detail = m.summary + (m.intended_for?.length ? ` · For: ${m.intended_for.join(", ")}` : "");
   } else {
     const i = p as InventoryItem;
     title = `${prefix}${i.institution} · ${i.product} ${i.account_hint}`;
-    detail = i.nominee_or_beneficiary ? `Nominee: ${i.nominee_or_beneficiary}` : null;
+    detail = [i.nominee_or_beneficiary && `Nominee: ${i.nominee_or_beneficiary}`,
+      i.intended_for && `Meant for: ${i.intended_for}`, i.papers_at && `Papers: ${i.papers_at}`]
+      .filter(Boolean).join(" · ") || null;
     warning = i.missing_fields.length ? `Missing: ${i.missing_fields.join(", ")}` : null;
   }
   return (
