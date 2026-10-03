@@ -21,6 +21,9 @@ from .store import store
 
 NOMINEE_EXPECTED = {"insurance": 3, "bank_account": 2, "investment": 2, "retirement": 2}
 UNKNOWN = {"", "unknown", "not sure", "none", "n/a"}
+# A bare relationship ("my wife") can't be compared with a name unless a kept person has it.
+RELATION_WORDS = {"wife", "husband", "spouse", "son", "daughter", "mother", "father", "brother", "sister",
+                  "niece", "nephew", "grandson", "granddaughter", "daughter-in-law", "son-in-law", "amma", "appa"}
 
 
 def _plain(text: str | None) -> str:
@@ -33,11 +36,24 @@ def _who(name: str | None) -> str:
 
 
 def _same_person(a: str, b: str, relations: dict[str, str]) -> bool:
+    """False only when both clearly name different people. A relationship word that no kept
+    person has ("my wife", with no wife kept) can't be compared, so it's never a conflict."""
     a, b = _who(a), _who(b)
     if not a or not b:
         return True  # unknown on either side is a nominee gap, not a conflict
     a, b = relations.get(a, a), relations.get(b, b)  # "wife" -> the kept wife's name
+    if a in RELATION_WORDS or b in RELATION_WORDS:
+        return True
     return a == b or a.split(" ")[0] == b.split(" ")[0]
+
+
+def _id(item: dict) -> str:
+    """What a gap is about, stable across versions: a new version of an account (an update card)
+    gets a new id, but a skip must still hold."""
+    if "category" in item:
+        return f"{_plain(item.get('institution'))}|{re.sub(r'[^0-9]', '', item.get('account_hint') or '')[-4:]}" \
+               f"|{_plain(item.get('product'))}"
+    return _plain(item.get("name") or item.get("title"))
 
 
 def _label(item: dict) -> str:
@@ -61,7 +77,7 @@ def find(owner_id: str, *, include_skipped: bool = False) -> list[dict]:
         category = a.get("category")
         nominee = (a.get("nominee_or_beneficiary") or "").strip()
         if category in NOMINEE_EXPECTED and _plain(nominee) in UNKNOWN:
-            gap(f"nominee:{a['id']}", NOMINEE_EXPECTED[category], a["id"],
+            gap(f"nominee:{_id(a)}", NOMINEE_EXPECTED[category], a["id"],
                 f"{label} has no nominee recorded.", "nominee")
         inst = _plain(a.get("institution"))
         for w in wishes:
@@ -70,7 +86,7 @@ def find(owner_id: str, *, include_skipped: bool = False) -> list[dict]:
                 continue
             for person in w.get("people") or []:
                 if not _same_person(person, nominee, relations):
-                    gap(f"conflict:{a['id']}:{w['id']}", 3, a["id"],
+                    gap(f"conflict:{_id(a)}:{_id(w)}", 3, a["id"],
                         f"The wish \"{w.get('title')}\" gives the {label} to {person}, "
                         f"but its nominee is {nominee}.", "conflict")
                     break
@@ -78,10 +94,10 @@ def find(owner_id: str, *, include_skipped: bool = False) -> list[dict]:
             named = any(inst and f" {inst} " in f" {_plain(m.get('title'))} {_plain(m.get('summary'))} "
                         for m in moments)
             if not named:
-                gap(f"heir:{a['id']}", 2, a["id"], f"Nobody is named to receive {label}.", "heir")
+                gap(f"heir:{_id(a)}", 2, a["id"], f"Nobody is named to receive {label}.", "heir")
     for p in people:
         if _plain(p.get("relationship")) in UNKNOWN:
-            gap(f"relationship:{p['id']}", 1, p["id"], f"How {p.get('name')} is related isn't known.", "relationship")
+            gap(f"relationship:{_id(p)}", 1, p["id"], f"How {p.get('name')} is related isn't known.", "relationship")
 
     if not include_skipped:
         skipped = {s["key"] for s in store.list("gap_skips", owner_id=owner_id)}

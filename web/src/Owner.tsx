@@ -55,7 +55,6 @@ function AliveAlert() {
   );
 }
 
-/** Family members who asked for access; only the owner can let them in. */
 /** Gaps found by fixed rules (PR-7.10). Saathi may gently ask about the top ones; Skip means
  * "I'd rather not, or I don't know", and Saathi never asks about it again. */
 function MissingPieces() {
@@ -79,6 +78,7 @@ function MissingPieces() {
   );
 }
 
+/** Family members who asked for access; only the owner can let them in. */
 function People() {
   const [data, setData] = useState<Awaited<ReturnType<typeof api.ownerAccessRequests>> | null>(null);
   const { error, run } = useAction();

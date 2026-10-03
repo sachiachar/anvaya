@@ -6,7 +6,7 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
-from app import gaps, loops, main, proposals
+from app import gaps, knowledge, loops, main, proposals
 from app.schemas import ConversationTurn
 from tests.people import PRIYA
 from tests.test_knowledge import OWNER, POLICY, STORY, _keep
@@ -97,10 +97,51 @@ def test_naming_the_nominee_with_just_the_bank_updates_that_account(client):
 
 
 def test_a_skipped_gap_never_comes_back(client):
-    kept = _keep("inventory", SBI)
-    key = f"nominee:{kept['id']}"
+    _keep("inventory", SBI)
+    key = gaps.find(OWNER)[0]["key"]
     r = client.post(f"/api/owners/{OWNER}/gaps/{key}/skip")
     assert r.status_code == 200 and r.json()["gaps"] == []
     assert proposals.known(OWNER)["open_gaps"] == []
     assert client.post(f"/api/owners/{OWNER}/gaps/nominee:nope/skip").status_code == 404
     assert client.get(f"/api/owners/{OWNER}/gaps", headers=PRIYA).status_code == 403
+
+
+def test_a_skip_holds_after_the_account_is_updated(client):
+    kept = _keep("inventory", SBI)
+    gaps.skip(OWNER, gaps.find(OWNER)[0]["key"])
+    card = proposals.save_inventory(OWNER, {**SBI, "approximate_value": "2 lakh"}, {})
+    assert card["updates"] == kept["id"]
+    proposals.approve("inventory", card)
+    assert gaps.find(OWNER) == []
+
+
+def test_a_different_kind_of_account_at_the_same_bank_is_a_new_card(client):
+    _keep("inventory", SBI)
+    card = proposals.save_inventory(OWNER, {"category": "investment", "institution": "SBI", "product": "Fixed deposit",
+                                            "account_hint": "", "nominee_or_beneficiary": "my wife"}, {})
+    assert not card.get("updates")
+
+
+def test_with_two_accounts_at_one_bank_a_bank_only_update_doesnt_guess(client):
+    proposals.save_inventory(OWNER, SBI, {})
+    proposals.save_inventory(OWNER, {**SBI, "account_hint": "••1234"}, {})
+    card = proposals.save_inventory(OWNER, {"category": "bank_account", "institution": "SBI", "product": "",
+                                            "account_hint": "", "nominee_or_beneficiary": "my wife"}, {})
+    assert not card.get("updates") and card["account_hint"] == ""
+
+
+def test_a_relationship_nobody_has_yet_is_no_conflict(client):
+    _keep("inventory", {**SBI, "nominee_or_beneficiary": "Anjana"})
+    _keep("moments", {**STORY, "kind": "wish", "title": "SBI account to my wife", "people": ["my wife"],
+                      "summary": "He wants the SBI account to go to his wife.", "quote": "SBI to my wife."})
+    assert "conflict" not in keys()
+
+
+def test_a_person_saved_by_relationship_is_renamed_not_duplicated(client):
+    wife = proposals.approve("people", proposals.save_person(OWNER, {"name": "Wife", "relationship": "wife"}))
+    card = proposals.save_person(OWNER, {"name": "Anjana", "relationship": "wife"})
+    assert card["updates"] == wife["id"]
+    proposals.approve("people", card)
+    wives = [p for p in knowledge.items(OWNER, "people") if p["relationship"] == "wife"]
+    assert [p["name"] for p in wives] == ["Anjana"]
+    assert proposals.save_person(OWNER, {"name": "Wife", "relationship": "wife"}) is None
