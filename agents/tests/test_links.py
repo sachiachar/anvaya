@@ -116,3 +116,34 @@ def test_the_rebuilt_catalog_keeps_the_links():
     before = knowledge.catalog(OWNER)["concepts"]
     media.delete(OWNER, "kept/.catalog.json")
     assert knowledge.rebuild(OWNER)["concepts"] == before
+
+
+def test_the_knowledge_map_draws_the_typed_links_once():
+    from app import knowledge_map
+
+    meena = _person("Meena Rao", "wife")
+    flat = _keep("inventory", FLAT)
+    story = _keep("moments", STORY)
+    edges = knowledge_map.build(OWNER, "Vikram Rao")["edges"]
+    assert {"from": flat["id"], "to": meena["id"], "label": "meant for", "derived": False} in edges
+    mentions = [e for e in edges if e["from"] == story["id"] and e["label"] == "mentions"]
+    assert len(mentions) == 1 and mentions[0]["derived"] is False
+
+
+def test_relinking_never_brings_back_a_replaced_version(monkeypatch):
+    policy = _keep("inventory", POLICY)
+    real_save_if = media.save_if
+
+    def replace_meanwhile(owner, name, data, mime, version):
+        # Another request replaces the policy while relinking runs.
+        if name.endswith(policy["concept"]) and not knowledge.get(OWNER, policy["id"])["okf_status"] == "deprecated":
+            update = {**POLICY, "id": new_id("inv"), "approximate_value": "10 lakh"}
+            monkeypatch.setattr(media, "save_if", real_save_if)
+            knowledge.commit("inventory", update, OWNER, replaces=policy["id"])
+        return real_save_if(owner, name, data, mime, version)
+
+    monkeypatch.setattr(media, "save_if", replace_meanwhile)
+    _person("Ajay Rao", "nephew")
+    current = knowledge.items(OWNER, "inventory")
+    assert len(current) == 1 and current[0]["approximate_value"] == "10 lakh"
+    assert knowledge.get(OWNER, policy["id"])["okf_status"] == "deprecated"

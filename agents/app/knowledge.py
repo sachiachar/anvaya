@@ -389,28 +389,40 @@ def commit(collection: str, item: dict, owner_id: str, *, replaces: str | None =
 
 def relink(owner_id: str) -> int:
     """Work out every current item's links again (after a person is kept or replaced), and rewrite
-    the items whose links changed. Not a new version: the item says the same; only its links do."""
-    cat = catalog(owner_id)
-    changed: dict[str, dict] = {}
+    the items whose links changed. Not a new version: the item says the same; only its links do.
+    Safe alongside other Keeps: a file is rewritten only if it hasn't changed since it was read,
+    and the catalog update touches only the links of entries that are still current."""
+    cat, _ = _load(owner_id)
+    updates: dict[str, dict] = {}
     for cid, entry in cat["concepts"].items():
         if entry["graph"]["status"] != "stable" or entry["collection"] == "people":
             continue
         links = links_for(entry["collection"], entry["record"], cat)
         if links == entry["graph"]["links"]:
             continue
-        text = media.load(owner_id, f"{ROOT}/{entry['path']}")
-        if not text:
+        data, version = media.load_versioned(owner_id, f"{ROOT}/{entry['path']}")
+        if not data:
             continue
-        front, _ = parse(text.decode())
+        front, _ = parse(data.decode())
+        if front.get("status", "stable") != "stable":
+            continue  # replaced meanwhile
         front["links"] = links
-        record = front.get("record", {})
-        body = _body(front["collection"], record, front["title"], front["description"], links, cat)
-        media.save(owner_id, f"{ROOT}/{entry['path']}", render(front, body).encode(), "text/markdown")
-        changed[cid] = _entry(front, entry["path"])
-    if changed:
-        _change_catalog(owner_id, lambda c: c["concepts"].update(
-            {cid: e for cid, e in changed.items() if cid in c["concepts"]}))
-    return len(changed)
+        body = _body(front["collection"], front.get("record", {}), front["title"], front["description"], links, cat)
+        try:
+            media.save_if(owner_id, f"{ROOT}/{entry['path']}", render(front, body).encode(), "text/markdown", version)
+        except media.Changed:
+            continue  # someone else changed it; their write wins
+        updates[cid] = links
+
+    def change(c: dict) -> None:
+        for cid, links in updates.items():
+            entry = c["concepts"].get(cid)
+            if entry and entry["graph"]["status"] == "stable":
+                entry["graph"]["links"] = links
+
+    if updates:
+        _change_catalog(owner_id, change)
+    return len(updates)
 
 
 # ---- index.md and log.md ------------------------------------------------------------------------
