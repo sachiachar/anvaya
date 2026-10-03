@@ -5,7 +5,7 @@ import { fmt, platform, type Me } from "./api";
 import { AgentsPage, ApprovalsPage, AuditPage, DemosPage, FraudPage, GuardianPage, OverviewPage } from "./pages";
 
 const PAGES = {
-  overview: { label: "Overview", render: (me: Me) => <OverviewPage me={me} /> },
+  overview: { label: "Overview", render: (me: Me, fresh: boolean) => <OverviewPage me={me} fresh={fresh} /> },
   agents: { label: "Agents", render: () => <AgentsPage /> },
   approvals: { label: "Approvals", render: (me: Me) => <ApprovalsPage me={me} /> },
   guardian: { label: "Guardian", render: (me: Me) => <GuardianPage me={me} /> },
@@ -27,9 +27,14 @@ export default function AdminApp() {
   const [email, setEmail] = useState<string | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // Refresh: remount the page so it loads again; the overview also asks for fresh billing data.
+  const [refreshed, setRefreshed] = useState(0);
+  const [freshFor, setFreshFor] = useState<Page | null>(null);
+  const [loadedAt, setLoadedAt] = useState(() => new Date());
+  const refresh = () => { setRefreshed((n) => n + 1); setFreshFor(page); setLoadedAt(new Date()); };
 
   useEffect(() => {
-    const onHash = () => setPage(pageFromHash());
+    const onHash = () => { setPage(pageFromHash()); setFreshFor(null); setLoadedAt(new Date()); };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -95,8 +100,14 @@ export default function AdminApp() {
         </div>
       </aside>
       <main className="pa-main">
-        <h1>{PAGES[page].label}</h1>
-        {PAGES[page].render(me)}
+        <div className="pa-head">
+          <h1>{PAGES[page].label}</h1>
+          <div className="pa-refresh">
+            <span className="pa-muted">Loaded {loadedAt.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</span>
+            <button onClick={refresh}>Refresh</button>
+          </div>
+        </div>
+        <div key={`${page}:${refreshed}`}>{PAGES[page].render(me, freshFor === page)}</div>
       </main>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   fmt, platform, type Agent, type AuditEntry, type Blocked, type BudgetRequest, type DemoCopy, type GuardianEvent,
   type Guide, type KillSwitchState, type Me, type Permission, type Scenario, type Spend, type Use,
@@ -164,8 +164,14 @@ function SpendSection({ spend }: { spend: Spend }) {
   );
 }
 
-export function OverviewPage({ me }: { me: Me }) {
-  const load = useCallback(() => platform.overview(), []);
+export function OverviewPage({ me, fresh }: { me: Me; fresh: boolean }) {
+  // Only the load right after a Refresh click asks for fresh billing; later reloads use the cache.
+  const freshOnce = useRef(fresh);
+  const load = useCallback(() => {
+    const f = freshOnce.current;
+    freshOnce.current = false;
+    return platform.overview(f);
+  }, []);
   const { data: o, error, reload } = useLoad(load);
   const [switchTo, setSwitchTo] = useState<KillSwitchState>("off");
   if (!o) return <Loading error={error} />;

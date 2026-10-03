@@ -108,3 +108,15 @@ def test_reads_bigquery_with_the_project_filter(monkeypatch):
     assert rows == [{"day": "2026-10-02", "service": "Gemini API", "sku": "x", "usd": 1.5}]
     assert seen["project"] == "life-after" and "project.id = @project" in seen["sql"]
     assert seen["params"][0].value == "life-after"
+
+
+def test_refresh_reads_again_but_at_most_once_a_minute(monkeypatch):
+    calls = []
+    monkeypatch.setattr(billing, "_fetch_rows", lambda: calls.append(1) or ROWS)
+    billing.spend(now=1000)
+    billing.spend(now=1000 + billing.FRESH_SECONDS - 1, fresh=True)  # clicked again straight away
+    assert len(calls) == 1
+    billing.spend(now=1000 + billing.FRESH_SECONDS + 1, fresh=True)
+    assert len(calls) == 2
+    billing.spend(now=1000 + billing.FRESH_SECONDS + 2)  # a normal load uses the new cache
+    assert len(calls) == 2
