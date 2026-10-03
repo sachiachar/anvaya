@@ -84,16 +84,22 @@ export default function KnowledgeMap() {
 
   useEffect(() => {
     let alive = true;
+    let busy = false;  // one request at a time, so an older answer can't replace a newer one
+    let last = "";
     const load = () => {
-      if (document.hidden) return;
+      if (document.hidden || busy) return;
+      busy = true;
       api.knowledgeMap().then((g) => {
         if (!alive) return;
+        setError(null);
+        const text = JSON.stringify(g);
+        if (text === last) return;  // nothing changed: no new layout, no glide
+        last = text;
         const now = Date.now();
         const initial = Object.keys(firstSeen.current).length === 0;
         for (const n of g.nodes) firstSeen.current[n.id] ??= initial ? 0 : now;
         setGraph(g);
-        setError(null);
-      }).catch((e) => alive && setError(String(e.message ?? e)));
+      }).catch((e) => alive && setError(String(e.message ?? e))).finally(() => { busy = false; });
     };
     load();
     const t = window.setInterval(load, POLL_MS);

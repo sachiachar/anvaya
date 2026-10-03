@@ -39,27 +39,40 @@ def build(owner_id: str, owner_name: str) -> dict:
     edges: list[dict] = []
     gaps: list[dict] = []
 
-    # People first, so links from stories and accounts can find them by name or first name.
+    # People first, so links from stories and accounts can find them. A full name must match; a
+    # single word ("Ajay") matches a kept person's first name only if exactly one has it.
     people: dict[str, str] = {}
+    first_names: dict[str, list[str]] = {}
     for cid, c in concepts.items():
         if c["graph"]["type"] == "Person":
-            name = c["record"].get("name") or c["title"]
-            people.setdefault(_key(name), cid)
-            people.setdefault(_key(name).split(" ")[0], cid)
+            name = _key(c["record"].get("name") or c["title"])
+            people.setdefault(name, cid)
+            first_names.setdefault(name.split(" ")[0], []).append(cid)
+    owner_key = _key(owner_name)
 
     def person(name: str) -> str | None:
-        """A kept person, or a 'mentioned' one the owner hasn't kept yet."""
-        if not _key(name):
+        """The owner, a kept person, or a 'mentioned' one the owner hasn't kept yet."""
+        key = _key(name)
+        if not key:
             return None
-        if _key(name) in (_key(owner_name), _key(owner_name).split(" ")[0]):
+        single = " " not in key
+        if key == owner_key or (single and key == owner_key.split(" ")[0]):
             return "owner"
-        found = people.get(_key(name)) or people.get(_key(name).split(" ")[0])
-        if found:
-            return found
-        mid = f"mention:{_key(name)}"
+        if key in people:
+            return people[key]
+        if single and len(first_names.get(key, [])) == 1:
+            return first_names[key][0]
+        mid = f"mention:{key}"
         if not any(n["id"] == mid for n in nodes):
             nodes.append({"id": mid, "label": name.strip(), "group": "mentioned", "type": "Mentioned"})
         return mid
+
+    linked: set[tuple[str, str, str]] = set()
+
+    def link(a: str, b: str, label: str, derived: bool = True) -> None:
+        if (a, b, label) not in linked:
+            linked.add((a, b, label))
+            edges.append({"from": a, "to": b, "label": label, "derived": derived})
 
     institutions: dict[str, str] = {}
     for cid, c in concepts.items():
@@ -71,26 +84,25 @@ def build(owner_id: str, owner_name: str) -> dict:
         for name, targets in typed.items():  # PR-7.9, when it lands
             for target in targets if isinstance(targets, list) else [targets]:
                 if target in concepts:
-                    edges.append({"from": cid, "to": target, "label": name, "derived": False})
+                    link(cid, target, name, derived=False)
         if okf_type == "Person":
-            edges.append({"from": cid, "to": "owner", "label": record.get("relationship") or "family",
-                          "derived": True})
+            link(cid, "owner", record.get("relationship") or "family")
         elif c["collection"] == "moments":
             for name in record.get("people") or []:
                 target = person(name)
                 if target:
-                    edges.append({"from": cid, "to": target, "label": "mentions", "derived": True})
+                    link(cid, target, "mentions")
         elif c["collection"] == "inventory":
             inst = (record.get("institution") or "").strip()
             if inst:
                 iid = institutions.setdefault(_key(inst), f"institution:{_key(inst)}")
                 if not any(n["id"] == iid for n in nodes):
                     nodes.append({"id": iid, "label": inst, "group": "institution", "type": "Institution"})
-                edges.append({"from": cid, "to": iid, "label": "with", "derived": True})
+                link(cid, iid, "with")
             for field, label in (("nominee_or_beneficiary", "nominee"), ("holder_name", "holder")):
                 target = person(record.get(field) or "")
                 if target and target != "owner":
-                    edges.append({"from": cid, "to": target, "label": label, "derived": True})
+                    link(cid, target, label)
             if okf_type in NOMINEE_EXPECTED and not record.get("nominee_or_beneficiary"):
                 gaps.append({"node": cid, "missing": "nominee"})
 

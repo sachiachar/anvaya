@@ -82,3 +82,23 @@ def test_only_the_owner_sees_the_map(client):
 def test_the_vault_never_appears(client):
     client.post(f"/api/owners/{OWNER}/vault/items", json={"label": "Netbanking password", "ciphertext": "x", "iv": "y"})
     assert "Netbanking" not in str(client.get(f"/api/owners/{OWNER}/knowledge-map").json())
+
+
+def test_names_match_in_full_and_a_shared_first_name_doesnt_guess(client):
+    for name in ("Ajay Kumar", "Ajay Singh"):
+        proposals.approve("people", proposals.save_person(OWNER, {"name": name, "relationship": "nephew"}))
+    kept = _keep("moments", {**STORY, "title": "Cricket at Lalbagh", "people": ["Ajay Singh", "Ajay", "Vikram Mehta"]})
+    g = graph()
+    singh = node(g, "Ajay Singh")
+    assert linked(g, kept["id"], singh["id"], "mentions")
+    assert not linked(g, kept["id"], node(g, "Ajay Kumar")["id"], "mentions")
+    assert node(g, "Ajay")["group"] == "mentioned"  # two kept Ajays: no guess
+    assert node(g, "Vikram Mehta")["group"] == "mentioned" and not linked(g, kept["id"], "owner", "mentions")
+
+
+def test_each_link_is_drawn_once(client):
+    proposals.approve("people", proposals.save_person(OWNER, {"name": "Meena Rao", "relationship": "niece"}))
+    _keep("moments", {**STORY, "title": "Meena's wedding", "people": ["Meena", "Meena Rao"]})
+    g = graph()
+    keys = [(e["from"], e["to"], e["label"]) for e in g["edges"]]
+    assert len(keys) == len(set(keys)) == g["counts"]["links"]
