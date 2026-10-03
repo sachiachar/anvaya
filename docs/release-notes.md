@@ -11,6 +11,7 @@
 
 **Keeping what matters**
 - After the handover, the family's assistant reads everything Vikram kept, so it understands questions worded differently or asked in another language ("Where are Papa's documents?" finds the papers in the blue folder). Each answer names the kept items it came from.
+- Cards can now say where an item's papers are kept, and who a property or wish is meant for. Kept items link to the people they name (a policy to its nominee, a story to the people in it), so the family's assistant and the knowledge map can follow them.
 - Everything the owner keeps is saved as a small open-format document (Open Knowledge Format), with where it came from and that the owner confirmed it. Changing a kept item keeps the earlier version, marked as replaced. Long account numbers keep only their last 4 digits.
 - Demo copies made before this change start again once, from the beginning, the next time they're opened.
 

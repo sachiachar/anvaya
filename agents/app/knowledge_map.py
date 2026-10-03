@@ -23,6 +23,8 @@ import re
 from . import knowledge
 
 NOMINEE_EXPECTED = {"Bank Account", "Insurance Policy", "Investment", "Retirement Account"}
+# Typed link names (knowledge.links_for) as the map labels them, matching its own derived links.
+TYPED_LABELS = {"people": "mentions", "intended_for": "meant for"}
 GROUPS = {"Story": "story", "Advice": "story", "Practical Fact": "story", "Wish": "wish", "Person": "person"}
 
 
@@ -94,6 +96,7 @@ def build(owner_id: str, owner_name: str) -> dict:
             edges.append({"from": a, "to": b, "label": label, "derived": derived})
 
     institutions: dict[str, str] = {}
+    by_path = {f"/{c['path']}": cid for cid, c in concepts.items()}
     moments: list[tuple[str, str]] = []  # (id, text), linked to people and accounts they name below
     accounts: dict[str, list[str]] = {}  # institution key -> account ids
     for cid, c in concepts.items():
@@ -102,10 +105,12 @@ def build(owner_id: str, owner_name: str) -> dict:
                       "description": c.get("description", ""), "kept_at": c.get("kept_at"),
                       "verified": c.get("verified", False)})
         typed = c["graph"].get("links") or {}
-        for name, targets in typed.items():  # PR-7.9, when it lands
+        for name, targets in typed.items():  # PR-7.9: bundle paths, e.g. "/people/p_1.md"
+            label = TYPED_LABELS.get(name, name)
             for target in targets if isinstance(targets, list) else [targets]:
+                target = by_path.get(target, target)
                 if target in concepts:
-                    link(cid, target, name, derived=False)
+                    link(cid, target, label, derived=False)
         if okf_type == "Person":
             link(cid, "owner", record.get("relationship") or "family")
         elif c["collection"] == "moments":

@@ -21,6 +21,9 @@ class Moment(BaseModel):
     people: list[str] = []
     places: list[str] = []
     year: str | None = None
+    intended_for: list[str] = Field(
+        default=[], description="For a wish: the people it is meant for, if the owner said (names only)"
+    )
 
 
 class Person(BaseModel):
@@ -53,6 +56,12 @@ class InventoryItem(BaseModel):
     )
     approximate_value: str | None = None
     institution_contact: str | None = None
+    papers_at: str | None = Field(
+        default=None, description="Where the owner keeps this item's papers, if they said, e.g. 'blue folder, bedroom cupboard'"
+    )
+    intended_for: str | None = Field(
+        default=None, description="For property: who the owner wants it to go to, if they said (a name)"
+    )
     missing_fields: list[str] = Field(
         default=[], description="Important fields the document does not show, e.g. 'nominee'"
     )
