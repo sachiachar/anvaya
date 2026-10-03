@@ -138,3 +138,19 @@ def test_the_admin_portal_never_creates_a_demo_copy(client):
         assert store.get("owners", f"owner_{key}") is None
     finally:
         TOKENS.pop("portal-only")
+
+
+def test_a_handover_conversation_never_continues_in_another_copy():
+    import asyncio
+
+    from app import executor_agent
+
+    async def run():
+        session = await executor_agent._session_service.create_session(
+            app_name=executor_agent.APP_NAME, user_id="family:copy-a", state={"owner_id": "owner_a", "owner_name": "A"})
+        for owner, user in (({"id": "owner_b", "name": "B"}, "family:copy-b"),   # another copy
+                            ({"id": "owner_b", "name": "B"}, "family:copy-a")):  # same person, other owner
+            with pytest.raises(executor_agent.UnknownSession):
+                await executor_agent.ask(owner, user, "What did A leave?", session.id)
+
+    asyncio.run(run())

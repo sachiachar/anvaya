@@ -20,7 +20,7 @@ from pydantic import BaseModel, ValidationError
 
 from . import auth, demo, escrow, live, loops, media, proposals, release, speech, tasks
 from .config import settings
-from .executor_agent import ask
+from .executor_agent import UnknownSession, ask
 from .governance import core as governance_core
 from .governance import portal
 from .store import new_id, store
@@ -672,7 +672,11 @@ class Question(BaseModel):
 async def ask_question(owner_id: str, body: Question) -> dict:
     require_handover(owner_id)
     owner = owner_or_404(owner_id)
-    return {"autonomy": ACT, **await ask(owner, "family", body.question, body.session_id)}
+    try:
+        # The asker is the family within the caller's own copy, so sessions never cross copies.
+        return {"autonomy": ACT, **await ask(owner, f"family:{demo.current()}", body.question, body.session_id)}
+    except UnknownSession:
+        raise HTTPException(404, "conversation not found") from None
 
 
 @api.post("/owners/{owner_id}/settlement")
