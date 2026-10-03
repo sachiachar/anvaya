@@ -1,0 +1,84 @@
+"""The knowledge map (PR-7, demo): the owner's kept knowledge as a graph, filling in live."""
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app import knowledge_map, main, proposals
+from tests.people import PRIYA
+from tests.test_knowledge import OWNER, POLICY, STORY, _keep
+
+
+@pytest.fixture()
+def client():
+    c = TestClient(main.app)
+    assert c.post("/api/demo/seed").status_code == 200
+    return c
+
+
+def graph():
+    return knowledge_map.build(OWNER, "Vikram Rao")
+
+
+def node(g, label):
+    """Kept people are titled "Name (relationship)"."""
+    return next(n for n in g["nodes"] if n["label"] == label or n["label"].startswith(f"{label} ("))
+
+
+def linked(g, a, b, label):
+    return any(e["from"] == a and e["to"] == b and e["label"] == label for e in g["edges"])
+
+
+def test_a_kept_story_links_to_the_people_it_mentions(client):
+    kept = _keep("moments", STORY)
+    g = graph()
+    amma = node(g, "Amma")
+    assert amma["group"] == "mentioned"  # mentioned, not kept as a person yet
+    assert linked(g, kept["id"], amma["id"], "mentions")
+    proposals.approve("people", proposals.save_person(OWNER, {"name": "Amma", "relationship": "mother"}))
+    g = graph()
+    amma = node(g, "Amma")
+    assert amma["group"] == "person" and linked(g, kept["id"], amma["id"], "mentions")
+    assert linked(g, amma["id"], "owner", "mother")
+    assert not any(n["group"] == "mentioned" for n in g["nodes"])
+
+
+def test_a_policy_links_to_its_nominee_and_institution_and_the_owner_is_its_holder(client):
+    kept = _keep("inventory", POLICY)
+    g = graph()
+    assert linked(g, kept["id"], node(g, "Ajay")["id"], "nominee")
+    assert linked(g, kept["id"], node(g, "LIC")["id"], "with") and node(g, "LIC")["group"] == "institution"
+    assert not any(n["label"] == "Vikram Rao" and n["group"] == "mentioned" for n in g["nodes"])
+    assert g["gaps"] == []
+
+
+def test_a_policy_without_a_nominee_is_a_gap(client):
+    kept = _keep("inventory", {**POLICY, "nominee_or_beneficiary": None})
+    assert graph()["gaps"] == [{"node": kept["id"], "missing": "nominee"}]
+
+
+def test_two_accounts_at_one_bank_share_its_node(client):
+    a = _keep("inventory", POLICY)
+    b = _keep("inventory", {**POLICY, "product": "Endowment plan", "account_hint": "••1234", "institution": "lic "})
+    g = graph()
+    lic = [n for n in g["nodes"] if n["group"] == "institution"]
+    assert len(lic) == 1 and linked(g, a["id"], lic[0]["id"], "with") and linked(g, b["id"], lic[0]["id"], "with")
+
+
+def test_recent_changes_come_newest_first(client):
+    _keep("moments", STORY)
+    _keep("inventory", POLICY)
+    recent = graph()["recent"]
+    assert recent[0]["title"] != recent[1]["title"] and recent[0]["at"] >= recent[1]["at"]
+
+
+def test_only_the_owner_sees_the_map(client):
+    _keep("moments", STORY)
+    url = f"/api/owners/{OWNER}/knowledge-map"
+    r = client.get(url)
+    assert r.status_code == 200 and r.json()["counts"]["concepts"] >= 1
+    assert client.get(url, headers=PRIYA).status_code == 403
+
+
+def test_the_vault_never_appears(client):
+    client.post(f"/api/owners/{OWNER}/vault/items", json={"label": "Netbanking password", "ciphertext": "x", "iv": "y"})
+    assert "Netbanking" not in str(client.get(f"/api/owners/{OWNER}/knowledge-map").json())

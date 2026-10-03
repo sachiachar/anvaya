@@ -13,6 +13,10 @@ export default function Owner() {
         <button role="tab" aria-selected={tab === "talk"} className={tab === "talk" ? "active" : ""} onClick={() => setTab("talk")}>Talk</button>
         <button role="tab" aria-selected={tab === "plan"} className={tab === "plan" ? "active" : ""} onClick={() => setTab("plan")}>My plan</button>
       </div>
+      <p className="map-link">
+        <a href="/#knowledge-map" target="_blank" rel="noopener">Open the knowledge map</a>
+        <span className="muted"> · in a new window, to watch it fill in as you keep things</span>
+      </p>
       {tab === "talk" ? (
         <Conversation />
       ) : (
