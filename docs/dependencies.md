@@ -101,4 +101,12 @@ All of these are Google's proprietary managed services, used under the Google Cl
 | **Firebase Rules** | Publishes `firestore.rules` | `.github/workflows/deploy.yml` |
 | Vertex AI API | Turned on by `infra/deploy.sh` for later, but not used: the prototype release calls the Gemini API with a key, and a test checks this | `infra/deploy.sh` |
 
+## Outside services
+
+Services from other companies. Each needs the product owner's agreement before it's added.
+
+| Service | Purpose | What's sent | Key | Where in the code |
+| --- | --- | --- | --- | --- |
+| **Exa** (exa.ai), search API | Web search for the fraud research agent: finds pages that report fraud tactics, so a scenario or tactic can be checked against a quoted source. Replaced Google Search grounding on 3 October 2026, whose quota the free tier didn't cover. Paid per search, with free starting credit. | Fraud research queries only: a document type, a country, a claimed tactic. Never owner data (a test checks this). | `EXA_API_KEY`: the GitHub secret of that name (environment "production"), set on Cloud Run with each API deploy | `agents/app/web_search.py` |
+
 **Data use.** On the Gemini API's free tier, Google may use prompts and responses to improve its products. On the paid tier it doesn't. Keep billing on for any environment that handles more than synthetic demo data.

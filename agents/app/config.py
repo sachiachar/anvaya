@@ -28,6 +28,9 @@ class Settings:
     # The fraud pipeline (imagine, then check with Google Search). Must be in the registry
     # for fraud.dreamer and fraud.researcher.
     research_model: str = os.getenv("GEMINI_RESEARCH_MODEL", "gemini-3.8-flash")
+    # Web search for the fraud research agent (Exa, exa.ai; web_search.py). Empty: research and
+    # scenario checks stop with "web search isn't set up yet".
+    exa_api_key: str = os.getenv("EXA_API_KEY", "")
 
     # Sign-in (Firebase Auth) and the demo allowlist; see auth.py.
     auth_required: bool = os.getenv("AUTH_REQUIRED", "false").lower() == "true"

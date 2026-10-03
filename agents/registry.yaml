@@ -129,8 +129,8 @@ agents:
   - id: fraud.researcher
     role: Checks imagined scenarios and new fraud tactics against cited sources
     autonomy: propose
-    models: {primary: gemini-3.8-flash, fallback: []}
-    tools: [google_search]   # the only agent with web access; saving drafts is our own code
+    models: {primary: gemini-3.8-flash, fallback: [gemini-3.5-flash-lite]}
+    tools: [web_search]      # the only agent with web access (Exa, web_search.py); saving drafts is our own code
     limits: {max_input_tokens: 8000, max_output_tokens: 2000, max_new_patterns_per_run: 2, max_model_calls_per_run: 6, max_retries: 1}
     budget_class: platform
     safety_critical: false
@@ -138,7 +138,7 @@ agents:
   - id: fraud.dreamer
     role: Imagines attacks on our safeguards and maps which one catches each
     autonomy: propose
-    models: {primary: gemini-3.8-flash, fallback: []}
+    models: {primary: gemini-3.8-flash, fallback: [gemini-3.5-flash-lite]}
     tools: []                # no web access: it imagines from our own guide, safeguards and events
     limits: {max_input_tokens: 12000, max_output_tokens: 4000, max_scenarios_per_sequence: 3, max_sequences_per_run: 2,
              max_model_calls_per_run: 8, max_retries: 1}
