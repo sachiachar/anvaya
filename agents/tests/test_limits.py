@@ -111,13 +111,16 @@ def test_live_call_ends_at_its_time_limit(monkeypatch):
     assert blocked("saathi.voice", "max_call_minutes")
 
 
-def test_live_call_records_its_tokens_once_per_turn(monkeypatch):
-    def usage(t_in, t_out):
-        return SimpleNamespace(server_content=None,
-                               usage_metadata=SimpleNamespace(prompt_token_count=t_in, response_token_count=t_out))
+def test_live_call_records_its_tokens_once_per_reply(monkeypatch):
+    def usage(t_in, t_out, thoughts=None):
+        return SimpleNamespace(server_content=None, usage_metadata=SimpleNamespace(
+            prompt_token_count=t_in, response_token_count=t_out, thoughts_token_count=thoughts))
 
-    # Two model turns; the first reports its usage twice, so only the latest counts.
-    turns = [[usage(80, 300), usage(100, 400)], [usage(150, 300)], []]
+    interrupted = SimpleNamespace(usage_metadata=None, server_content=SimpleNamespace(
+        input_transcription=None, output_transcription=None, interrupted=True, model_turn=None, turn_complete=False))
+    # Turn one: a reply that reports twice (only the latest counts), is interrupted, and a second
+    # reply that thinks. Turn two: one reply.
+    turns = [[usage(80, 300), usage(100, 400), interrupted, usage(120, 200, thoughts=50)], [usage(150, 300)], []]
 
     class FakeWS:
         async def accept(self): pass
@@ -146,5 +149,5 @@ def test_live_call_records_its_tokens_once_per_turn(monkeypatch):
     asyncio.run(live.call(FakeWS(), {"id": "o1", "name": "Vikram"}, lambda t: t))
     after = voice()
     assert after["calls"] - before["calls"] == 1
-    assert after["tokens_in"] - before["tokens_in"] == 250
-    assert after["tokens_out"] - before["tokens_out"] == 700
+    assert after["tokens_in"] - before["tokens_in"] == 100 + 120 + 150
+    assert after["tokens_out"] - before["tokens_out"] == 400 + 250 + 300
