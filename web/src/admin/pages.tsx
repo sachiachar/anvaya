@@ -22,12 +22,9 @@ function Loading({ error }: { error: string | null }) {
   return error ? <p className="pa-error" role="alert">{error}</p> : <p className="pa-muted">Loading…</p>;
 }
 
-function SeededNote() {
-  return (
-    <p className="pa-note">
-      Seeded demo data, clearly synthetic. Real usage appears here as the agent gateway and the guardian record it. Spend is never seeded: it comes only from Google Cloud billing.
-    </p>
-  );
+// Shown on pages that still hold seeded examples. Spend, usage and blocked calls are always real.
+function SeededNote({ until }: { until: string }) {
+  return <p className="pa-note">Seeded examples, clearly synthetic, until {until}. Real entries appear here alongside them.</p>;
 }
 
 function Section({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
@@ -179,7 +176,6 @@ export function OverviewPage({ me }: { me: Me }) {
   const agentMax = Math.max(1, ...Object.values(u.by_agent).map((a) => a.tokens));
   return (
     <>
-      {o.seeded && <SeededNote />}
       <div className="pa-kpis">
         {spend.available ? (
           <>
@@ -258,7 +254,7 @@ export function OverviewPage({ me }: { me: Me }) {
             </table>
           </Section>
           {o.quota && (
-            <Section title="Gemini quota headroom (peak use)">
+            <Section title="Gemini quota headroom (peak use, sample figures until read from Cloud Monitoring)">
               <p>Requests per minute: {fmt.num(o.quota.rpm_peak)} of {fmt.num(o.quota.rpm_limit)}</p>
               <Bar value={o.quota.rpm_peak} max={o.quota.rpm_limit} label="Requests per minute used at peak" />
               <p>Tokens per minute: {fmt.num(o.quota.tpm_peak)} of {fmt.num(o.quota.tpm_limit)}</p>
@@ -268,7 +264,7 @@ export function OverviewPage({ me }: { me: Me }) {
         </div>
       </div>
       {can(me, "reseed") && (
-        <p><button className="pa-link" onClick={() => platform.reseed().then(reload)}>Reset the seeded demo data</button></p>
+        <p><button className="pa-link" onClick={() => platform.reseed().then(reload)}>Reset the seeded examples</button></p>
       )}
     </>
   );
@@ -333,6 +329,7 @@ export function ApprovalsPage({ me }: { me: Me }) {
   return (
     <>
       <p className="pa-lede">Extra allowance needs a person's approval. Grants are time-limited, and nobody can approve their own request.</p>
+      <SeededNote until="people can ask for more allowance in the app" />
       <Section title={`Waiting for a decision (${data.pending.length})`}>
         {data.pending.length === 0 ? <p className="pa-muted">Nothing waiting.</p> : (
           <ul className="pa-list">
@@ -378,6 +375,7 @@ export function GuardianPage({ me }: { me: Me }) {
   return (
     <>
       <p className="pa-lede">The guardian watches every agent step and can add a check, reduce autonomy, pause or block. It never approves or rejects a case: people review every intervention here.</p>
+      <SeededNote until="the guardian checks every step" />
       <div className="pa-kpis">
         {Object.entries(data.by_response).map(([k, v]) => <div className="pa-kpi" key={k}><span>{fmt.label(k)}</span><strong>{v}</strong></div>)}
         <div className="pa-kpi"><span>False alarms</span><strong>{data.false_alarm_rate === null ? "—" : fmt.pct(data.false_alarm_rate)}</strong><em>Reversed after review</em></div>
@@ -417,6 +415,7 @@ export function FraudPage({ me }: { me: Me }) {
   return (
     <>
       <p className="pa-lede">The dreaming agent imagines attacks on our safeguards; the research agent keeps the fraud reference guides current. A scenario affects checks only after a reviewer approves it.</p>
+      <SeededNote until="the research and dreaming agents run" />
       <div className="pa-kpis">
         <div className="pa-kpi"><span>Scenarios covered</span><strong>{data.coverage.covered}</strong><em>A safeguard catches it</em></div>
         <div className="pa-kpi"><span>Gaps</span><strong className={data.coverage.gaps ? "pa-warn" : ""}>{data.coverage.gaps}</strong><em>No safeguard catches it yet</em></div>

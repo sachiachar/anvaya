@@ -1,6 +1,9 @@
-"""Seeded demo data for the governance layer: 30 days of clearly labelled usage,
-blocked attempts, budget requests, guardian interventions, fraud scenarios and guides,
-and judges' demo copies. Used until the gateway and guardian record real events.
+"""Seeded demo data for the governance layer, only for what has no real source yet:
+budget requests, guardian interventions, fraud scenarios and guides, judges' demo copies
+and the quota headroom. Each one goes when its real feature arrives.
+
+Never seeded: spend (Google Cloud billing, billing.py), and usage and blocked calls, which
+the gateway records for real.
 """
 
 from __future__ import annotations
@@ -8,97 +11,31 @@ from __future__ import annotations
 import hashlib
 import random
 import time
-from datetime import datetime, timezone
 
 from ..store import new_id, store
-from .core import platform_settings, registry, user_key
+from .core import platform_settings, user_key
 
-# Version of the seeded data's format. Version 3 holds usage only: dollars come from
-# Google Cloud billing (billing.py) and are never seeded.
-DATA_VERSION = 3
-# Demo tenants and their number of users.
+# Version of the seeded data's format. Version 4 stops seeding usage and blocked calls,
+# and removes those written earlier (versions 1 to 3).
+DATA_VERSION = 4
+# Demo tenants and their number of seeded users.
 TENANTS = {"direct": 20, "demo-bank": 18, "judges": 8}
-# Typical daily calls per active user, and tokens per call (in, out).
-USE = {
-    "saathi.chat": (6, 3500, 350), "saathi.voice": (0.5, 0, 0), "saathi.speech": (3, 120, 2600),
-    "capture.extractor": (6, 2500, 400), "documents.reader": (0.4, 1800, 300),
-    "readiness.planner": (0.8, 9000, 900), "legal.needs": (0.2, 6000, 500),
-    "activation.checker": (0.08, 2200, 600), "handover.assistant": (0.15, 12000, 450),
-    "settlement.planner": (0.03, 9000, 2200), "guardian.detectors": (2, 900, 120),
-}
-
-
-def _day(ts: float) -> str:
-    return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%d")
+# Collections that held seeded documents. Usage days and blocked calls are only cleared:
+# seeded days shared their date ID with the real ledger, so real calls since the gateway
+# went live were added to them and can't be told apart. Clearing them leaves only real use.
+CLEARED = ("usage_days", "gateway_blocked", "budget_requests", "guardian_events",
+           "fraud_scenarios", "fraud_guides", "demo_copies")
 
 
 def seed(now: float | None = None) -> None:
-    """Create 30 days of realistic, clearly labelled demo data for the portal."""
+    """Create clearly labelled demo data for the parts of the portal with no real source yet."""
     now = now or time.time()
     rng = random.Random(42)
-    agents = {a["id"]: a for a in registry()}
     users = {t: [user_key(f"seed-{t}-{i}") for i in range(n)] for t, n in TENANTS.items()}
 
-    for collection in ("usage_days", "gateway_blocked", "budget_requests", "guardian_events",
-                       "fraud_scenarios", "fraud_guides", "demo_copies"):
+    for collection in CLEARED:
         for doc in store.list(collection, seeded=True):
             store.delete(collection, doc["id"])
-
-    for back in range(29, -1, -1):
-        ts = now - back * 86400
-        day = {"id": _day(ts), "day": _day(ts), "seeded": True, "agents": {}, "tenants": {}, "model_use": {}}
-        for tenant, keys in users.items():
-            active = max(0, int(len(keys) * rng.uniform(0.35, 0.7)))
-            if tenant == "judges" and back > 10:
-                active = 0  # judges arrive in the last ten days
-            tenant_use = {"calls": 0, "tokens": 0, "minutes": 0.0}
-            for agent_id, (per_user, tin, tout) in USE.items():
-                a = agents[agent_id]
-                expected = active * per_user * rng.uniform(0.6, 1.4)
-                calls = int(expected) + (1 if rng.random() < expected - int(expected) else 0)
-                if not calls:
-                    continue
-                model = a["models"]["primary"]
-                row = day["agents"].setdefault(agent_id, {"calls": 0, "tokens_in": 0, "tokens_out": 0,
-                                                          "minutes": 0.0, "errors": 0})
-                minutes, tokens = 0.0, 0
-                if agent_id == "saathi.voice":
-                    minutes = round(calls * rng.uniform(4, 11), 1)
-                    row["minutes"] = round(row["minutes"] + minutes, 1)
-                else:
-                    row["tokens_in"] += calls * tin
-                    row["tokens_out"] += calls * tout
-                    tokens = calls * (tin + tout)
-                row["calls"] += calls
-                row["errors"] += sum(1 for _ in range(calls) if rng.random() < 0.012)
-                use = day["model_use"].setdefault(model, {"calls": 0, "tokens": 0, "minutes": 0.0})
-                for u in (use, tenant_use):
-                    u["calls"] += calls
-                    u["tokens"] += tokens
-                    u["minutes"] = round(u["minutes"] + minutes, 1)
-            day["tenants"][tenant] = {**tenant_use, "active_users": active}
-        if back % 7 == 3:  # the weekly fraud research and dreaming runs
-            for agent_id in ("fraud.researcher", "fraud.dreamer"):
-                calls, t_in, t_out = rng.randint(8, 16), rng.randint(60_000, 120_000), rng.randint(8_000, 16_000)
-                day["agents"][agent_id] = {"calls": calls, "tokens_in": t_in, "tokens_out": t_out,
-                                           "minutes": 0.0, "errors": 0}
-                use = day["model_use"].setdefault("gemini-3.8-flash", {"calls": 0, "tokens": 0, "minutes": 0.0})
-                use["calls"] += calls
-                use["tokens"] += t_in + t_out
-        store.put("usage_days", day)
-
-    blocked = [
-        ("handover.assistant", "tool", "read_vault", "Tool not in the registry for this agent"),
-        ("saathi.chat", "model", "gemini-3.8-pro", "Model not allowed; fallback must be the same price class or cheaper"),
-        ("capture.extractor", "limit", "max_output_tokens", "Output limit of 1,500 tokens reached"),
-        ("handover.assistant", "limit", "max_model_calls_per_run", "Stopped after 6 model calls in one run"),
-        ("saathi.voice", "limit", "max_call_minutes", "Live call ended at 20 minutes"),
-        ("saathi.speech", "budget", "daily_allowance", "Person reached their daily allowance for spoken replies"),
-    ]
-    for i, (agent_id, kind, what, why) in enumerate(blocked):
-        store.put("gateway_blocked", {"id": new_id("blk"), "seeded": True, "at": now - (i * 2 + 1) * 43200,
-                                      "agent": agent_id, "kind": kind, "attempted": what, "reason": why,
-                                      "user_key": rng.choice(users["direct"] + users["judges"])})
 
     requests = [
         ("judges", "voice_minutes", 30, 48, "Judge exploring the live call in depth", "pending"),
@@ -173,15 +110,17 @@ def seed(now: float | None = None) -> None:
                                   "created_at": created, "last_used_at": created + rng.uniform(600, 40000),
                                   "allowance_used": round(rng.uniform(0.1, 0.95), 2), "status": "active"})
 
+    current = platform_settings()  # re-seeding never changes the kill switch
     store.put("platform_settings", {
-        "id": "settings", "data_version": DATA_VERSION, "seeded_at": now, "kill_switch": "off", "kill_switch_reason": None,
+        "id": "settings", "data_version": DATA_VERSION, "seeded_at": now,
+        "kill_switch": current.get("kill_switch", "off"), "kill_switch_reason": current.get("kill_switch_reason"),
         # Gemini quota headroom: seeded until Cloud Monitoring is read (PR-10.5).
         "quota": {"rpm_limit": 1000, "rpm_peak": 212, "tpm_limit": 4_000_000, "tpm_peak": 640_000},
     })
 
 
 def ensure_seeded() -> None:
-    """Seed on first use, and re-seed data written in an older format (versions 1 and 2 held estimated costs)."""
+    """Seed on first use, and re-seed data written in an older format (versions 1 to 3 seeded usage)."""
     if platform_settings().get("data_version") != DATA_VERSION:
         seed()
 

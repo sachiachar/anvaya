@@ -47,7 +47,6 @@ def overview() -> dict:
                       "active_users_today": small(latest.get("active_users", 0))}
     s = platform_settings()
     return {
-        "seeded": bool(s.get("seeded_at")),
         "spend": billing.spend(),
         "usage": {
             "daily": [{"day": d["day"], **_use(list(d["agents"].values()))} for d in days],
