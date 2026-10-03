@@ -95,7 +95,30 @@ def save_moment(owner_id: str, moment: dict, source: dict[str, Any]) -> dict | N
             if existing["status"] == "pending":
                 return store.update("moments", existing["id"], merged)
             return _pending("moments", owner_id, merged, updates=existing["id"], **source)
-    return _pending("moments", owner_id, moment, **source)
+    like = lookalike(owner_id, moment)
+    extra = {"looks_like": {"id": like["id"], "title": like["title"]}} if like else {}
+    return _pending("moments", owner_id, moment, **extra, **source)
+
+
+def _people_of(m: dict) -> set[str]:
+    return {re.sub(r"^(?:my|his|her) ", "", _norm(p)) for p in m.get("people") or [] if _norm(p)}
+
+
+def lookalike(owner_id: str, moment: dict) -> dict | None:
+    """A kept story or wish this new card may be a reworded update of: the same kind, and the same
+    people or a close title or summary. The owner decides on the card ("Replace it" or "Keep
+    both"); nothing is merged silently."""
+    best, best_score = None, 0.0
+    for kept in knowledge.items(owner_id, "moments", kind=moment.get("kind")):
+        title_words, kept_words = set(_norm(moment.get("title")).split()), set(_norm(kept.get("title")).split())
+        title = len(title_words & kept_words) / len(title_words | kept_words) if title_words | kept_words else 0
+        summary_a, summary_b = set(_norm(moment.get("summary")).split()), set(_norm(kept.get("summary")).split())
+        summary = len(summary_a & summary_b) / len(summary_a | summary_b) if summary_a | summary_b else 0
+        shared = _people_of(moment) & _people_of(kept)
+        score = max(title, summary) + (0.3 if shared else 0)
+        if (title >= 0.5 or summary >= 0.5 or (shared and max(title, summary) >= 0.25)) and score > best_score:
+            best, best_score = kept, score
+    return best
 
 
 def _match(owner_id: str, item: dict) -> list[dict]:

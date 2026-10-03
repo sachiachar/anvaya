@@ -60,7 +60,7 @@ SECTIONS = [("stories", "Stories"), ("advice", "Advice"), ("practical", "Practic
             ("property", "Property")]
 COLLECTIONS = ("moments", "inventory", "people")
 # Fields of a card that are workflow, not knowledge.
-WORKFLOW_FIELDS = {"owner_id", "status", "updates", "missing_fields"}
+WORKFLOW_FIELDS = {"owner_id", "status", "updates", "missing_fields", "looks_like"}
 UNMASKED = {"id", "recording", "document"}
 
 
@@ -493,10 +493,12 @@ def remove(owner_id: str, cid: str) -> int:
             media.delete(owner_id, name)
     media.save(owner_id, f"{ROOT}/.events/{event['at'].replace(':', '')}-{event['id']}-removal.json",
                json.dumps(event, ensure_ascii=False).encode(), "application/json")
-    for collection in COLLECTIONS:  # update cards still waiting for Keep
+    for collection in COLLECTIONS:  # cards still waiting for Keep
         for draft in store.list(collection, owner_id=owner_id):
             if draft.get("updates") in gone:
                 store.delete(collection, draft["id"])
+            elif (draft.get("looks_like") or {}).get("id") in gone:
+                store.update(collection, draft["id"], {"looks_like": None})  # nothing left to replace
     relink(owner_id)
     write_indexes(owner_id)
     return len(gone)

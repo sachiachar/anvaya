@@ -51,6 +51,9 @@
 - Removing deletes the item and every earlier version of it from the kept knowledge for good, along with any update cards waiting for it: the family and their assistant never see it. The record of changes keeps only "An item was removed by the owner". The conversation it came from stays in the chat.
 - Nothing can be removed while a handover is being reviewed, and the person who receives the vault can't be removed until Vikram chooses someone else.
 
+**Updating a story or wish without duplicating it**
+- When Saathi words a story or wish differently from one Vikram already kept ("SBI account for my wife" after "Transfer of SBI account"), the card says "This looks like an update to …" and asks: Replace it, Keep both, or Not now. Replace it keeps the new card as the next version, so the map shows one item, not two. Nothing is merged without asking.
+
 **Governance and the admin portal**
 - A separate platform admin portal for the Anvaya team, at https://anvaya-admin.web.app. It shows:
   - actual spend against the monthly budget, with a forecast, in US dollars, read from Google Cloud billing (up to yesterday);
