@@ -25,6 +25,8 @@ class Store(Protocol):
     def update(self, collection: str, doc_id: str, fields: dict[str, Any]) -> dict[str, Any]: ...
     def list(self, collection: str, **where: Any) -> list[dict[str, Any]]: ...
     def delete(self, collection: str, doc_id: str) -> None: ...
+    def increment(self, collection: str, doc_id: str, group: str, amounts: dict[str, float],
+                  fields: dict[str, Any]) -> None: ...
 
 
 class MemoryStore:
@@ -54,6 +56,15 @@ class MemoryStore:
     def delete(self, collection, doc_id):
         with self._lock:
             self._data.get(collection, {}).pop(doc_id, None)
+
+
+    def increment(self, collection, doc_id, group, amounts, fields):
+        """Add to counters in doc[group] atomically, creating the document with `fields` if needed."""
+        with self._lock:
+            doc = self._data.setdefault(collection, {}).setdefault(doc_id, {"id": doc_id, **fields})
+            counters = doc.setdefault(group, {})
+            for key, value in amounts.items():
+                counters[key] = counters.get(key, 0) + value
 
 
 class FileStore(MemoryStore):
@@ -90,6 +101,12 @@ class FileStore(MemoryStore):
             self._save()
 
 
+    def increment(self, collection, doc_id, group, amounts, fields):
+        super().increment(collection, doc_id, group, amounts, fields)
+        with self._lock:
+            self._save()
+
+
 class FirestoreStore:
     def __init__(self) -> None:
         from google.cloud import firestore
@@ -117,6 +134,14 @@ class FirestoreStore:
 
     def delete(self, collection, doc_id):
         self._db.collection(collection).document(doc_id).delete()
+
+
+    def increment(self, collection, doc_id, group, amounts, fields):
+        """Atomic on the server (Firestore Increment), so overlapping calls never lose a count."""
+        from google.cloud import firestore
+
+        self._db.collection(collection).document(doc_id).set(
+            {"id": doc_id, **fields, group: {k: firestore.Increment(v) for k, v in amounts.items()}}, merge=True)
 
 
 def _make_store() -> Store:

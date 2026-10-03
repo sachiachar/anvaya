@@ -78,6 +78,9 @@ export type Task = {
   severity: "high" | "medium" | "low";
 };
 
+export type AllowanceMeasure = { used: number; limit: number; share: number; state: "ok" | "warning" | "reached" };
+export type Allowance = { pools: Record<string, Record<string, AllowanceMeasure>>; warn_at: number };
+
 export type AccessRequest = { id: string; name: string; relationship: string; contact: string; note: string; at: number };
 
 export type VaultItem = { id: string; category: string; iv: string; ciphertext: string; ai_label: string | null };
@@ -132,6 +135,8 @@ const o = (path: string) => `/owners/${OWNER_ID}${path}`;
 
 export const api = {
   me: () => request<{ email: string | null; name: string | null; auth: boolean }>("/me"),
+  /** Today's use against the signed-in person's daily allowance (PR-10.4). */
+  allowance: () => request<Allowance>("/allowance"),
   seed: () => request<{ owner: Record<string, unknown> }>("/demo/seed", { method: "POST" }),
   owner: () => request<{ name: string; family: string[] } & Record<string, unknown>>(o("")),
   archive: () => request<{ moments: Moment[]; inventory: InventoryItem[] }>(o("/archive")),

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, type InventoryItem, type Moment, type Person, type Proposal, type Turn } from "./api";
+import { type Allowance, api, type InventoryItem, type Moment, type Person, type Proposal, type Turn } from "./api";
 import { LiveCall, type CallEvent } from "./liveCall";
 
 const GREETING: Turn = {
@@ -27,9 +27,25 @@ export default function Conversation() {
   const call = useRef<LiveCall | null>(null);
   const [callState, setCallState] = useState<"off" | "connecting" | "listening" | "speaking">("off");
   const [caption, setCaption] = useState({ heard: "", said: "" });
+  const [allowance, setAllowance] = useState<Allowance | null>(null);
+  const spokenNoticeShown = useRef(false);
+
+  /** Check today's allowance. Near the spoken-reply limit, stop reading replies aloud
+   *  automatically (once); the owner can switch it back on with the 🔊 button. */
+  function refreshAllowance() {
+    api.allowance().then((a) => {
+      setAllowance(a);
+      const spoken = a.pools.owner?.spoken_replies;
+      if (spoken && spoken.state !== "ok" && !spokenNoticeShown.current) {
+        spokenNoticeShown.current = true;
+        setSpeak(false);
+      }
+    }).catch(() => { /* the notice is a nicety; never block the conversation */ });
+  }
 
   useEffect(() => {
     api.conversation().then((r) => setTurns(r.turns)).catch((e) => setError(String(e)));
+    refreshAllowance();
   }, []);
   // Braces matter: newer browsers return a Promise from scrollIntoView, and an
   // effect must return nothing (or a cleanup function).
@@ -76,9 +92,11 @@ export default function Conversation() {
     try {
       const r = await api.say(message, file, fileName);
       appendTurns(r.owner_turn, r.assistant_turn);
-      sayAloud(r.assistant_turn);
+      // Check the allowance after the spoken reply is counted, so the notice is up to date.
+      void sayAloud(r.assistant_turn).finally(refreshAllowance);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      refreshAllowance();
     } finally {
       setThinking(false);
     }
@@ -172,6 +190,7 @@ export default function Conversation() {
         {thinking && <li className="bubble assistant typing" aria-label="Thinking">…</li>}
       </ol>
       <div ref={bottom} />
+      {allowance && <AllowanceNotice allowance={allowance} muted={!speak} />}
       {error && <p className="error" role="alert">{error}</p>}
 
       {inCall ? (
@@ -242,5 +261,28 @@ function ProposalCard({ p, onDecide }: { p: Proposal; onDecide: (p: Proposal, d:
         </div>
       )}
     </div>
+  );
+}
+
+const MEASURE: Record<string, string> = {
+  tokens: "conversation",
+  voice_minutes: "voice minutes",
+  spoken_replies: "spoken replies",
+};
+
+/** A gentle note near or at today's allowance (PR-10.4). It never blocks the screen. */
+function AllowanceNotice({ allowance, muted }: { allowance: Allowance; muted: boolean }) {
+  const owner = allowance.pools.owner ?? {};
+  const reached = Object.entries(owner).filter(([, m]) => m.state === "reached").map(([k]) => MEASURE[k] ?? k);
+  const near = Object.entries(owner).filter(([, m]) => m.state === "warning").map(([k]) => MEASURE[k] ?? k);
+  if (!reached.length && !near.length) return null;
+  return (
+    <p className="muted" role="status">
+      {reached.length > 0
+        ? `You've used today's ${reached.join(" and ")}. It resets tomorrow, or you can ask for more.`
+        : `You've talked a lot with Saathi today: you're close to today's ${near.join(" and ")}.`}
+      {muted && owner.spoken_replies && owner.spoken_replies.state !== "ok" &&
+        " Replies aren't read aloud automatically now; tap “🔈 Replies muted” to turn it back on."}
+    </p>
   );
 }
