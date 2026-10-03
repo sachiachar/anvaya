@@ -6,6 +6,7 @@ Autonomy level of each action is returned as `autonomy` so the UI can show it.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import pathlib
 import time
@@ -96,7 +97,7 @@ def seed_demo() -> dict:
     data = json.loads(path.read_text())
     owner = data["owner"]
     for collection in ("moments", "inventory", "people", "vault_items", "cases", "legal_documents", "turns",
-                       "access_requests", "handoffs", "tasks"):
+                       "access_requests", "handoffs", "tasks", "loop_cache"):
         for doc in store.list(collection, owner_id=owner["id"]):
             store.delete(collection, doc["id"])
     store.put("owners", {**owner, "readiness_score": None})
@@ -218,16 +219,28 @@ async def live_call(ws: WebSocket, owner_id: str, token: str | None = None) -> N
 
 
 class Speech(BaseModel):
-    text: str
+    turn_id: str
 
 
 @api.post("/speech")
 async def speech_audio(body: Speech) -> Response:
-    """Spoken version of an assistant reply, as a WAV file."""
-    if not body.text.strip() or len(body.text) > 1000:
-        raise HTTPException(400, "text must be 1-1000 characters")
+    """Spoken version of one of Saathi's replies, as a WAV file (PR-10.3).
+
+    Only a reply Saathi actually gave can be spoken, never arbitrary text. The audio is
+    saved and reused for the same words, so replaying a reply, or a reply that repeats
+    earlier words, costs nothing.
+    """
+    turn = store.get("turns", body.turn_id)
+    if not turn or turn.get("role") != "assistant" or not (turn.get("text") or "").strip():
+        raise HTTPException(404, "reply not found")
+    key = hashlib.sha256(f"{settings.tts_voice}:{turn['text']}".encode()).hexdigest()[:32]
+    name = f"speech/{key}.wav"
+    if cached := media.load(turn["owner_id"], name):
+        return Response(content=cached, media_type="audio/wav")
     try:
-        return Response(content=await speech.speak(body.text), media_type="audio/wav")
+        audio = await speech.speak(turn["text"])
+        media.save(turn["owner_id"], name, audio, "audio/wav")
+        return Response(content=audio, media_type="audio/wav")
     except speech.VoiceUnavailable as e:
         raise HTTPException(503, str(e))
 
@@ -296,13 +309,29 @@ def archive(owner_id: str) -> dict:
 # ---- Readiness and planning loops ---------------------------------------------
 
 
-@api.post("/owners/{owner_id}/readiness")
-async def readiness(owner_id: str) -> dict:
-    """Readiness loop: score, plus next steps that stay on the owner's list until done."""
+# Caching (PR-10.3): these loops call Gemini only when their inputs have changed since the
+# last run; otherwise the saved result comes back at no cost.
+
+
+def _fingerprint(inputs) -> str:
+    return hashlib.sha256(json.dumps(inputs, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _cached(loop: str, owner_id: str, inputs) -> dict | None:
+    doc = store.get("loop_cache", f"{loop}:{owner_id}")
+    return doc["result"] if doc and doc["fingerprint"] == _fingerprint(inputs) else None
+
+
+def _remember(loop: str, owner_id: str, inputs, result: dict) -> None:
+    store.put("loop_cache", {"id": f"{loop}:{owner_id}", "owner_id": owner_id, "loop": loop,
+                             "fingerprint": _fingerprint(inputs), "result": result, "at": time.time()})
+
+
+def _readiness_inputs(owner_id: str) -> tuple[dict, list]:
     owner = owner_or_404(owner_id)
     recipient = owner.get("vault_recipient") or {}
-    result = await loops.assess_readiness(
-        owner,
+    args = [
+        {k: v for k, v in owner.items() if k != "readiness_score"},
         store.list("inventory", owner_id=owner_id, status="approved"),
         store.list("moments", owner_id=owner_id, status="approved"),
         [v["ai_label"] for v in store.list("vault_items", owner_id=owner_id) if v.get("ai_label")],
@@ -310,9 +339,22 @@ async def readiness(owner_id: str) -> dict:
         store.list("tasks", owner_id=owner_id),
         {"items": len(store.list("vault_items", owner_id=owner_id)), "recipient": recipient.get("status"),
          "sealed": bool(owner.get("vault_escrow"))},
-    )
+    ]
+    return owner, args
+
+
+@api.post("/owners/{owner_id}/readiness")
+async def readiness(owner_id: str) -> dict:
+    """Readiness loop: score, plus next steps that stay on the owner's list until done."""
+    owner, args = _readiness_inputs(owner_id)
+    if (cached := _cached("readiness", owner_id, args)) is not None:
+        return {**cached, "tasks": tasks.open_tasks(owner_id), "cached": True}
+    result = await loops.assess_readiness(owner, *args[1:])
     tasks.refresh(owner_id, [g.model_dump() for g in result.gaps])
     store.update("owners", owner_id, {"readiness_score": result.score})
+    # Running readiness updates the next steps, which are one of its own inputs, so remember
+    # the inputs as they are now; an unchanged owner then gets the saved result next time.
+    _remember("readiness", owner_id, _readiness_inputs(owner_id)[1], {"autonomy": ACT, "score": result.score})
     return {"autonomy": ACT, "score": result.score, "tasks": tasks.open_tasks(owner_id)}
 
 
@@ -349,13 +391,14 @@ def companion_asks(owner_id: str, body: Prompt) -> dict:
 @api.post("/owners/{owner_id}/legal-needs")
 async def legal_needs(owner_id: str) -> dict:
     owner = owner_or_404(owner_id)
-    result = await loops.find_legal_needs(
-        owner,
-        store.list("moments", owner_id=owner_id, status="approved", kind="wish"),
-        store.list("inventory", owner_id=owner_id, status="approved"),
-        bool(store.list("vault_items", owner_id=owner_id)),
-    )
-    return {"autonomy": PROPOSE, **result.model_dump()}
+    args = [store.list("moments", owner_id=owner_id, status="approved", kind="wish"),
+            store.list("inventory", owner_id=owner_id, status="approved"),
+            bool(store.list("vault_items", owner_id=owner_id))]
+    if (cached := _cached("legal_needs", owner_id, args)) is not None:
+        return {**cached, "cached": True}
+    result = {"autonomy": PROPOSE, **(await loops.find_legal_needs(owner, *args)).model_dump()}
+    _remember("legal_needs", owner_id, args, result)
+    return result
 
 
 class Handoff(BaseModel):
@@ -639,12 +682,13 @@ async def ask_question(owner_id: str, body: Question) -> dict:
 async def settlement(owner_id: str) -> dict:
     require_handover(owner_id)
     owner = owner_or_404(owner_id)
-    result = await loops.plan_settlement(
-        owner,
-        store.list("inventory", owner_id=owner_id, status="approved"),
-        store.list("moments", owner_id=owner_id, status="approved"),
-    )
-    return {"autonomy": PROPOSE, **result.model_dump()}
+    args = [store.list("inventory", owner_id=owner_id, status="approved"),
+            store.list("moments", owner_id=owner_id, status="approved")]
+    if (cached := _cached("settlement", owner_id, args)) is not None:
+        return {**cached, "cached": True}
+    result = {"autonomy": PROPOSE, **(await loops.plan_settlement(owner, *args)).model_dump()}
+    _remember("settlement", owner_id, args, result)
+    return result
 
 
 # ---- Access requests: family members the owner never listed ----------------------
