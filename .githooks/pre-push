@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Local safety net for everyone, not only coding agents: refuses a push to main,
+# because every push to main deploys to production.
+# Turn on once per clone:  git config core.hooksPath .githooks
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  if [ "$remote_ref" = "refs/heads/main" ]; then
+    echo "Refused: pushing to main deploys to production. Push a branch and open a pull request." >&2
+    exit 1
+  fi
+done
+exit 0
