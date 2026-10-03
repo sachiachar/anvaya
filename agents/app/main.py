@@ -298,7 +298,10 @@ def decide(doc_id: str, body: Decision) -> dict:
                   if k not in ("id", "owner_id", "status", "updates", "recording", "document")}
     if safe_edits:
         doc = store.update(body.collection, doc_id, safe_edits)
-    return proposals.approve(body.collection, doc)
+    try:
+        return proposals.approve(body.collection, doc)
+    except knowledge.Removed as e:
+        raise HTTPException(409, "You removed the item this card updates, so it can't be kept.") from e
 
 
 @api.get("/owners/{owner_id}/archive")
@@ -308,6 +311,34 @@ def archive(owner_id: str) -> dict:
         "inventory": knowledge.items(owner_id, "inventory"),
         "legal_documents": store.list("legal_documents", owner_id=owner_id),
     }
+
+
+@api.get("/owners/{owner_id}/kept", dependencies=[Depends(demo.only("owner"))])
+def list_kept(owner_id: str) -> dict:
+    """Everything the owner has kept, current versions only, so they can remove a mistake."""
+    owner_or_404(owner_id)
+    cat = knowledge.catalog(owner_id)
+    return {"items": sorted(({"id": cid, "collection": e["collection"], "type": e["graph"]["type"],
+                              "title": e["title"], "description": e["description"]}
+                             for cid, e in cat["concepts"].items() if e["graph"]["status"] == "stable"),
+                            key=lambda i: (i["collection"], i["title"].lower()))}
+
+
+@api.delete("/owners/{owner_id}/kept/{item_id}", dependencies=[Depends(demo.only("owner"))])
+def remove_kept(owner_id: str, item_id: str) -> dict:
+    """The owner removes something wrongly recorded: it and every earlier version are deleted from
+    the bundle, so it never reaches the family. Only the owner, and not while a release case is
+    open: then the bundle is what the reviewers and the family rely on."""
+    owner = owner_or_404(owner_id)
+    item = knowledge.current(owner_id, item_id)
+    if not item:
+        raise HTTPException(404, "Nothing kept with that id.")
+    if open_case(owner_id):
+        raise HTTPException(409, "Nothing can be removed while a handover is being reviewed.")
+    if item.get("concept", "").startswith("people/") and owner.get("vault_recipient_name") and \
+            proposals.same_name(item.get("name"), owner["vault_recipient_name"]):
+        raise HTTPException(409, "This person receives your vault. Choose someone else first.")
+    return {"removed": knowledge.remove(owner_id, item["id"]), **list_kept(owner_id)}
 
 
 @api.get("/owners/{owner_id}/knowledge-map", dependencies=[Depends(demo.only("owner"))])

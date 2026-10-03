@@ -69,6 +69,7 @@ export default function KnowledgeMap() {
   const [graph, setGraph] = useState<Graph | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);  // kept until the next try: refreshes don't clear it
   const [hovered, setHovered] = useState<string | null>(null);
   const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 });
   const [, redraw] = useState(0);
@@ -316,6 +317,16 @@ export default function KnowledgeMap() {
                   return <li key={`${e.from}-${e.to}-${e.label}`}><em>{e.label}</em> {other?.label}</li>;
                 })}
               </ul>
+              {!["owner", "institution", "mentioned"].includes(chosen.group) && (
+                <p>
+                  <button className="secondary" onClick={() => {
+                    if (!window.confirm(`Remove "${chosen.label}"? It's removed for good from what your family receives.`)) return;
+                    setRemoveError(null);
+                    api.removeKept(chosen.id).then(() => setSelected(null)).catch((e) => setRemoveError(String(e.message ?? e)));
+                  }}>Remove, it's wrong</button>
+                </p>
+              )}
+              {removeError && <p className="error" role="alert">{removeError}</p>}
               <button className="link" onClick={() => setSelected(null)}>Close</button>
             </section>
           ) : (
