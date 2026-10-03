@@ -67,6 +67,32 @@ def test_empty_export_and_errors_are_not_guessed(monkeypatch):
     assert s["reason"] == "error" and "403" not in s["message"]  # no internals on the screen
 
 
+def test_no_export_table_yet_means_no_data_not_an_error(monkeypatch):
+    class BadRequest(Exception):  # what BigQuery returns before the first load (checked on 3 Oct 2026)
+        code = 400
+
+    class NotFound(Exception):
+        code = 404
+
+    def no_table():
+        raise BadRequest("400 POST …/jobs: life-after-509907:anvaya_platform.gcp_billing_export_resource_v1_* "
+                         "does not match any table.")
+
+    monkeypatch.setattr(billing, "_fetch_rows", no_table)
+    s = billing.spend(now=1000)
+    assert s["available"] is False and s["reason"] == "no_data"
+    # Checked again sooner than the hourly cache, since the first load can land any time.
+    assert store.get("billing_cache", "spend")["expires_at"] == 1000 + billing.RETRY_SECONDS
+
+    store.delete("billing_cache", "spend")
+
+    def wrong_dataset():
+        raise NotFound("Dataset life-after:anvaya_platfrom was not found")
+
+    monkeypatch.setattr(billing, "_fetch_rows", wrong_dataset)
+    assert billing.spend(now=1000)["reason"] == "error"  # a typo isn't "no data yet"
+
+
 def test_cached_for_an_hour(monkeypatch):
     calls = []
     monkeypatch.setattr(billing, "_fetch_rows", lambda: calls.append(1) or ROWS)
