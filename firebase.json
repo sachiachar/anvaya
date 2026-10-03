@@ -31,7 +31,7 @@
     },
     {
       "site": "anvaya-admin",
-      "public": "web/dist",
+      "public": "web/dist-admin",
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -62,7 +62,7 @@
         },
         {
           "source": "**",
-          "destination": "/admin.html"
+          "destination": "/index.html"
         }
       ]
     },

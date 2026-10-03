@@ -12,3 +12,4 @@ agents/data/
 
 # Local scratch
 *.tmp
+web/dist-admin/
