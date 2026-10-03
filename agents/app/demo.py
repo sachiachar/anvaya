@@ -18,7 +18,7 @@ from contextvars import ContextVar
 
 from fastapi import HTTPException, Request
 
-from . import media
+from . import knowledge, media
 from .governance import core as governance
 from .store import new_id, store
 
@@ -27,6 +27,9 @@ LOCAL = "local"
 # Collections whose documents belong to one owner (by owner_id); reset clears them all.
 OWNED = ("moments", "inventory", "people", "vault_items", "cases", "legal_documents", "turns",
          "access_requests", "handoffs", "tasks", "loop_cache")
+# Version of how a copy keeps knowledge. 1: kept items live in the owner's OKF bundle (PR-7);
+# copies from before are started again on their next sign-in, purging kept items from Firestore.
+KNOWLEDGE_VERSION = 1
 TOUCH_SECONDS = 3600  # how often "last used" is written, so not every request writes
 # Routes that answer the same for any owner, so they never reveal whether one exists. They
 # check the copy themselves and act only on the caller's own.
@@ -88,8 +91,11 @@ def ensure() -> str:
                                   "status": "active"})
     elif now - doc.get("last_used_at", 0) > TOUCH_SECONDS:
         store.update("demo_copies", copy_id, {"last_used_at": now})
-    if not store.get("owners", owner_id_for(copy_id)):
-        reset()  # a new copy, or one whose data was cleared
+    if not store.get("owners", owner_id_for(copy_id)) or (doc or {}).get("knowledge") != KNOWLEDGE_VERSION:
+        # A new copy, one whose data was cleared, or one from before kept knowledge moved to the
+        # OKF bundle (its kept items were in Firestore): start it again from the persona.
+        reset(copy_id)
+        store.update("demo_copies", copy_id, {"knowledge": KNOWLEDGE_VERSION})
     return copy_id
 
 
@@ -102,13 +108,21 @@ def reset(copy_id: str | None = None) -> dict:
             store.delete(collection, doc["id"])
     media.delete_all(oid)
     data = _persona()
-    owner = {**data["owner"], "id": oid, "readiness_score": None}
+    family = data["owner"].get("family", [])
+    owner = {**{k: v for k, v in data["owner"].items() if k != "family"}, "id": oid, "readiness_score": None}
     store.put("owners", owner)
+    # The persona's starting knowledge goes into the bundle, labelled as the demo's own (not the
+    # owner's confirmation): Priya, and any stories or accounts the persona starts with.
+    seeded = {"generated_by": "process:demo-persona", "verified": False}
+    for entry in family:
+        name, _, relationship = entry.partition(" (")
+        knowledge.commit("people", {"id": new_id("p"), "name": name, "relationship": relationship.rstrip(")")},
+                         oid, **seeded)
     for m in data["moments"]:
-        store.put("moments", {**m, "id": new_id("m"), "owner_id": oid, "status": "approved"})
+        knowledge.commit("moments", {**m, "id": new_id("m")}, oid, **seeded)
     for item in data["inventory"]:
-        store.put("inventory", {**item, "id": new_id("inv"), "owner_id": oid, "status": "approved"})
-    return owner
+        knowledge.commit("inventory", {**item, "id": new_id("inv")}, oid, **seeded)
+    return {**owner, "family": knowledge.family(oid)}
 
 
 def act_as(person: str | None) -> str:

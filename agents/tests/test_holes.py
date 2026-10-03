@@ -6,7 +6,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from app import loops, main, speech
+from app import knowledge, loops, main, speech
 from app.config import settings
 from app.schemas import LegalNeeds, Readiness
 from app.store import new_id, store
@@ -71,8 +71,8 @@ def test_readiness_runs_again_only_when_something_changed(client, monkeypatch):
     assert client.post(f"/api/owners/{OWNER}/readiness").json()["score"] == 40
     second = client.post(f"/api/owners/{OWNER}/readiness").json()
     assert second["score"] == 40 and second.get("cached") and len(runs) == 1
-    store.put("inventory", {"id": new_id("inv"), "owner_id": OWNER, "status": "approved", "category": "bank",
-                            "institution": "SBI", "product": "Savings", "account_hint": "1187"})
+    knowledge.commit("inventory", {"id": new_id("inv"), "category": "bank_account",
+                                   "institution": "SBI", "product": "Savings", "account_hint": "1187"}, OWNER)
     client.post(f"/api/owners/{OWNER}/readiness")
     assert len(runs) == 2
 
@@ -87,7 +87,7 @@ def test_legal_needs_are_cached_until_wishes_change(client, monkeypatch):
     monkeypatch.setattr(loops, "find_legal_needs", fake_legal)
     client.post(f"/api/owners/{OWNER}/legal-needs")
     assert client.post(f"/api/owners/{OWNER}/legal-needs").json().get("cached") and len(runs) == 1
-    store.put("moments", {"id": new_id("m"), "owner_id": OWNER, "status": "approved", "kind": "wish",
-                          "title": "Flat", "summary": "The flat goes to Meena", "quote": "", "people": [], "places": []})
+    knowledge.commit("moments", {"id": new_id("m"), "kind": "wish", "title": "Flat",
+                                 "summary": "The flat goes to Meena", "quote": "", "people": [], "places": []}, OWNER)
     client.post(f"/api/owners/{OWNER}/legal-needs")
     assert len(runs) == 2

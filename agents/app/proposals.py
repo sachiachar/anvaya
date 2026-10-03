@@ -5,6 +5,9 @@
   updates the pending card, or, if the original was already kept, becomes an
   "update" card the owner confirms.
 - People the owner describes ("Ajay is my nephew") become family cards.
+
+Cards are drafts in Firestore. Keeping one commits it to the owner's kept-knowledge bundle
+(knowledge.py, PR-7) and removes the draft, so kept items are always read from the bundle.
 """
 
 from __future__ import annotations
@@ -12,6 +15,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from . import knowledge
 from .store import new_id, store
 
 
@@ -55,22 +59,25 @@ def _pending(collection: str, owner_id: str, fields: dict, **extra: Any) -> dict
                                   **extra, **fields})
 
 
+def _all(collection: str, owner_id: str) -> list[dict]:
+    """Kept items (from the bundle) and drafts (from Firestore) together."""
+    return knowledge.items(owner_id, collection) + store.list(collection, owner_id=owner_id)
+
+
 def known(owner_id: str) -> dict:
     """What is already saved or waiting, given to the model so it doesn't repeat itself."""
-    owner = store.get("owners", owner_id) or {}
     return {
-        "family": owner.get("family", []) + [
+        "family": knowledge.family(owner_id) + [
             f"{p['name']} ({p['relationship']}), waiting for confirmation"
             for p in store.list("people", owner_id=owner_id, status="pending")],
-        "moments": [{"title": m["title"], "summary": m["summary"]} for m in store.list("moments", owner_id=owner_id)],
-        "inventory": [f"{i['institution']} {i['product']} {i['account_hint']}"
-                      for i in store.list("inventory", owner_id=owner_id)],
+        "moments": [{"title": m["title"], "summary": m["summary"]} for m in _all("moments", owner_id)],
+        "inventory": [f"{i['institution']} {i['product']} {i['account_hint']}" for i in _all("inventory", owner_id)],
     }
 
 
 def save_moment(owner_id: str, moment: dict, source: dict[str, Any]) -> dict | None:
     """Returns the card to show, or None if it adds nothing new."""
-    for existing in store.list("moments", owner_id=owner_id):
+    for existing in _all("moments", owner_id):
         if _similar(existing["quote"], moment["quote"]) or _similar(existing["summary"], moment["summary"], 0.85):
             if existing["status"] == "pending":
                 return store.update("moments", existing["id"], {**moment, "quote": existing["quote"]})
@@ -90,7 +97,7 @@ def save_moment(owner_id: str, moment: dict, source: dict[str, Any]) -> dict | N
 
 def save_inventory(owner_id: str, item: dict, source: dict[str, Any]) -> dict:
     """Merge into a matching pending proposal, or create a new one."""
-    for existing in store.list("inventory", owner_id=owner_id):
+    for existing in _all("inventory", owner_id):
         if not _same_item(existing, item):
             continue
         if existing["status"] != "pending":
@@ -105,9 +112,8 @@ def save_inventory(owner_id: str, item: dict, source: dict[str, Any]) -> dict:
 
 
 def save_person(owner_id: str, person: dict) -> dict | None:
-    owner = store.get("owners", owner_id) or {}
     name = _norm(person["name"])
-    if any(_norm(f).startswith(name) for f in owner.get("family", [])):
+    if any(_norm(f).startswith(name) for f in knowledge.family(owner_id)):
         return None
     for existing in store.list("people", owner_id=owner_id):
         if _norm(existing["name"]) == name:
@@ -116,14 +122,12 @@ def save_person(owner_id: str, person: dict) -> dict | None:
 
 
 def approve(collection: str, doc: dict) -> dict:
-    """The owner tapped Keep."""
-    if collection == "people":
-        owner = store.get("owners", doc["owner_id"])
-        store.update("owners", owner["id"], {"family": [*owner.get("family", []),
-                                                        f"{doc['name']} ({doc['relationship']})"]})
-        return store.update("people", doc["id"], {"status": "approved"})
-    if doc.get("updates") and (target := store.get(collection, doc["updates"])):
-        fields = {k: v for k, v in doc.items() if k not in ("id", "owner_id", "status", "updates")}
-        store.delete(collection, doc["id"])
-        return store.update(collection, target["id"], {**fields, "status": "approved"})
-    return store.update(collection, doc["id"], {"status": "approved"})
+    """The owner tapped Keep: commit the card to the kept-knowledge bundle, then remove the draft.
+    An update card becomes the new version, and the version it updates is marked deprecated."""
+    previous = knowledge.get(doc["owner_id"], doc["updates"]) if doc.get("updates") else None
+    if previous:  # the new version keeps what was known and adds what the card says
+        fresh = {k: v for k, v in doc.items() if v not in (None, "", [])}
+        doc = {**{k: v for k, v in previous.items() if k not in ("concept", "okf_status")}, **fresh}
+    kept = knowledge.commit(collection, doc, doc["owner_id"], replaces=previous["id"] if previous else None)
+    store.delete(collection, doc["id"])
+    return kept

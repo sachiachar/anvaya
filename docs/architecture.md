@@ -173,10 +173,13 @@ The portal is a separate entry point (`web/admin.html`), served by its own Fireb
 | **Tokens limited to one owner** | For each request, the API exchanges its credential for a short-lived token restricted to that owner's folder (Credential Access Boundaries), so Cloud Storage itself refuses access to any other owner. |
 
 **What lives where**
-- **Kept knowledge is an OKF bundle in Cloud Storage** ([OKF v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md)):
+- **Kept knowledge is an OKF bundle in Cloud Storage** ([OKF v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md)). **Built (PR-7.1, 7.2, 7.4, `knowledge.py`)**, for now in the owner's folder of the private media bucket (`<owner>/kept/`) until PR-6's buckets exist:
   - one Markdown concept per kept item, with `type`, `sources`, `generated`, `verified: human:owner-<id>`, `status` and `stale_after`;
   - an `index.md` that is regenerated after each Keep, and a history log per date.
-  - **Keep is the commit:** only owner-confirmed knowledge enters the bundle.
+  - **Keep is the commit:** only owner-confirmed knowledge enters the bundle. The draft leaves Firestore; an update writes a new version and marks the old one `deprecated`.
+  - each concept keeps its **graph part** (`type`, `status`, typed links) apart from its content, so fixed-code readers (the gap check, and the anonymous fraud cues in `docs/proposals/fraud-foresight.md` §5) never read text or sources;
+  - a machine copy (`.catalog.json`, rebuildable from the files) is written with conditional writes, and each change is a separate event file, so overlapping Keeps never collide;
+  - long numbers are masked to their last 4 digits, and the vault can't enter.
 - **Firestore holds workflow data only:** pending cards, cases and reviews, guardian events, next steps and access requests.
 - **The conversation:**
   - sensitive details are masked before storage (Sensitive Data Protection);
