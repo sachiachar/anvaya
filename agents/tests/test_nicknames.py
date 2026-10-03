@@ -85,6 +85,12 @@ def test_allowance_used_is_todays_real_use(client):
     store.put("user_usage", {"id": f"{core._today()}:{judge_key}", "owner": {"tokens": limit // 4}})
     copies = {c["id"]: c for c in client.get("/api/platform/demos", headers=h("admin")).json()["copies"]}
     assert copies[judge_key]["allowance_used"] == 0.25
+    # An approved request for more counts, as it does for the gateway: doubling the allowance halves the share.
+    store.put("budget_requests", {"id": "req_nick", "user_key": judge_key, "kind": "daily_allowance", "amount": limit // 1000,
+                                  "status": "approved", "expires_at": time.time() + 3600})
+    copies = {c["id"]: c for c in client.get("/api/platform/demos", headers=h("admin")).json()["copies"]}
+    assert copies[judge_key]["allowance_used"] == 0.125
+    store.delete("budget_requests", "req_nick")
 
 
 def test_a_portal_reset_restores_that_copy_only(client):

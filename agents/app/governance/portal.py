@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from .. import demo
 from ..store import store
 from . import billing, core
-from .core import Actor, actor, allowances, audit, need, platform_settings, registry, small
+from .core import Actor, actor, audit, need, platform_settings, registry, small
 from .seed import ensure_current
 
 # ---- Read models ----------------------------------------------------------------
@@ -209,10 +209,10 @@ def research_now(guide_id: str, who: Actor = Depends(need("review_fraud"))) -> d
 
 
 def _allowance_used(key: str) -> float:
-    """Share of today's owner token allowance this copy has used (PR-10.4)."""
-    limit = allowances().get("owner", {}).get("tokens_per_day") or 0
-    used = (store.get("user_usage", f"{core._today()}:{key}") or {}).get("owner", {}).get("tokens", 0)
-    return round(min(1.0, used / limit), 4) if limit else 0.0
+    """Share of today's owner token allowance this copy has used, counting approved extra
+    allowance, exactly as the gateway does (PR-10.4)."""
+    tokens = core.allowance_status(key).get("owner", {}).get("tokens") or {}
+    return round(min(1.0, tokens.get("share", 0.0)), 4)
 
 
 @router.get("/demos")

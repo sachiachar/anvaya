@@ -34,7 +34,7 @@ function NicknamePrompt({ onDone }: { onDone: () => void }) {
   return (
     <section className="card" aria-labelledby="nickname-title">
       <h2 id="nickname-title">What should we call you?</h2>
-      <p className="muted">Optional. Only the Anvaya team sees it, to tell demo copies apart. Any nickname is fine.</p>
+      <p className="muted">Optional, and it doesn't need to be your real name. Only the Anvaya team sees it, to tell demo copies apart.</p>
       <div className="row">
         <input value={value} onChange={(e) => setValue(e.target.value)} maxLength={30} placeholder="A nickname" aria-label="Nickname" />
         <button disabled={busy || !value.trim()} onClick={() => answer(value)}>Save</button>
