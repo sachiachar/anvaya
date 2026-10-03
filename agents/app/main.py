@@ -242,7 +242,7 @@ async def speech_audio(body: Speech) -> Response:
         media.save(turn["owner_id"], name, audio, "audio/wav")
         return Response(content=audio, media_type="audio/wav")
     except speech.VoiceUnavailable as e:
-        raise HTTPException(503, str(e))
+        raise HTTPException(503, str(e)) from e
 
 
 @api.post("/owners/{owner_id}/documents")
@@ -595,7 +595,7 @@ async def submit_authority(owner_id: str, proof: UploadFile = File(...)) -> dict
     try:
         release.attach_authority_check(case, loops.review_summary(check))
     except release.ReleaseError as e:
-        raise HTTPException(409, str(e))
+        raise HTTPException(409, str(e)) from e
     return {"autonomy": ASSIST, "case": store.put("cases", case)}
 
 
@@ -638,7 +638,7 @@ def _transition(case_id: str, step) -> dict:
     try:
         case = step(case)
     except release.ReleaseError as e:
-        raise HTTPException(409, str(e))
+        raise HTTPException(409, str(e)) from e
     return {"case": store.put("cases", case)}
 
 

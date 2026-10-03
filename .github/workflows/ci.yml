@@ -1,17 +1,17 @@
-# Checks every pull request: API tests and the web build. Deploys happen only
-# from main (deploy.yml), after a person merges.
+# Checks every pull request: lint, the API tests and the web build.
+# Deploys only happen from main (deploy.yml).
 name: CI
 
 on:
   pull_request:
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   api:
@@ -19,6 +19,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+      - name: Lint
+        working-directory: agents
+        run: uv run --group dev ruff check .
       - name: Tests
         working-directory: agents
         run: uv run --group dev pytest -q
@@ -32,8 +35,11 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - name: Type check and build
+      - run: npm ci
         working-directory: web
-        run: |
-          npm ci
-          npm run build
+      - name: Lint
+        working-directory: web
+        run: npm run lint
+      - name: Type-check and build
+        working-directory: web
+        run: npm run build

@@ -318,14 +318,20 @@ On `released`, KMS removes the outer layer and the recipient's phone decrypts th
 
 ## 10. Testing
 
-35 automated tests (`agents/tests/`), with Gemini stubbed so they run without credentials:
+Automated tests (`agents/tests/`), with Gemini stubbed so they run without credentials:
 
 - release rules: two-person rule, override reasons, waiting period, owner cancel;
 - access gating and consent; recipient invitation, approval and key changes;
+- sign-in: every API route and the live call need an allowed Google account;
 - card merging (repeats, follow-ups that keep earlier facts, family), using real cases from test runs;
 - next-step rules (duplicates, reworded done steps, LIC vs SBI);
 - reply rules (script, false claims, "shall I add");
-- document verdict rules (wrong document scores 0).
+- document verdict rules (wrong document scores 0);
+- governance: server-side roles, approvals, the kill switch, and a portal that never returns conversation text or names;
+- the gateway: every file that calls Gemini goes through it, every agent named in code is registered, and every call is recorded in the ledger;
+- limits per request: output caps, retries, input size, call length and reply length.
+
+Every pull request runs the linters (ruff for `agents/`, Biome for `web/`), these tests and the web build ([.github/workflows/ci.yml](../.github/workflows/ci.yml)).
 
 Also verified by hand: the vault and recovery round trip (Node Web Crypto), live calls through the WebSocket, and real Gemini runs of conversations and next steps.
 

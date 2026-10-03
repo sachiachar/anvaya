@@ -1,40 +1,70 @@
 # Contributing to Anvaya
 
+This is how we work together on GitHub, with or without a coding agent. The rules for the code and for writing are in [AGENTS.md](AGENTS.md). They apply to people too.
+
 ## Set up
 
-- **API** (`agents/`): Python 3.12+ and [uv](https://docs.astral.sh/uv/). `cd agents && uv sync`.
-- **Web app and admin portal** (`web/`): Node 20+. `cd web && npm install`.
-- **Git hooks**, once per clone: `git config core.hooksPath .githooks`. This refuses pushes to `main` on your machine.
+- **API** (`agents/`): Python 3.12+ and [uv](https://docs.astral.sh/uv/). Run `cd agents && uv sync --group dev`.
+- **Web app and admin portal** (`web/`): Node 20.19+ (CI uses 22). Run `cd web && npm ci`.
+- **Git hooks**, once per clone: `git config core.hooksPath .githooks`. They stop commits and pushes on `main`, for people and agents alike.
 
-See the README for running locally.
+Then follow "Run it locally" in the [README](README.md).
 
-## How a change gets in
+## The flow
 
-1. **Branch from `main`:** `git switch -c feat/short-name` (or `fix/…`, `chore/…`, `docs/…`).
-2. **Make the change, with tests.**
-   - `cd agents && uv run --group dev pytest -q`
-   - `cd web && npm run build`
-3. **Open a pull request.** Fill in the template, link the roadmap item (`PR-x.y`) or issue, and say how you checked it.
-4. **Review.** CI runs the API tests and the web build. Areas listed in [.github/CODEOWNERS](.github/CODEOWNERS) need an owner's approval: the vault, the handover, sign-in, governance, `firestore.rules`, hosting and deploys.
-5. **Merge.** A person merges to `main`. **Every push to `main` deploys to production** ([deploy.yml](.github/workflows/deploy.yml)), and deploys only what changed. Never push to `main` directly, and never deploy by hand except through Actions → Deploy.
+1. **Start from the latest `main`:** `git fetch origin && git switch -c feat/short-name origin/main` (or `fix/…`, `chore/…`, `docs/…`).
+2. **Make one change per branch, with tests.** Small PRs get reviewed faster and are easier to undo.
+3. **Run the checks locally.**
+   ```bash
+   cd agents && uv run --group dev ruff check . && uv run --group dev pytest -q
+   cd web && npm run lint && npm run build
+   ```
+4. **Open a pull request** (`gh pr create`). Fill in the template, link the roadmap item (`PR-x.y`) or issue, and say how you checked it. Open it as a draft if it isn't ready.
+5. **CI runs the same checks** on every PR. Fix anything red before asking for review.
+6. **Another person reviews.** Changes to the paths in [.github/CODEOWNERS](.github/CODEOWNERS) need the owner's review: the vault, the handover, sign-in, governance, the admin portal, `firestore.rules`, hosting, deploys and the agent rules.
+7. **Squash and merge.** The PR title becomes the commit on `main`, so write it in the commit style below. Delete the branch afterwards.
+8. **Merging deploys.** Every merge to `main` deploys what changed to production ([deploy.yml](.github/workflows/deploy.yml)). Docs-only changes deploy nothing. Merge only when it's ready to go live, then check the Deploy run in Actions. Never push to `main` directly, and never deploy by hand except through Actions → Deploy.
 
-## Rules that keep the product safe
+To stay up to date while a branch is open, run `git pull --rebase origin main` on your own branch. Never rebase a branch someone else is also pushing to.
 
-- **Every Gemini call goes through the governance gateway.**
-  - Name the agent (`agent="…"`), and register it in [agents/registry.yaml](agents/registry.yaml) with its role, autonomy, allowed models and tools, and limits.
-  - A test fails if any code calls Gemini outside the gateway.
-  - Registry changes need an owner's review.
-- **People decide.** Nothing automated approves a release, saves to the archive without the owner's Keep, or shares with a partner without consent.
-- **No conversation text or names** in the platform admin portal or in logs. Users appear as hashed keys.
-- **Secrets never go in the repository.** `.env` files stay local. Configuration lives in GitHub environments and Secret Manager.
-- **Demo data is synthetic.** Never use real personal data.
-- **The prototype release uses the Gemini API key path, not Vertex AI.**
+## Commit messages and PR titles
 
-## Writing
+Copy the style in `git log`:
 
-- **Docs** use plain English: short sentences, active voice, no jargon.
-- **Pitches for people and institutions** (`docs/concept.md`, `docs/pitch-*.md`) are warm, and talk about a service, not technology:
-  - they never use the word "AI";
-  - they never say someone "died": use "left us", "no longer here" or "when the time comes".
-- **The judges' material** (README, deck) names Gemini and Google Cloud openly.
-- **Issues** use numbered requirements (`PR-x.y.z`) with a plain-words description and "How we check it".
+```
+Limits per request from the registry (PR-10.2)
+
+The gateway now enforces each agent's limits from agents/registry.yaml:
+- max_input_tokens: estimated before the call; larger requests are refused …
+
+Six new tests; real Gemini calls confirm the output caps leave room.
+```
+
+- The subject is a plain imperative sentence, under about 72 characters, with no full stop and the roadmap item if there is one.
+- The body says what changed and why. Mention new tests.
+- Avoid subjects like "Updates", "fix" or "wip" on `main`.
+
+## Using coding agents
+
+Any agent is fine (Claude Code, Codex, Cursor, Copilot, Gemini CLI). You're responsible for what you commit, whoever typed it.
+
+- **Shared instructions are in `AGENTS.md`.** Claude Code loads them through `CLAUDE.md`, and Codex, Cursor and Copilot read `AGENTS.md` directly. For Gemini CLI, set `"context": {"fileName": ["AGENTS.md"]}` in `.gemini/settings.json`.
+- **Change the shared instructions through a PR** when you find something every agent should know, such as a new rule, a gotcha or a command. Don't keep it in your own local notes.
+- **Give each parallel session its own worktree.** Running two agents in one folder means one switches branches under the other, and files go missing or end up in the wrong commit. Use `git worktree add ../Anvaya-<topic> -b feat/<topic> origin/main`, and remove it with `git worktree remove` when the branch is merged.
+- **Keep personal agent settings out of git.** Use `.claude/settings.local.json` and `CLAUDE.local.md`, which are ignored.
+- **Read the whole diff before you commit.** Watch for code the agent deleted or "simplified", tests that were weakened to pass, new dependencies, and changes to files you didn't ask about.
+- **Say what the agent did** in the PR description, and add a `Co-Authored-By:` trailer when it wrote a substantial part.
+- **Don't paste secrets or real personal data** into an agent: no `.env` contents, no keys, no real family or account details. The demo data is synthetic, so keep it that way.
+- **Agents never deploy** or change cloud resources and GitHub settings. A person does that.
+
+## Reviewing
+
+- Check the PR does what its description says, and nothing else.
+- Read the tests first: do they test the behaviour, or only the code that was written?
+- Look harder at anything touching the vault, the handover, sign-in, governance or the deploy workflow.
+- Approve only what you'd be happy to see deployed, because merging deploys.
+
+## Secrets and access
+
+- Secrets live in GitHub (*Settings → Environments → production*) and in Google Secret Manager, never in the repo. `.env` files stay local.
+- If a secret is committed by mistake, tell the owner straight away so they can rotate it. Deleting the commit isn't enough.

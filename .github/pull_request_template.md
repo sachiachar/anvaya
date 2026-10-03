@@ -4,8 +4,8 @@
 
 ## How I checked it
 
-- [ ] `cd agents && uv run --group dev pytest -q`
-- [ ] `cd web && npm run build`
+- [ ] `cd agents && uv run --group dev ruff check . && uv run --group dev pytest -q`
+- [ ] `cd web && npm run lint && npm run build`
 - [ ] Tried it in the app (say which role and flow):
 
 ## Risk

@@ -48,7 +48,7 @@ def verify(token: str | None) -> User:
     try:
         claims = id_token.verify_firebase_token(token, _request, audience=settings.firebase_project_id)
     except Exception:
-        raise HTTPException(401, "Your sign-in has expired. Please sign in again.")
+        raise HTTPException(401, "Your sign-in has expired. Please sign in again.") from None
     email = claims.get("email") or ""
     if not email or not claims.get("email_verified"):
         raise HTTPException(403, "This account has no verified email address.")

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Stops commits on main: every push to main deploys to production.
+# Turn on once per clone: git config core.hooksPath .githooks
+if [ "$(git symbolic-ref --short HEAD 2>/dev/null)" = "main" ]; then
+  echo "Commit refused: you're on main. Create a branch first: git switch -c feat/short-name" >&2
+  exit 1
+fi
