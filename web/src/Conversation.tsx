@@ -92,12 +92,13 @@ export default function Conversation() {
     try {
       const r = await api.say(message, file, fileName);
       appendTurns(r.owner_turn, r.assistant_turn);
-      sayAloud(r.assistant_turn);
+      // Check the allowance after the spoken reply is counted, so the notice is up to date.
+      void sayAloud(r.assistant_turn).finally(refreshAllowance);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      refreshAllowance();
     } finally {
       setThinking(false);
-      refreshAllowance();
     }
   }
 
@@ -189,7 +190,7 @@ export default function Conversation() {
         {thinking && <li className="bubble assistant typing" aria-label="Thinking">…</li>}
       </ol>
       <div ref={bottom} />
-      {allowance && <AllowanceNotice allowance={allowance} />}
+      {allowance && <AllowanceNotice allowance={allowance} muted={!speak} />}
       {error && <p className="error" role="alert">{error}</p>}
 
       {inCall ? (
@@ -270,7 +271,7 @@ const MEASURE: Record<string, string> = {
 };
 
 /** A gentle note near or at today's allowance (PR-10.4). It never blocks the screen. */
-function AllowanceNotice({ allowance }: { allowance: Allowance }) {
+function AllowanceNotice({ allowance, muted }: { allowance: Allowance; muted: boolean }) {
   const owner = allowance.pools.owner ?? {};
   const reached = Object.entries(owner).filter(([, m]) => m.state === "reached").map(([k]) => MEASURE[k] ?? k);
   const near = Object.entries(owner).filter(([, m]) => m.state === "warning").map(([k]) => MEASURE[k] ?? k);
@@ -280,7 +281,8 @@ function AllowanceNotice({ allowance }: { allowance: Allowance }) {
       {reached.length > 0
         ? `You've used today's ${reached.join(" and ")}. It resets tomorrow, or you can ask for more.`
         : `You've talked a lot with Saathi today: you're close to today's ${near.join(" and ")}.`}
-      {owner.spoken_replies && owner.spoken_replies.state !== "ok" && " Replies aren't read aloud automatically now; tap 🔈 to turn it back on."}
+      {muted && owner.spoken_replies && owner.spoken_replies.state !== "ok" &&
+        " Replies aren't read aloud automatically now; tap “🔈 Replies muted” to turn it back on."}
     </p>
   );
 }

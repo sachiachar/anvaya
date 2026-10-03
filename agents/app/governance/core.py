@@ -283,17 +283,29 @@ def check_allowance(agent: str) -> None:
         raise Refused("You've used today's allowance for this. It resets tomorrow, or you can ask for more.")
 
 
-def count_for_user(agent: str, *, tokens: int = 0, minutes: float = 0.0) -> None:
-    """Add one call to the person's counters for today (not for the safety pool)."""
+def _add(agent: str, amount: float) -> None:
+    """Add to (or, with a negative amount, take from) the person's counter for today, atomically."""
     user, pool = current_user(), _pool(agent)
     if not user or not allowances().get(pool):
         return
-    doc = _usage_today(user) or {"id": f"{_today()}:{user}", "day": _today(), "user_key": user}
-    row = doc.setdefault(pool, {})
+    store.increment("user_usage", f"{_today()}:{user}", pool, {METRIC.get(agent, "tokens"): amount},
+                    {"day": _today(), "user_key": user})
+
+
+def count_for_user(agent: str, *, tokens: int = 0, minutes: float = 0.0) -> None:
+    """Add one call to the person's counters for today (not for the safety pool)."""
     metric = METRIC.get(agent, "tokens")
-    add = {"tokens": tokens, "voice_minutes": round(minutes, 2), "spoken_replies": 1}[metric]
-    row[metric] = round(row.get(metric, 0) + add, 2)
-    store.put("user_usage", doc)
+    _add(agent, {"tokens": tokens, "voice_minutes": round(minutes, 2), "spoken_replies": 1}[metric])
+
+
+def reserve(agent: str, amount: float) -> None:
+    """Hold part of the allowance before a long call (live voice), so a second call at the same
+    time sees only what's really left. Release it when the call ends; the actual use is counted."""
+    _add(agent, amount)
+
+
+def release(agent: str, amount: float) -> None:
+    _add(agent, -amount)
 
 
 # ---- Recording (used by the gateway and the guardian) -------------------------

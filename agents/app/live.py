@@ -47,6 +47,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
         await ws.close()
         return
     started: float | None = None
+    reserved = 0.0
     config = types.LiveConnectConfig(
         response_modalities=["AUDIO"],
         speech_config=types.SpeechConfig(
@@ -70,8 +71,11 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
             cap = governance.limit(AGENT, "max_call_minutes", 20)
             left = governance.remaining(AGENT)  # the person's voice minutes left today (PR-10.4)
             by_allowance = left is not None and left < cap
-            timeout = (left if by_allowance else cap) * 60
-            done, pending = await asyncio.wait({upstream, downstream}, timeout=timeout,
+            planned = left if by_allowance else cap
+            # Hold the planned minutes, so a second call at the same time sees what's really left.
+            governance.reserve(AGENT, planned)
+            reserved = planned
+            done, pending = await asyncio.wait({upstream, downstream}, timeout=planned * 60,
                                                return_when=asyncio.FIRST_COMPLETED)
             for task in pending:
                 task.cancel()
@@ -96,6 +100,8 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
         except Exception:
             pass
     finally:
+        if reserved:  # give back the held minutes; the actual minutes are counted below
+            governance.release(AGENT, reserved)
         if started is not None:  # record the call's minutes in the usage ledger
             minutes = (time.time() - started) / 60
             governance.record_usage(AGENT, settings.live_model, "direct", minutes=minutes,
