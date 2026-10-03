@@ -35,6 +35,7 @@ export default function App() {
     if (!authEnabled) return;
     setEmail(user?.email ?? null);
     setSession(user ? "checking" : "signed-out");
+    setReady(false); // a different account has a different demo copy: load its owner first
   }), []);
 
   useEffect(() => {

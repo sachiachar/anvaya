@@ -56,9 +56,16 @@ def owner_id() -> str:
 
 
 def begin(uid: str) -> str:
-    """Called at sign-in for every request and live call: find or create the caller's copy."""
+    """Called at sign-in for every request and live call: note whose copy this is. It reads and
+    writes nothing, so the admin portal's requests never create a copy."""
     copy_id = governance.user_key(uid)
     _copy.set(copy_id)
+    return copy_id
+
+
+def ensure() -> str:
+    """Find or create the caller's copy (the app's first call, the live call and reset)."""
+    copy_id = current()
     now = time.time()
     doc = store.get("demo_copies", copy_id)
     if not doc:

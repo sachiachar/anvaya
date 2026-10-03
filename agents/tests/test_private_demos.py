@@ -127,3 +127,14 @@ def test_signing_in_twice_keeps_the_same_copy(client, copies):
     store.put("turns", {"id": "turn_a2", "owner_id": a, "at": time.time(), "role": "owner", "text": "hi"})
     assert client.get("/api/me", headers=h("judge-a")).json()["owner_id"] == a
     assert store.get("turns", "turn_a2") is not None  # not reset on the next sign-in
+
+
+def test_the_admin_portal_never_creates_a_demo_copy(client):
+    TOKENS["portal-only"] = {"sub": "uid-portal-only", "email": "ops@hack2skill.com", "email_verified": True}
+    try:
+        assert client.get("/api/platform/me", headers=h("portal-only")).status_code == 200
+        key = client.get("/api/platform/me", headers=h("portal-only")).json()["key"]
+        assert store.get("demo_copies", key) is None
+        assert store.get("owners", f"owner_{key}") is None
+    finally:
+        TOKENS.pop("portal-only")

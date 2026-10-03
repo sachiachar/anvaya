@@ -95,6 +95,7 @@ def require_handover(owner_id: str) -> None:
 def seed_demo() -> dict:
     """Reset the caller's own demo copy to the synthetic persona (PR-1.5). Never touches another
     copy. Never use real personal data in demos."""
+    demo.ensure()
     return {"owner": demo.reset()}
 
 
@@ -206,6 +207,7 @@ async def live_call(ws: WebSocket, owner_id: str, token: str | None = None) -> N
     else:
         governance_core.set_current_user(governance_core.user_key(demo.LOCAL))
         demo.begin(demo.LOCAL)
+    demo.ensure()
     owner = store.get("owners", owner_id)
     if not owner or owner_id != demo.owner_id():  # only the caller's own copy
         await ws.close(code=4404)
@@ -764,6 +766,7 @@ def me(request: Request) -> dict:
     """Who is signed in, and the owner in their own demo copy (the app calls this right after
     sign-in, which also creates the copy on first use)."""
     user = getattr(request.state, "user", None)
+    demo.ensure()
     return {"email": user.email if user else None, "name": user.name if user else None,
             "auth": settings.auth_required, "owner_id": demo.owner_id()}
 
