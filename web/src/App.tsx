@@ -3,6 +3,7 @@ import { AuthError, api, setActingAs, type DemoPerson, type PersonId } from "./a
 import { authEnabled, signInWithGoogle, signOutUser, watchUser } from "./auth";
 import { ShowAutonomy } from "./ui";
 import Family from "./Family";
+import KnowledgeMap from "./KnowledgeMap";
 import Owner from "./Owner";
 import Team from "./Team";
 
@@ -116,6 +117,11 @@ export default function App() {
         </div>
       </div>
     );
+  }
+
+  // The demo's knowledge map opens in its own window, always as the owner.
+  if (location.hash === "#knowledge-map") {
+    return ready ? <KnowledgeMap /> : <p className="muted">{error ?? "Loading…"}</p>;
   }
 
   return (
