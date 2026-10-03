@@ -50,8 +50,9 @@ def test_people_become_family_once_kept():
     card = proposals.save_person(OWNER, {"name": "Ajay", "relationship": "nephew"})
     assert proposals.save_person(OWNER, {"name": "Ajay", "relationship": "nephew"})["id"] == card["id"]
     proposals.approve("people", card)
-    assert store.get("owners", OWNER)["family"] == ["Ajay (nephew)"]
+    assert store.get("owners", OWNER)["family"] == ["Priya Rao (daughter)", "Ajay (nephew)"]
     assert proposals.save_person(OWNER, {"name": "Ajay", "relationship": "nephew"}) is None
+    assert proposals.save_person(OWNER, {"name": "Priya", "relationship": "daughter"}) is None  # known from the start
 
 
 def test_a_follow_up_never_wipes_earlier_details():

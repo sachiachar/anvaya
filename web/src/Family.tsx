@@ -122,7 +122,9 @@ function AcceptRole() {
           </label>
         </div>
       ) : registered === false ? (
-        invite ? (
+        invite && !invite.name.trim().toLowerCase().startsWith("priya") ? (
+          <p className="muted">Vikram has chosen {invite.name} ({invite.relationship}), not you, to receive his vault. To try this part, switch to Vikram and choose Priya.</p>
+        ) : invite ? (
           <>
             <p><strong>Vikram has chosen you, {invite.name} ({invite.relationship}), to receive his vault.</strong></p>
             <p className="muted">Accepting creates your key and a recovery code. The key is backed up in encrypted form, so any of your phones can use it.</p>

@@ -13,6 +13,7 @@
 - Readiness, legal needs and the claims checklist are worked out again only when the owner's information has changed; otherwise the last result comes back straight away.
 
 **Access**
+- Vikram's daughter Priya is in his family from the start, so he can choose her as his vault recipient straight away. Only the person Vikram chose can accept; if he chose someone else, Priya's screen says so.
 - Switch between the people in your demo: Vikram (owner), Priya (family), Anjali and Rahul (reviewers) and the platform admin. A banner always shows who you are acting as. The server checks it: only Vikram changes his vault, only Priya opens it after release, and only a reviewer confirms. One reviewer can't confirm both the death and the legal authority, even though you play both.
 - Each person who signs in gets their own private copy of the demo. Nobody else can see or change it, and "Reset my demo" restores only your own copy, including its recordings.
 - The app is now called Anvaya, at https://anvaya-saathi.web.app, with a new logo, icons and navy theme. The old address redirects there.

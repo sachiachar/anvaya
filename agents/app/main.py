@@ -497,6 +497,12 @@ def set_recipient(owner_id: str, body: Recipient) -> dict:
     invite = owner.get("vault_invite")
     if not invite:
         raise HTTPException(409, "Only the person the owner has chosen can become the vault recipient.")
+    # Only the invited person registers, as themselves: the person acting must be the one invited.
+    def first_name(name: str) -> str:
+        return (name.split() or [""])[0].casefold()
+
+    if not first_name(invite["name"]) or first_name(invite["name"]) != first_name(demo.person()["name"]):
+        raise HTTPException(409, f"Vikram chose {invite['name']}, not you, to receive his vault.")
     if owner.get("vault_recipient") and open_case(owner_id):
         raise HTTPException(409, "The vault can no longer be re-sealed. Restore the existing key with the recovery code.")
     # The key still waits for the owner to confirm the matching code before the vault is sealed for it.
