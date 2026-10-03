@@ -18,7 +18,7 @@ from google.auth.exceptions import DefaultCredentialsError
 from google.genai import errors as genai_errors
 from pydantic import BaseModel, ValidationError
 
-from . import auth, demo, escrow, fraud_guides, knowledge, live, loops, media, proposals, release, speech, tasks
+from . import auth, demo, escrow, fraud_guides, knowledge, knowledge_map, live, loops, media, proposals, release, speech, tasks
 from .config import settings
 from .executor_agent import UnknownSession, ask
 from .governance import core as governance_core
@@ -307,6 +307,13 @@ def archive(owner_id: str) -> dict:
         "inventory": knowledge.items(owner_id, "inventory"),
         "legal_documents": store.list("legal_documents", owner_id=owner_id),
     }
+
+
+@api.get("/owners/{owner_id}/knowledge-map", dependencies=[Depends(demo.only("owner"))])
+def get_knowledge_map(owner_id: str) -> dict:
+    """The owner's kept knowledge as a graph, for the demo's knowledge map (read-only)."""
+    owner = owner_or_404(owner_id)
+    return knowledge_map.build(owner_id, owner.get("name") or "Owner")
 
 
 # ---- Readiness and planning loops ---------------------------------------------

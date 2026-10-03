@@ -16,6 +16,15 @@ export const setActingAs = (person: PersonId) => {
 
 export type Autonomy = "assist" | "propose" | "act_within_limits";
 
+export type MapNode = { id: string; label: string; type: string;
+  group: "owner" | "person" | "mentioned" | "story" | "wish" | "account" | "institution";
+  description?: string; kept_at?: string | null; verified?: boolean };
+/** derived: implied by the cards' fields; typed links (PR-7.9) have derived false. */
+export type MapEdge = { from: string; to: string; label: string; derived: boolean };
+export type KnowledgeMap = { nodes: MapNode[]; edges: MapEdge[]; gaps: { node: string; missing: string }[];
+  recent: { at: string; action: "Creation" | "Update" | "Deprecation"; id: string; title: string }[];
+  counts: { concepts: number; links: number; gaps: number } };
+
 export type Moment = {
   id: string;
   kind: "story" | "advice" | "practical" | "wish";
@@ -170,6 +179,8 @@ export const api = {
   seed: () => request<{ owner: Record<string, unknown> }>("/demo/seed", { method: "POST" }),
   owner: () => request<{ name: string; family: string[] } & Record<string, unknown>>(o("")),
   archive: () => request<{ moments: Moment[]; inventory: InventoryItem[] }>(o("/archive")),
+  /** The owner's kept knowledge as a graph, for the demo's live knowledge map. */
+  knowledgeMap: () => request<KnowledgeMap>(o("/knowledge-map")),
 
   captureAudio: (audio: Blob, name: string) =>
     request<{ autonomy: Autonomy; language: string; transcript: string; proposals: Moment[] }>(
