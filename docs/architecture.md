@@ -67,7 +67,7 @@ flowchart LR
 | `fraud_guides.py` | Fraud reference guides (PR-2.3): what a genuine document looks like and how forgeries are made, for each document and country. Every item carries a knowledge label (observed, derived, simulated, validated, invalidated). Every version is kept in Firestore; a copy built into the code is used if none is saved or Firestore is down. Only checked knowledge reaches the certificate check. Design: `docs/proposals/fraud-foresight.md` |
 | `fraud_pipeline.py` | Fraud foresight pipeline (PR-2.5, PR-2.6): `fraud.dreamer` imagines attacks on our safeguards from the guide's checked tactics, the fixed list of safeguards and recent guardian events; `fraud.researcher` checks each one against web pages found with Exa (`web_search.py`); each is mapped to the safeguard that catches it, or marked a gap. "Confirmed" needs a cited page whose quoted sentence really appears in that page and supports the claim (`judge`). Confirmed scenarios and researched tactics wait for a reviewer; unconfirmed ones fade after 3 runs. One run at a time, with a cap on model calls per agent, a Stop button, and a live log of each step for the portal |
 | `knowledge.remove` | The owner removes something wrongly recorded ("What you've kept" on My plan, or the knowledge map): the item and every earlier version are deleted from the bundle with their history files, other items' links are worked out again, and the log keeps one line with no title or content ("An item was removed by the owner"). Owner only; refused while a release case is open, and for the vault recipient. Recordings and documents the item came from, and the conversation history, are not deleted |
-| `knowledge_map.py` | The knowledge map for the demo: the owner's kept knowledge as a graph (owner, kept concepts, institutions, and people a story mentions but who aren't kept yet). Links are the concepts' typed links (PR-7.9) once they exist; until then the links the cards imply, marked `derived`: people a story or wish names (by name, or by relationship such as "my wife"), accounts and banks it names, a policy's nominee, holder and institution, and each person's relationship to the owner. Gaps: an account or policy with no nominee. Owner only, read-only; the web app shows it at `/#knowledge-map` like Obsidian's graph view (a small force layout, zoom, pan and drag, no graph library), refreshing every 2 seconds |
+| `knowledge_map.py` | The knowledge map for the demo: the owner's kept knowledge as a graph (owner, kept concepts, institutions, and people a story mentions but who aren't kept yet). Links are the concepts' typed links (PR-7.9) once they exist; until then the links the cards imply, marked `derived`: people a story or wish names (by name, or by relationship such as "my wife"), accounts and banks it names, a policy's nominee, holder and institution, and each person's relationship to the owner, or to the kept person they're related through ("wife of brother-in-law", "Bhaskar's son"). Gaps: an account or policy with no nominee. Owner only, read-only; the web app shows it at `/#knowledge-map` like Obsidian's graph view (a small force layout, zoom, pan and drag, no graph library), refreshing every 2 seconds |
 | `loops.py` | One Gemini step per loop. Also holds the shared **Saathi persona**, the live-call instructions, and `reply_problems`, which checks every typed reply for wrong language or script, false "saved" claims and "shall I add" questions, and rewrites it once if needed |
 | `live.py` | Live-call relay between the browser and the Gemini Live API; captions; saves each exchange and extracts cards |
 | `speech.py` | Natural voice for typed replies (Gemini TTS), falling back through a list of TTS models, each with its own quota |
@@ -116,7 +116,7 @@ flowchart LR
 
 **One companion everywhere.** `loops.persona` defines Saathi once: warm, addresses the owner as "{first name} ji", matches their language, honest about what is saved, no legal advice, and asks who unknown people are. Both the typed chat and the live call use it.
 
-### 4.1 Guardian layer (planned for the prototype release)
+### 4.1 Guardian layer (partly built: fraud guide, dreaming and research; the core is planned)
 
 Fraud can enter at any loop, not only at activation, so a **guardian** watches every loop and corrects course before an action takes effect. It is tracked as PR-2 ([#2](https://github.com/sachiachar/anvaya/issues/2)).
 
@@ -168,7 +168,7 @@ The portal is a separate entry point (`web/admin.html`), served by its own Fireb
 | `access_requests` | name, relationship, contact, note, status (pending_owner, pending_review, approved, declined) | Family members who weren't listed |
 | `handoffs`, `legal_documents` | Consented legal summaries; signed documents | Never contain vault data |
 
-### 5.1 Storage layout (planned for the prototype release)
+### 5.1 Storage layout (kept-knowledge bundle built; buckets per tenant planned)
 
 **Buckets per tenant and region; inside each, a folder per owner, a key per owner, and access tokens limited to one owner.** Tracked in [PR-6 (#17)](https://github.com/sachiachar/anvaya/issues/17) and [PR-7 (#18)](https://github.com/sachiachar/anvaya/issues/18).
 
@@ -196,9 +196,9 @@ The portal is a separate entry point (`web/admin.html`), served by its own Fireb
   - the owner can delete it, by destroying its key.
 - **The family's assistant** (built, PR-7.5) gets the whole kept bundle in its instructions while it's under about 20,000 tokens, built fresh for each question from current versions only; above that, `index.md` and the concepts it opens. Kept text is fenced as information, never instructions. Every source shown is a real kept item, with its title. It never reads the conversation, another owner's bundle or the vault. Context caching can come later.
 - **The bundle is a graph** (typed links built, PR-7.3 and 7.9). Each kept item links to the people it names: an account or policy to its `nominee` and `holder`, property or a wish to who it's `intended_for`, a story to the `people` it mentions. Links are frontmatter fields (bundle paths) and ordinary Markdown links in the body. A full name must match a kept person, and a first name only if exactly one kept person has it; keeping or replacing a person relinks the items that name them. The graph part also records which key fields are present (`has`: nominee, holder, intended for, papers), never their values. Still to come: `covered_by` (a will) and `contact`. No graph database.
-  - A fixed-rule check against the expected links for each type finds **gaps and conflicts**, ranked by impact on the family.
-  - Saathi raises at most one gently, and "skip" is remembered.
-  - Readiness becomes **link coverage**, shown as a knowledge coverage map, and the family's checklist comes from the graph.
+  - A fixed-rule check against the expected links for each type finds **gaps and conflicts**, ranked by impact on the family (built, PR-7.10, `gaps.py`).
+  - Saathi raises at most one gently, and "skip" is remembered (built).
+  - Still to come (F-7): readiness as **link coverage**, shown as a knowledge coverage map, with the family's checklist from the graph.
 
 ## 6. API surface
 
