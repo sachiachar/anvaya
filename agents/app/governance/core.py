@@ -288,7 +288,7 @@ def _add(agent: str, amount: float) -> None:
     user, pool = current_user(), _pool(agent)
     if not user or not allowances().get(pool):
         return
-    store.increment("user_usage", f"{_today()}:{user}", pool, {METRIC.get(agent, "tokens"): amount},
+    store.increment("user_usage", f"{_today()}:{user}", {pool: {METRIC.get(agent, "tokens"): amount}},
                     {"day": _today(), "user_key": user})
 
 
@@ -317,22 +317,18 @@ def _today() -> str:
 
 def record_usage(agent: str, model: str, tenant: str, *, tokens_in: int = 0, tokens_out: int = 0,
                  minutes: float = 0.0, cost_usd: float = 0.0, error: bool = False) -> None:
-    """Add one model call to today's ledger (the gateway calls this after every call)."""
+    """Add one model call to today's ledger (the gateway calls this after every call).
+
+    An atomic increment, so calls that finish at the same time (on several server instances)
+    never overwrite each other's counts in the portal's spend figures.
+    """
     day_id = _today()
-    day = store.get("usage_days", day_id) or {"id": day_id, "day": day_id, "agents": {}, "tenants": {},
-                                               "models": {}}
-    row = day["agents"].setdefault(agent, {"calls": 0, "tokens_in": 0, "tokens_out": 0, "minutes": 0.0,
-                                           "cost_usd": 0.0, "errors": 0})
-    row["calls"] += 1
-    row["tokens_in"] += tokens_in
-    row["tokens_out"] += tokens_out
-    row["minutes"] = round(row["minutes"] + minutes, 1)
-    row["cost_usd"] = round(row["cost_usd"] + cost_usd, 6)
-    row["errors"] += int(error)
-    day["models"][model] = round(day["models"].get(model, 0.0) + cost_usd, 6)
-    t = day["tenants"].setdefault(tenant, {"cost_usd": 0.0, "active_users": 0})
-    t["cost_usd"] = round(t["cost_usd"] + cost_usd, 6)
-    store.put("usage_days", day)
+    store.increment("usage_days", day_id, {
+        "agents": {agent: {"calls": 1, "tokens_in": tokens_in, "tokens_out": tokens_out, "minutes": minutes,
+                           "cost_usd": cost_usd, "errors": int(error)}},
+        "models": {model: cost_usd},
+        "tenants": {tenant: {"cost_usd": cost_usd}},
+    }, {"day": day_id})
     if not error:
         count_for_user(agent, tokens=tokens_in + tokens_out, minutes=minutes)
 
