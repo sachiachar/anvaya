@@ -126,3 +126,26 @@ def test_a_story_links_to_people_its_text_names_even_without_a_people_list(clien
                               "quote": "Animesh and I ran the magazine."})
     g = graph()
     assert linked(g, story["id"], node(g, "Animesh Anjana")["id"], "mentions")
+
+
+def test_only_the_owners_own_relatives_are_his(client):
+    for name, rel in (("Wife", "wife"), ("Amma", "mother")):
+        proposals.approve("people", proposals.save_person(OWNER, {"name": name, "relationship": rel}))
+    story = _keep("moments", {**STORY, "title": "Ajay's wedding", "people": ["Ajay's wife"],
+                              "summary": "Ajay's wife came with my wife's mother to the wedding.",
+                              "quote": "Ajay's wife came with my wife's mother."})
+    g = graph()
+    assert node(g, "Ajay's wife")["group"] == "mentioned"
+    assert not linked(g, story["id"], node(g, "Amma")["id"], "mentions")  # not the owner's mother
+
+
+def test_names_with_punctuation_match_in_text(client):
+    proposals.approve("people", proposals.save_person(OWNER, {"name": "Dr. Mehta", "relationship": "doctor"}))
+    acct = _keep("inventory", {**POLICY, "institution": "HDFC Bank Ltd.", "category": "bank_account",
+                               "product": "Savings account", "account_hint": "••7777"})
+    story = _keep("moments", {**STORY, "title": "Hospital visit", "people": [],
+                              "summary": "Dr Mehta said the HDFC Bank Ltd account pays the hospital bills.",
+                              "quote": "Dr Mehta told me."})
+    g = graph()
+    assert linked(g, story["id"], node(g, "Dr. Mehta")["id"], "mentions")
+    assert linked(g, story["id"], acct["id"], "about")

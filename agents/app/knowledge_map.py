@@ -23,12 +23,17 @@ import re
 from . import knowledge
 
 NOMINEE_EXPECTED = {"Bank Account", "Insurance Policy", "Investment", "Retirement Account"}
-_POSSESSIVE = re.compile(r"^(?:my|his|her|their|our|[a-z]+'s)\s+")
 GROUPS = {"Story": "story", "Advice": "story", "Practical Fact": "story", "Wish": "wish", "Person": "person"}
 
 
 def _key(name: str) -> str:
     return re.sub(r"\s+", " ", name or "").strip().lower()
+
+
+def _plain(text: str) -> str:
+    """Lower case, punctuation as spaces (apostrophes kept), so "Dr. Mehta" and "HDFC Bank Ltd."
+    compare the same in a name and in a story's text."""
+    return " ".join(re.sub(r"[^a-z0-9']+", " ", (text or "").lower()).split())
 
 
 def _group(okf_type: str) -> str:
@@ -49,21 +54,26 @@ def build(owner_id: str, owner_name: str) -> dict:
     relations: dict[str, list[str]] = {}
     for cid, c in concepts.items():
         if c["graph"]["type"] == "Person":
-            name = _key(c["record"].get("name") or c["title"])
+            name = _plain(c["record"].get("name") or c["title"])
             people.setdefault(name, cid)
             first_names.setdefault(name.split(" ")[0], []).append(cid)
-            rel = _key(c["record"].get("relationship") or "")
+            rel = _plain(c["record"].get("relationship") or "")
             if rel:
                 relations.setdefault(rel, []).append(cid)
     owner_key = _key(owner_name)
+    # Words that make a relative the owner's: "my wife", "his wife" (cards describe the owner in the
+    # third person), "Vikram's wife". Anyone else's ("Ajay's wife") is someone else's.
+    mine = "|".join(re.escape(w) for w in ("my", "his", "her", f"{_plain(owner_name)}'s",
+                                           f"{_plain(owner_name).split(' ')[0]}'s"))
+    possessive = re.compile(rf"^(?:{mine})\s+")
 
     def person(name: str) -> str | None:
         """The owner, a kept person, or a 'mentioned' one the owner hasn't kept yet."""
-        key = _POSSESSIVE.sub("", _key(name))  # "my wife", "Vikram's wife" -> "wife"
+        key = possessive.sub("", _plain(name))  # "my wife", "Vikram's wife" -> "wife"
         if not key:
             return None
         single = " " not in key
-        if key == owner_key or (single and key == owner_key.split(" ")[0]):
+        if key == _plain(owner_key) or (single and key == _plain(owner_key).split(" ")[0]):
             return "owner"
         if key in people:
             return people[key]
@@ -107,7 +117,7 @@ def build(owner_id: str, owner_name: str) -> dict:
         elif c["collection"] == "inventory":
             inst = (record.get("institution") or "").strip()
             if inst:
-                accounts.setdefault(_key(inst), []).append(cid)
+                accounts.setdefault(_plain(inst), []).append(cid)
                 iid = institutions.setdefault(_key(inst), f"institution:{_key(inst)}")
                 if not any(n["id"] == iid for n in nodes):
                     nodes.append({"id": iid, "label": inst, "group": "institution", "type": "Institution"})
@@ -122,12 +132,16 @@ def build(owner_id: str, owner_name: str) -> dict:
     # Stories and wishes also link to the kept people and the accounts their own text names, so
     # "Transfer of SBI account to my wife" reaches the SBI account and the wife.
     for cid, text in moments:
-        words = f" {_key(re.sub(r'[^A-Za-z0-9 ]', ' ', text))} "
-        for name, pid in [*people.items(), *((r, ids[0]) for r, ids in relations.items() if len(ids) == 1)]:
-            if len(name) > 2 and f" {name} " in words:
+        plain = _plain(text)
+        words = f" {plain} "
+        for name, pid in people.items():
+            if len(name) > 2 and (f" {name} " in words or f" {name}'s " in words):
                 link(cid, pid, "mentions")
+        for rel, ids in relations.items():  # "my wife", not "my wife's mother" or "Ajay's son"
+            if len(ids) == 1 and re.search(rf"(?:^| )(?:{mine}) {re.escape(rel)}(?![a-z0-9'])", plain):
+                link(cid, ids[0], "mentions")
         for inst, ids in accounts.items():
-            if f" {inst} " in words:
+            if inst and f" {inst} " in words:
                 for aid in ids:
                     link(cid, aid, "about")
 
