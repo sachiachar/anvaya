@@ -118,6 +118,7 @@ function MissingPieces() {
           </li>
         ))}
       </ul>
+      <p className="muted">We count common gaps, never the details, to protect everyone.</p>
       <ErrorLine error={error} />
     </Card>
   );

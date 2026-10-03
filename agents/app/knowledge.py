@@ -143,7 +143,7 @@ def _description(collection: str, item: dict) -> str:
 
 LINK_LABELS = {"nominee": "Nominee", "holder": "Holder", "intended_for": "Meant for", "people": "Mentions"}
 # Fields whose presence (never their value) the graph records, for the gap check (PR-7.10).
-HAS_FIELDS = ("nominee_or_beneficiary", "holder_name", "intended_for", "papers_at")
+HAS_FIELDS = ("nominee_or_beneficiary", "holder_name", "intended_for", "papers_at", "relationship")
 _SPLIT = re.compile(r"\s*(?:,|;|&|\band\b)\s*", re.IGNORECASE)
 
 
@@ -627,6 +627,19 @@ def for_reading(owner_id: str) -> list[dict]:
                     "confirmed": entry.get("verified", False),
                     "text": _body(entry["collection"], entry["record"], entry["title"], entry["description"],
                                   entry["graph"]["links"], cat)})
+    return out
+
+
+def graph_parts(owner_id: str) -> list[dict]:
+    """The graph part of every current kept item: type, status, typed links (bundle paths) and which
+    key fields are present. Nothing else: no names, text, sources or record. This is all a
+    fixed-code reader such as the fraud cues (fraud_cues.py) may see of an owner's knowledge."""
+    out = []
+    for entry in catalog(owner_id)["concepts"].values():
+        g = entry["graph"]
+        if g["status"] == "stable":
+            out.append({"path": f"/{entry['path']}", "type": g["type"], "status": g["status"],
+                        "links": g.get("links", {}), "has": list(g.get("has", []))})
     return out
 
 

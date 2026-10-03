@@ -78,6 +78,8 @@ export type Scenario = { id: string; at: number; scenario: string; safeguard: st
   review: "pending" | "unconfirmed" | "approved" | "discarded" | "faded";
   evidence: number; label?: Label; variant?: "close" | "far"; steps?: string[]; claim?: string;
   sources?: Source[]; source_note?: string; coverage_reason?: string; run_id?: string;
+  /** The common gap in kept knowledge it starts from: a pattern and how many owners have it (never who). */
+  cue?: { pattern: string; asset_class: string; owners: number; means: string } | null;
   /** If approved, this becomes a warning sign the certificate check uses, so a reviewer sees both parts. */
   document_sign?: { look_for: string; genuine: string } | null };
 

@@ -573,6 +573,7 @@ export function FraudPage({ me }: { me: Me }) {
               <p><strong>{s.scenario}</strong></p>
               {s.steps && s.steps.length > 0 && <ol className="pa-muted">{s.steps.map((x) => <li key={x}>{x}</li>)}</ol>}
               <p className="pa-muted">{s.caught_by ? `Caught by: ${s.caught_by}` : "Not caught by any safeguard yet."}{s.coverage_reason ? ` ${s.coverage_reason}` : ""}</p>
+              {s.cue && <p className="pa-muted">Starts from a common gap: {s.cue.owners} owners have {s.cue.means} (counted, never read).</p>}
               {s.document_sign && s.review === "pending" && <SignPreview sign={s.document_sign} />}
               {s.source_note && <p className="pa-muted">What sources say: {s.source_note}</p>}
               <Sources sources={s.sources} />
