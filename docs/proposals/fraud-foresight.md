@@ -1,6 +1,6 @@
 # Fraud foresight: imagine, check, keep
 
-**Status:** proposal, waiting for approval · **Issues:** PR-2.3 (#6), PR-2.5 (#8), PR-2.6 (#9), PR-2.7 (#12), PR-7 (#18) · **Owner review:** governance, registry, admin portal
+**Status:** agreed 3 October 2026; partly built: the India guide (#71, PR-2.3), the pipeline (#73, PR-2.5, PR-2.6) and web checks with Exa (#77). Still to come: automatic admission and learning (§7, §8) and OKF cues (§5) · **Issues:** PR-2.3 (#6), PR-2.5 (#8), PR-2.6 (#9), PR-2.7 (#12), PR-7 (#18) · **Owner review:** governance, registry, admin portal
 
 ## 1. In short
 

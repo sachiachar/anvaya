@@ -115,7 +115,7 @@ flowchart LR
 
 **One companion everywhere.** `loops.persona` defines Saathi once: warm, addresses the owner as "{first name} ji", matches their language, honest about what is saved, no legal advice, and asks who unknown people are. Both the typed chat and the live call use it.
 
-### 4.1 Guardian layer (planned for the prototype release)
+### 4.1 Guardian layer (partly built: fraud guide, dreaming and research; the core is planned)
 
 Fraud can enter at any loop, not only at activation, so a **guardian** watches every loop and corrects course before an action takes effect. It is tracked as PR-2 ([#2](https://github.com/sachiachar/anvaya/issues/2)).
 
@@ -167,7 +167,7 @@ The portal is a separate entry point (`web/admin.html`), served by its own Fireb
 | `access_requests` | name, relationship, contact, note, status (pending_owner, pending_review, approved, declined) | Family members who weren't listed |
 | `handoffs`, `legal_documents` | Consented legal summaries; signed documents | Never contain vault data |
 
-### 5.1 Storage layout (planned for the prototype release)
+### 5.1 Storage layout (kept-knowledge bundle built; buckets per tenant planned)
 
 **Buckets per tenant and region; inside each, a folder per owner, a key per owner, and access tokens limited to one owner.** Tracked in [PR-6 (#17)](https://github.com/sachiachar/anvaya/issues/17) and [PR-7 (#18)](https://github.com/sachiachar/anvaya/issues/18).
 
@@ -195,9 +195,9 @@ The portal is a separate entry point (`web/admin.html`), served by its own Fireb
   - the owner can delete it, by destroying its key.
 - **The family's assistant** (built, PR-7.5) gets the whole kept bundle in its instructions while it's under about 20,000 tokens, built fresh for each question from current versions only; above that, `index.md` and the concepts it opens. Kept text is fenced as information, never instructions. Every source shown is a real kept item, with its title. It never reads the conversation, another owner's bundle or the vault. Context caching can come later.
 - **The bundle is a graph** (typed links built, PR-7.3 and 7.9). Each kept item links to the people it names: an account or policy to its `nominee` and `holder`, property or a wish to who it's `intended_for`, a story to the `people` it mentions. Links are frontmatter fields (bundle paths) and ordinary Markdown links in the body. A full name must match a kept person, and a first name only if exactly one kept person has it; keeping or replacing a person relinks the items that name them. The graph part also records which key fields are present (`has`: nominee, holder, intended for, papers), never their values. Still to come: `covered_by` (a will) and `contact`. No graph database.
-  - A fixed-rule check against the expected links for each type finds **gaps and conflicts**, ranked by impact on the family.
-  - Saathi raises at most one gently, and "skip" is remembered.
-  - Readiness becomes **link coverage**, shown as a knowledge coverage map, and the family's checklist comes from the graph.
+  - A fixed-rule check against the expected links for each type finds **gaps and conflicts**, ranked by impact on the family (built, PR-7.10, `gaps.py`).
+  - Saathi raises at most one gently, and "skip" is remembered (built).
+  - Still to come (F-7): readiness as **link coverage**, shown as a knowledge coverage map, with the family's checklist from the graph.
 
 ## 6. API surface
 
