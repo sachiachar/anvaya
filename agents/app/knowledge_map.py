@@ -5,7 +5,9 @@ taps Keep. Nodes are the owner, kept concepts, institutions named by accounts, a
 story mentions who aren't kept yet. Links are the concepts' typed links (PR-7.9) once they
 exist; until then the links the cards already imply, marked `derived`:
 
-    story or wish -> each person it mentions          ("mentions")
+    story or wish -> each person it mentions          ("mentions"), by name or relationship
+                                                      ("my wife"), in its people or its text
+    story or wish -> an account or bank it names      ("about")
     account or policy -> its nominee, its holder      ("nominee", "holder")
     account or policy -> its institution              ("with")
     person -> the owner                               (their relationship)
@@ -21,6 +23,7 @@ import re
 from . import knowledge
 
 NOMINEE_EXPECTED = {"Bank Account", "Insurance Policy", "Investment", "Retirement Account"}
+_POSSESSIVE = re.compile(r"^(?:my|his|her|their|our|[a-z]+'s)\s+")
 GROUPS = {"Story": "story", "Advice": "story", "Practical Fact": "story", "Wish": "wish", "Person": "person"}
 
 
@@ -43,16 +46,20 @@ def build(owner_id: str, owner_name: str) -> dict:
     # single word ("Ajay") matches a kept person's first name only if exactly one has it.
     people: dict[str, str] = {}
     first_names: dict[str, list[str]] = {}
+    relations: dict[str, list[str]] = {}
     for cid, c in concepts.items():
         if c["graph"]["type"] == "Person":
             name = _key(c["record"].get("name") or c["title"])
             people.setdefault(name, cid)
             first_names.setdefault(name.split(" ")[0], []).append(cid)
+            rel = _key(c["record"].get("relationship") or "")
+            if rel:
+                relations.setdefault(rel, []).append(cid)
     owner_key = _key(owner_name)
 
     def person(name: str) -> str | None:
         """The owner, a kept person, or a 'mentioned' one the owner hasn't kept yet."""
-        key = _key(name)
+        key = _POSSESSIVE.sub("", _key(name))  # "my wife", "Vikram's wife" -> "wife"
         if not key:
             return None
         single = " " not in key
@@ -62,6 +69,8 @@ def build(owner_id: str, owner_name: str) -> dict:
             return people[key]
         if single and len(first_names.get(key, [])) == 1:
             return first_names[key][0]
+        if len(relations.get(key, [])) == 1:  # "wife" -> the one kept person who is the wife
+            return relations[key][0]
         mid = f"mention:{key}"
         if not any(n["id"] == mid for n in nodes):
             nodes.append({"id": mid, "label": name.strip(), "group": "mentioned", "type": "Mentioned"})
@@ -75,6 +84,8 @@ def build(owner_id: str, owner_name: str) -> dict:
             edges.append({"from": a, "to": b, "label": label, "derived": derived})
 
     institutions: dict[str, str] = {}
+    moments: list[tuple[str, str]] = []  # (id, text), linked to people and accounts they name below
+    accounts: dict[str, list[str]] = {}  # institution key -> account ids
     for cid, c in concepts.items():
         okf_type, record = c["graph"]["type"], c["record"]
         nodes.append({"id": cid, "label": c["title"], "group": _group(okf_type), "type": okf_type,
@@ -92,9 +103,11 @@ def build(owner_id: str, owner_name: str) -> dict:
                 target = person(name)
                 if target:
                     link(cid, target, "mentions")
+            moments.append((cid, f"{c['title']} {c.get('description', '')} {record.get('summary', '')}"))
         elif c["collection"] == "inventory":
             inst = (record.get("institution") or "").strip()
             if inst:
+                accounts.setdefault(_key(inst), []).append(cid)
                 iid = institutions.setdefault(_key(inst), f"institution:{_key(inst)}")
                 if not any(n["id"] == iid for n in nodes):
                     nodes.append({"id": iid, "label": inst, "group": "institution", "type": "Institution"})
@@ -105,6 +118,18 @@ def build(owner_id: str, owner_name: str) -> dict:
                     link(cid, target, label)
             if okf_type in NOMINEE_EXPECTED and not record.get("nominee_or_beneficiary"):
                 gaps.append({"node": cid, "missing": "nominee"})
+
+    # Stories and wishes also link to the kept people and the accounts their own text names, so
+    # "Transfer of SBI account to my wife" reaches the SBI account and the wife.
+    for cid, text in moments:
+        words = f" {_key(re.sub(r'[^A-Za-z0-9 ]', ' ', text))} "
+        for name, pid in [*people.items(), *((r, ids[0]) for r, ids in relations.items() if len(ids) == 1)]:
+            if len(name) > 2 and f" {name} " in words:
+                link(cid, pid, "mentions")
+        for inst, ids in accounts.items():
+            if f" {inst} " in words:
+                for aid in ids:
+                    link(cid, aid, "about")
 
     titles = {cid: c["title"] for cid, c in cat.get("concepts", {}).items()}
     recent = [{"at": e["at"], "action": e["action"], "id": e["id"], "title": e.get("title") or titles.get(e["id"], "")}

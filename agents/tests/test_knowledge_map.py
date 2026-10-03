@@ -102,3 +102,27 @@ def test_each_link_is_drawn_once(client):
     g = graph()
     keys = [(e["from"], e["to"], e["label"]) for e in g["edges"]]
     assert len(keys) == len(set(keys)) == g["counts"]["links"]
+
+
+def test_a_wish_about_an_account_links_to_it_and_to_the_person_by_relationship(client):
+    proposals.approve("people", proposals.save_person(OWNER, {"name": "Wife", "relationship": "wife"}))
+    account = _keep("inventory", {**POLICY, "category": "bank_account", "institution": "SBI",
+                                  "product": "Savings account", "account_hint": "••4808", "nominee_or_beneficiary": None})
+    wish = _keep("moments", {**STORY, "kind": "wish", "title": "Transfer of SBI account", "people": ["my wife"],
+                             "summary": "He wants his SBI savings account to go to his wife.",
+                             "quote": "SBI account should go to my wife."})
+    g = graph()
+    wife = node(g, "Wife")
+    assert linked(g, wish["id"], account["id"], "about")
+    assert linked(g, wish["id"], wife["id"], "mentions")
+    assert not any(n["group"] == "mentioned" for n in g["nodes"])  # "my wife" is the kept wife
+    assert {"node": account["id"], "missing": "nominee"} in g["gaps"]  # a wish isn't a nominee
+
+
+def test_a_story_links_to_people_its_text_names_even_without_a_people_list(client):
+    proposals.approve("people", proposals.save_person(OWNER, {"name": "Animesh Anjana", "relationship": "friend"}))
+    story = _keep("moments", {**STORY, "title": "College days", "people": [],
+                              "summary": "He and Animesh Anjana ran the college magazine together.",
+                              "quote": "Animesh and I ran the magazine."})
+    g = graph()
+    assert linked(g, story["id"], node(g, "Animesh Anjana")["id"], "mentions")
