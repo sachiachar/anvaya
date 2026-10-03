@@ -76,7 +76,7 @@ Everything Anvaya is built on, with each item's version, licence and purpose. Ve
 | --- | --- | --- | --- |
 | actions/checkout | v7 | MIT | Fetches the code in CI and deploys |
 | actions/setup-node | v7 | MIT | Installs Node from `web/.nvmrc` |
-| astral-sh/setup-uv | v10 | MIT | Installs uv, and Python from `agents/.python-version` |
+| astral-sh/setup-uv | v10.2.0 (no major tags since v8) | MIT | Installs uv, and Python from `agents/.python-version` |
 | dorny/paths-filter | v4 | MIT | Deploys only the parts that changed |
 | google-github-actions/auth | v3 | Apache-2.0 | Signs in to Google Cloud with Workload Identity Federation (no stored keys) |
 | google-github-actions/setup-gcloud | v3 | Apache-2.0 | Installs the `gcloud` CLI for deploys |

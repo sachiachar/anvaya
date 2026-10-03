@@ -81,7 +81,7 @@ gh api repos/<owner>/<action>/releases/latest --jq .tag_name   # a GitHub Action
 
 - **Stable only.** Don't use pre-releases (alpha, beta, rc, preview, `next`, `canary`) or runtimes past their end of life.
 - **Runtimes are pinned in one place each.** Python is in `agents/.python-version` (also `requires-python` and the Dockerfile). Node is in `web/.nvmrc`, the current Active LTS (also `engines`; workflows read the file). Move them only to a newer stable or LTS release, in every place at once. A test checks that they agree.
-- **Pin what you ship.** Commit the lockfiles (`agents/uv.lock`, `web/package-lock.json`). Pin container images to a version, never `latest`. Use GitHub Actions at their latest major tag.
+- **Pin what you ship.** Commit the lockfiles (`agents/uv.lock`, `web/package-lock.json`). Pin container images to a version, never `latest`. Use each GitHub Action's latest release: its major tag (`@v7`) where it publishes one, otherwise the full version (`astral-sh/setup-uv@v10.2.0`; it stopped publishing major tags in v8). Check the tag exists (`gh api repos/<owner>/<action>/git/ref/tags/<tag>`): `deploy.yml` only runs after merging, so CI won't catch a bad tag there.
 - **Set version floors to what you tested.** In `pyproject.toml`, use `>=` the locked version. In `package.json`, use `^` the installed version.
 - **Read the release notes before a major upgrade.** List the breaking changes that apply in the PR, or say that none do. Then run every check.
 - **When you can't use the latest version,** because another package caps it, don't force it or add an override. Record the package and what holds it back in [docs/dependencies.md](docs/dependencies.md).
