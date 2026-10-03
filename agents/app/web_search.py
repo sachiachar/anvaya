@@ -4,10 +4,12 @@ Our code searches; Gemini only reads what came back. For a claim or a guide:
   1. Exa returns the top pages, each with its title, address and text.
   2. Gemini, with no web access, answers from those pages only, and must copy word for word
      the sentence of a page that supports each statement it makes.
-  3. Our code keeps a statement's source only if that quote really appears in the page, so a
-     model can't invent support. The result has the same shape as before (an answer, its
-     sources, and which sources support which sentence), so the fraud pipeline's rule 3
-     ("confirmed" means a source supports the claim) is unchanged.
+  3. Our code keeps a statement only if that quote really appears in the page and, when there's
+     a claim, is about it (a third of the claim's key words). Unsupported statements are dropped,
+     so a model can't invent support and nothing unsupported reaches a reviewer. The result has
+     the same shape as before (an answer, its sources, and which sources support which
+     sentence), so the fraud pipeline's rule 3 ("confirmed" means a source supports the claim)
+     is unchanged.
 
 Only agents the registry gives the `web_search` tool may search. Queries carry fraud research
 only (a document type, a country, a claimed tactic), never owner data. Page text is
@@ -91,10 +93,19 @@ def _norm(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
 
 
-def quoted(quote: str, page: str) -> bool:
-    """True only if the quote is long enough to show support and appears in the page word for word."""
+def _words(text: str) -> set[str]:
+    return {w for w in re.findall(r"\w+", text.lower()) if len(w) > 2}
+
+
+def quoted(quote: str, page: str, claim: str | None = None) -> bool:
+    """True only if the quote is long enough to show support, appears in the page word for word,
+    and, when there's a claim, is about it: it shares at least a third of the claim's key words
+    (the same test judge() applies to the answer), so any long sentence of a page won't do."""
     q = _norm(quote).strip(" .\"'")
-    return len(q) >= MIN_QUOTE_CHARS and q in _norm(page)
+    if len(q) < MIN_QUOTE_CHARS or q not in _norm(page):
+        return False
+    key = _words(claim or "")
+    return not key or len(_words(q) & key) * 3 >= len(key)
 
 
 _PAGE_TAG = re.compile(r"<\s*/?\s*page", re.IGNORECASE)  # a page can't open or close a fence
@@ -105,8 +116,11 @@ def _fence(pages: list[Page]) -> str:
                        f"{_PAGE_TAG.sub('‹page', p.text)}\n</page>" for i, p in enumerate(pages))
 
 
-async def answer_from_web(*, agent: str, model: str, query: str, question: str, system: str) -> Answer:
-    """Search the web for `query`, then answer `question` from those pages only (see module doc)."""
+async def answer_from_web(*, agent: str, model: str, query: str, question: str, system: str,
+                          claim: str | None = None) -> Answer:
+    """Search the web for `query`, then answer `question` from those pages only (see module doc).
+    With a `claim`, a quote supports a sentence only if it's about that claim. The answer keeps
+    only sentences a verified quote supports, so nothing unsupported reaches a reviewer."""
     pages = await search(query, agent=agent)
     if not pages:
         return Answer(text="")
@@ -119,9 +133,9 @@ async def answer_from_web(*, agent: str, model: str, query: str, question: str, 
     )
     supports = []
     for s in reply.statements:
-        if 0 <= s.source < len(pages) and quoted(s.quote, pages[s.source].text):
+        if 0 <= s.source < len(pages) and quoted(s.quote, pages[s.source].text, claim):
             supports.append((s.sentence, [s.source]))
         else:
-            log.info("dropped a statement whose quote isn't in page %s", s.source)
-    text = "\n".join([reply.first_line.strip(), " ".join(s.sentence for s in reply.statements)]).strip()
+            log.info("dropped a statement whose quote isn't supported by page %s", s.source)
+    text = "\n".join([reply.first_line.strip(), " ".join(sentence for sentence, _ in supports)]).strip()
     return Answer(text=text, sources=[(p.title, p.url) for p in pages], supports=supports)

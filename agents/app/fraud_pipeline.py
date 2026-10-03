@@ -210,6 +210,7 @@ async def check_claim(claim: str) -> Evidence:
         agent=RESEARCHER,
         model=settings.research_model,
         query=claim,
+        claim=claim,
         system=("You check claims about fraud for a fraud-prevention team. Say YES only if a page describes "
                 "this kind of fraud happening or being attempted."),
         question=(f'Claim: "{claim}"\nIs this reported by a news story, an official notice, a court record or a '

@@ -470,6 +470,15 @@ def test_a_source_counts_only_if_its_quote_is_really_in_the_page(monkeypatch):
     _model(monkeypatch, [short])
     assert not asyncio.run(fraud_pipeline.check_claim(CLAIM)).confirmed  # a mention isn't support
 
+    # A real, long sentence of the page that isn't about the claim doesn't count either.
+    _exa(monkeypatch, [("x", "https://example.test/x", PAGE + " Certificates are issued by the local registrar "
+                        "within twenty-one days of the registration of the event.")])
+    unrelated = web_search.Statement(sentence=CLAIM + ".", source=0, quote="Certificates are issued by the local "
+                                     "registrar within twenty-one days of the registration of the event")
+    _model(monkeypatch, [unrelated])
+    e = asyncio.run(fraud_pipeline.check_claim(CLAIM))
+    assert not e.confirmed and e.summary == ""  # and its unsupported sentence isn't shown to reviewers
+
 
 def test_no_key_means_a_clear_failure_on_the_run(monkeypatch, stub):
     monkeypatch.setattr(fraud_pipeline, "answer_from_web", web_search.answer_from_web)

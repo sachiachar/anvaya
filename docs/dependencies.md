@@ -23,6 +23,7 @@ Everything Anvaya is built on, with each item's version, licence and purpose. Ve
 | pydantic | 2.13.5 | MIT | Request and response schemas; structured output from Gemini |
 | google-genai | 2.28.0 | Apache-2.0 | Gemini calls: conversation, extraction, documents, spoken replies, live calls |
 | google-adk | 2.11.0 | Apache-2.0 | The handover assistant agent (`executor_agent.py`) |
+| httpx | 0.28.1 | BSD-3-Clause | Calls Exa's search API for fraud research (`web_search.py`); also the test client's fallback |
 | google-cloud-bigquery | 3.46.1 | Apache-2.0 | Reads actual costs from the Cloud Billing export (admin portal) |
 | google-cloud-firestore | 2.34.0 | Apache-2.0 | Data store on Google Cloud (`STORE=firestore`) |
 | google-cloud-kms | 3.18.0 | Apache-2.0 | Wraps the vault escrow blob with the KMS key |
@@ -36,7 +37,6 @@ Everything Anvaya is built on, with each item's version, licence and purpose. Ve
 | --- | --- | --- | --- |
 | pytest | 9.1.1 | MIT | Runs the tests |
 | httpx2 | 2.13.1 | BSD-3-Clause | HTTP client used by FastAPI's test client |
-| httpx | 0.28.1 | BSD-3-Clause | Fallback HTTP client for the test client |
 | ruff | 0.16.10 | MIT | Lint |
 
 **Held back by an upstream limit.** These indirect packages aren't at their latest release, because `google-adk` 2.11.0 (its latest release) caps them. They move when ADK raises its limits, and Dependabot opens that pull request.
