@@ -53,7 +53,7 @@ These protect users and the budget. Tests enforce several of them, so don't weak
 1. **Every Gemini call goes through the governance gateway** (`check_call(…)` in `agents/app/governance/core.py`). It names its agent (`agent="…"`), which must be in `agents/registry.yaml` with its role, autonomy, allowed models and tools, and limits. A new agent or model needs a registry entry in the same PR.
 2. **The server never sees vault secrets.** Encryption happens on the device (`web/src/vaultCrypto.ts`). Don't add a server path, log line or agent tool that could read them.
 3. **People decide.** The AI proposes. Nothing approves a release, saves to the archive without the owner's Keep, or shares with a partner without consent. Death and legal checks only assist. Keep the two-reviewer rule, override reasons and the waiting period.
-4. **No conversation text or names** in the platform admin portal or in logs. Users appear only as hashed keys.
+4. **No conversation text or names** in the platform admin portal or in logs. Users appear only as hashed keys. The one exception: a nickname a visitor chooses for their own demo copy, which is optional, shown only to platform admins, and never logged.
 5. **No real personal data.** Use synthetic data in code, tests, fixtures, prompts and screenshots. Mask account and policy numbers (last 4 digits only).
 6. **No secrets in the repo.** Configuration comes from environment variables (`agents/app/config.py`); document new ones in `agents/.env.example` or `web/.env.example`. Never read, print or commit `.env` files.
 7. **The prototype release uses the Gemini API key path, not Vertex AI.** A test checks this.

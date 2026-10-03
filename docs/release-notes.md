@@ -15,6 +15,7 @@
 **Access**
 - Vikram's daughter Priya is in his family from the start, so he can choose her as his vault recipient straight away. Only the person Vikram chose can accept; if he chose someone else, Priya's screen says so.
 - Switch between the people in your demo: Vikram (owner), Priya (family), Anjali and Rahul (reviewers) and the platform admin. A banner always shows who you are acting as. The server checks it: only Vikram changes his vault, only Priya opens it after release, and only a reviewer confirms. One reviewer can't confirm both the death and the legal authority, even though you play both.
+- After signing in for the first time, you can give an optional nickname, asked once. Only the Anvaya team sees it, to tell demo copies apart.
 - Each person who signs in gets their own private copy of the demo. Nobody else can see or change it, and "Reset my demo" restores only your own copy, including its recordings.
 - The app is now called Anvaya, at https://anvaya-saathi.web.app, with a new logo, icons and navy theme. The old address redirects there.
 
@@ -28,7 +29,7 @@
   - budget requests to approve or reject;
   - guardian interventions to confirm or reverse;
   - the fraud coverage map and reference guides;
-  - judges' demo copies;
+  - every private demo copy, with when it was last used and today's allowance used; your own is marked, and a platform admin can restore any copy to the start;
   - an audit log of every decision.
 - Roles in the portal (platform admin, budget approver, risk reviewer, viewer) are checked on the server. Anyone else who signs in can only view.
 - The portal never shows conversation text or names. People appear as anonymous keys, and counts under 5 are hidden.
@@ -57,7 +58,7 @@
 - Live calls end after about 15 minutes (Gemini Live limit), and spoken replies can't be rule-checked like typed ones.
 - Free-tier Gemini keys run out quickly; turn on billing for demos.
 - Spend, use and refused calls in the admin portal are always real. Spend appears only once Google Cloud billing has data; until then the portal says it isn't available yet.
-- Budget requests, guardian interventions, fraud scenarios and guides, judges' demo copies and quota headroom are clearly labelled examples until those features are built.
+- The admin portal shows only real data. Budget requests, guardian interventions, fraud scenarios and guides, and quota headroom stay empty until those features record them.
 - Spend can't yet be split by agent or tenant on the bill; those show use instead.
 
 ### Next

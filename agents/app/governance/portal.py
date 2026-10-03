@@ -13,10 +13,11 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from .. import demo
 from ..store import store
 from . import billing, core
 from .core import Actor, actor, audit, need, platform_settings, registry, small
-from .seed import ensure_seeded, seed
+from .seed import ensure_current
 
 # ---- Read models ----------------------------------------------------------------
 
@@ -93,20 +94,20 @@ def me(who: Actor = Depends(actor)) -> Actor:
 @router.get("/overview")
 def get_overview(fresh: bool = False, _: Actor = Depends(actor)) -> dict:
     """fresh=true (the portal's Refresh button) reads billing again, at most once a minute."""
-    ensure_seeded()
+    ensure_current()
     return overview(fresh=fresh)
 
 
 @router.get("/agents")
 def get_agents(_: Actor = Depends(actor)) -> dict:
-    ensure_seeded()
+    ensure_current()
     return {"agents": agents_view(),
             "blocked": sorted(store.list("gateway_blocked"), key=lambda b: -b["at"])}
 
 
 @router.get("/approvals")
 def get_approvals(_: Actor = Depends(actor)) -> dict:
-    ensure_seeded()
+    ensure_current()
     reqs = sorted(store.list("budget_requests"), key=lambda r: -r["at"])
     now = time.time()
     return {"pending": [r for r in reqs if r["status"] == "pending"],
@@ -140,7 +141,7 @@ def decide_approval(request_id: str, body: Decision, who: Actor = Depends(need("
 
 @router.get("/guardian")
 def get_guardian(_: Actor = Depends(actor)) -> dict:
-    ensure_seeded()
+    ensure_current()
     events = sorted(store.list("guardian_events"), key=lambda e: -e["at"])
     decided = [e for e in events if e["status"] != "open"]
     reversed_ = [e for e in decided if e["status"] == "reversed"]
@@ -171,7 +172,7 @@ def decide_guardian(event_id: str, body: GuardianDecision, who: Actor = Depends(
 
 @router.get("/fraud")
 def get_fraud(_: Actor = Depends(actor)) -> dict:
-    ensure_seeded()
+    ensure_current()
     scenarios = sorted(store.list("fraud_scenarios"), key=lambda s: -s["at"])
     return {"scenarios": scenarios,
             "coverage": {"covered": sum(s["coverage"] == "covered" for s in scenarios),
@@ -207,11 +208,26 @@ def research_now(guide_id: str, who: Actor = Depends(need("review_fraud"))) -> d
             "message": "Research requested. The research agent (PR-2.5) picks this up when it runs."}
 
 
+def _allowance_used(key: str) -> float:
+    """Share of today's owner token allowance this copy has used, counting approved extra
+    allowance, exactly as the gateway does (PR-10.4)."""
+    tokens = core.allowance_status(key).get("owner", {}).get("tokens") or {}
+    return round(min(1.0, tokens.get("share", 0.0)), 4)
+
+
 @router.get("/demos")
-def get_demos(_: Actor = Depends(actor)) -> dict:
-    ensure_seeded()
-    return {"copies": sorted(store.list("demo_copies"), key=lambda d: -d["last_used_at"]),
-            "cleanup_after_days": 30}
+def get_demos(who: Actor = Depends(actor)) -> dict:
+    """Every private demo copy, without names. A visitor's optional nickname is shown only to
+    platform admins; the viewer's own copy is marked."""
+    ensure_current()
+    copies = []
+    for d in sorted(store.list("demo_copies"), key=lambda d: -d.get("last_used_at", 0)):
+        row = {k: d.get(k) for k in ("id", "user_key", "created_at", "last_used_at", "status", "reset_at")}
+        row |= {"allowance_used": _allowance_used(d["id"]), "is_you": d["id"] == who.key}
+        if who.role == "platform_admin":
+            row["nickname"] = d.get("nickname")
+        copies.append(row)
+    return {"copies": copies, "cleanup_after_days": 30, "nicknames_visible": who.role == "platform_admin"}
 
 
 class Reason(BaseModel):
@@ -224,7 +240,8 @@ def reset_demo(copy_id: str, body: Reason, who: Actor = Depends(need("manage_dem
     if not copy:
         raise HTTPException(404, "demo copy not found")
     audit(who, "demo.reset", copy_id, body.reason)
-    return store.update("demo_copies", copy_id, {"allowance_used": 0.0, "reset_at": time.time()})
+    demo.reset(copy_id)  # the copy's demo data back to the start; never another copy's
+    return store.update("demo_copies", copy_id, {"reset_at": time.time()})
 
 
 class KillSwitch(BaseModel):
@@ -234,17 +251,11 @@ class KillSwitch(BaseModel):
 
 @router.post("/kill-switch")
 def set_kill_switch(body: KillSwitch, who: Actor = Depends(need("kill_switch"))) -> dict:
-    ensure_seeded()
+    ensure_current()
     audit(who, "kill_switch.set", body.state, body.reason)
     return store.update("platform_settings", "settings", {"kill_switch": body.state,
                                                           "kill_switch_reason": body.reason})
 
-
-@router.post("/reseed")
-def reseed(who: Actor = Depends(need("reseed"))) -> dict:
-    seed()
-    audit(who, "demo_data.reseed", "platform")
-    return {"seeded": True}
 
 
 @router.get("/audit")

@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from app import auth, main
 from app.config import settings
 from app.governance import core
-from app.governance.seed import seed
+from app.governance.seed import clear_samples as seed
 from app.store import new_id, store
 
 PERSON = "u_person0001"

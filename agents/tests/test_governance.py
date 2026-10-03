@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from app import auth, gemini, main
 from app.config import settings
 from app.governance import core
-from app.governance.seed import seed
+from app.governance.seed import clear_samples as seed
 from app.store import store
 
 TOKENS = {
@@ -35,7 +35,20 @@ def client(monkeypatch):
         "risk@anvaya.test": "risk_reviewer"})
     monkeypatch.setattr(settings, "platform_default_role", "viewer")
     seed()
+    _real_events()
     return TestClient(main.app)
+
+
+def _real_events() -> None:
+    """What real use leaves behind (the portal no longer seeds examples): a judge's request for
+    more allowance, and an intervention recorded through the guardian's own function."""
+    for collection in ("budget_requests", "guardian_events"):
+        for doc in store.list(collection):
+            store.delete(collection, doc["id"])
+    store.put("budget_requests", {"id": "req_test", "at": 1.0, "tenant": "judges", "user_key": core.user_key("u-judge"),
+                                  "kind": "voice_minutes", "amount": 30, "hours": 24,
+                                  "reason": "Exploring the live call", "status": "pending"})
+    core.record_intervention("activation.checker", "pause", "Same certificate used in another case", "c_test")
 
 
 def h(who):
@@ -158,7 +171,7 @@ def test_generate_json_names_its_agent_and_records_usage(client, monkeypatch):
     assert row["calls"] == calls_before + 1 and row["tokens_in"] >= 1000 and "cost_usd" not in row
 
 
-def test_portal_shows_usage_not_estimates_and_reseeds_old_cost_data(client):
+def test_portal_shows_usage_not_estimates_and_clears_old_examples(client):
     from app.governance import seed as seeding
 
     core.record_usage("saathi.chat", "gemini-3.1-flash-lite", "direct", tokens_in=10, tokens_out=5)
@@ -166,20 +179,26 @@ def test_portal_shows_usage_not_estimates_and_reseeds_old_cost_data(client):
     assert o["spend"]["available"] is False  # no billing export in tests: no guessing
     assert o["usage"]["by_agent"]["saathi.chat"]["calls"] > 0
     assert "usd" not in str(o["usage"]).lower()
-    store.update("platform_settings", "settings", {"data_version": 2})  # data with estimated costs
-    seeding.ensure_seeded()
+    store.update("platform_settings", "settings", {"data_version": 4})  # data with seeded examples
+    seeding.ensure_current()
     assert core.platform_settings()["data_version"] == seeding.DATA_VERSION
 
 
-def test_seed_never_writes_usage_or_blocked_calls_and_clears_old_samples():
-    store.put("usage_days", {"id": "2026-09-01", "day": "2026-09-01", "seeded": True, "agents": {}, "tenants": {}})
-    store.put("usage_days", {"id": "2026-09-02", "day": "2026-09-02", "agents": {}, "tenants": {}})  # real use
-    store.put("gateway_blocked", {"id": "blk_old", "seeded": True, "at": 1.0, "agent": "saathi.chat"})
+def test_old_seeded_examples_go_and_real_data_stays(client):
+    from app.governance.seed import CLEARED
+
+    for collection in CLEARED:
+        store.put(collection, {"id": f"old_{collection}", "seeded": True, "at": 1.0, "day": "2026-09-01",
+                               "last_used_at": 1.0, "agents": {}, "tenants": {}})
+    store.update("platform_settings", "settings", {"quota": {"rpm_limit": 1000, "rpm_peak": 212}})
     seed()
-    assert store.get("usage_days", "2026-09-01") is None and store.get("gateway_blocked", "blk_old") is None
-    assert store.get("usage_days", "2026-09-02") is not None
-    assert not store.list("usage_days", seeded=True) and not store.list("gateway_blocked", seeded=True)
-    assert store.list("budget_requests", seeded=True) and store.list("guardian_events", seeded=True)
+    for collection in CLEARED:
+        assert store.get(collection, f"old_{collection}") is None, collection
+        assert not store.list(collection, seeded=True), collection
+    assert store.get("budget_requests", "req_test") is not None  # real requests stay
+    assert "quota" not in core.platform_settings()  # sample quota gone; the portal hides the section
+    o = client.get("/api/platform/overview", headers=h("admin")).json()
+    assert o["quota"] is None
 
 
 def test_tenants_show_only_real_use_and_real_active_people(client):
@@ -192,7 +211,7 @@ def test_tenants_show_only_real_use_and_real_active_people(client):
     assert tenants["direct"]["calls"] >= 6 and tenants["direct"]["active_users_today"] >= 6
 
 
-def test_reseeding_keeps_the_kill_switch(client):
+def test_clearing_examples_keeps_the_kill_switch(client):
     assert client.post("/api/platform/kill-switch", headers=h("admin"),
                        json={"state": "optional_paused", "reason": "spend spike"}).status_code == 200
     seed()

@@ -789,9 +789,22 @@ def me(request: Request) -> dict:
     sign-in, which also creates the copy on first use)."""
     user = getattr(request.state, "user", None)
     demo.ensure()
+    copy = demo.copy_record()
     return {"email": user.email if user else None, "name": user.name if user else None,
             "auth": settings.auth_required, "owner_id": demo.owner_id(),
-            "people": [{"id": pid, **p} for pid, p in demo.PEOPLE.items()], "acting_as": demo.person()["id"]}
+            "people": [{"id": pid, **p} for pid, p in demo.PEOPLE.items()], "acting_as": demo.person()["id"],
+            "nickname": copy.get("nickname"), "ask_nickname": not copy.get("nickname_asked")}
+
+
+class Nickname(BaseModel):
+    nickname: str | None = None  # None or empty: skip
+
+
+@api.post("/me/nickname")
+def set_nickname(body: Nickname) -> dict:
+    """The optional name for the caller's demo copy, so the Anvaya team can tell copies apart.
+    Shown only to platform admins; never logged."""
+    return {"nickname": demo.set_nickname(body.nickname)}
 
 
 api.include_router(portal.router)

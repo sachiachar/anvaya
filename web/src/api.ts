@@ -146,10 +146,13 @@ const o = (path: string) => `/owners/${ownerId}${path}`;
 
 export const api = {
   me: () =>
-    request<{ email: string | null; name: string | null; auth: boolean; owner_id: string; people: DemoPerson[] }>("/me").then((m) => {
+    request<{ email: string | null; name: string | null; auth: boolean; owner_id: string; people: DemoPerson[];
+      nickname: string | null; ask_nickname: boolean }>("/me").then((m) => {
       ownerId = m.owner_id;
       return m;
     }),
+  /** The optional name for your demo copy; only the Anvaya team sees it. null skips. */
+  setNickname: (nickname: string | null) => request<{ nickname: string | null }>("/me/nickname", json({ nickname })),
   /** Today's use against the signed-in person's daily allowance (PR-10.4). */
   allowance: () => request<Allowance>("/allowance"),
   seed: () => request<{ owner: Record<string, unknown> }>("/demo/seed", { method: "POST" }),

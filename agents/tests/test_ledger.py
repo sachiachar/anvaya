@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app import main
 from app.governance import core
-from app.governance.seed import seed
+from app.governance.seed import clear_samples as seed
 from app.store import store
 
 

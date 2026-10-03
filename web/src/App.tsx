@@ -23,6 +23,27 @@ function render(person: DemoPerson) {
   }
 }
 
+/** Asked once, after the first sign-in. Optional: skipping is an answer too. */
+function NicknamePrompt({ onDone }: { onDone: () => void }) {
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const answer = (nickname: string | null) => {
+    setBusy(true);
+    api.setNickname(nickname).catch(() => undefined).finally(onDone);
+  };
+  return (
+    <section className="card" aria-labelledby="nickname-title">
+      <h2 id="nickname-title">What should we call you?</h2>
+      <p className="muted">Optional, and it doesn't need to be your real name. Only the Anvaya team sees it, to tell demo copies apart.</p>
+      <div className="row">
+        <input value={value} onChange={(e) => setValue(e.target.value)} maxLength={30} placeholder="A nickname" aria-label="Nickname" />
+        <button disabled={busy || !value.trim()} onClick={() => answer(value)}>Save</button>
+        <button className="secondary" disabled={busy} onClick={() => answer(null)}>Skip</button>
+      </div>
+    </section>
+  );
+}
+
 function AdminLink() {
   return (
     <section className="card">
@@ -36,6 +57,7 @@ function AdminLink() {
 
 export default function App() {
   const [people, setPeople] = useState<DemoPerson[]>([]);
+  const [askNickname, setAskNickname] = useState(false);
   const [acting, setActing] = useState<PersonId>("vikram");
   const switchTo = (id: PersonId) => { setActingAs(id); setActing(id); };
   const person = people.find((p) => p.id === acting);
@@ -65,7 +87,7 @@ export default function App() {
     if (session !== "checking" && session !== "in") return;
     if (authEnabled && !email) return;
     api.me()
-      .then((m) => { setPeople(m.people); return api.owner().catch(() => api.seed()); })
+      .then((m) => { setPeople(m.people); setAskNickname(m.ask_nickname); return api.owner().catch(() => api.seed()); })
       .then(() => { setSession("in"); setReady(true); })
       .catch((e) => {
         if (e instanceof AuthError) { setDenied(e.message); setSession("denied"); }
@@ -120,6 +142,7 @@ export default function App() {
       )}
       <main>
         {error && <p className="error">Cannot reach the agents API: {error}</p>}
+        {ready && askNickname && <NicknamePrompt onDone={() => setAskNickname(false)} />}
         <ShowAutonomy.Provider value={showAi}>
           {ready && person && <div key={person.id}>{render(person)}</div>}
         </ShowAutonomy.Provider>

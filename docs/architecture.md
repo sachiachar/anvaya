@@ -135,7 +135,7 @@ flowchart LR
 - `core.py`: the registry, roles and permissions, the audit log, the gateway's `check_call` (registry and kill switch), `record_usage` (daily ledger with calls, tokens and minutes; never dollars), `record_blocked` and `record_intervention`;
 - `billing.py`: actual spend from the Cloud Billing export to BigQuery (PR-10.9), the only source of dollar figures. Cached for an hour, up to yesterday; the portal says "not available yet" rather than estimating;
 - `portal.py`: the platform admin portal API under `/api/platform` (PR-12), with roles checked on the server;
-- `seed.py`: clearly labelled examples only where there's no real source yet (budget requests, guardian interventions, fraud scenarios and guides, demo copies, quota). Usage, blocked calls and spend are never seeded. Re-seeding keeps the kill switch as it is.
+- `seed.py`: nothing is seeded; the portal shows only real data. On the first portal request after a release, it removes any examples earlier versions seeded, keeping real data and the kill switch.
 
 The portal is a separate entry point (`web/admin.html`), served by its own Firebase Hosting site, `anvaya-admin`.
 
@@ -287,6 +287,7 @@ On `released`, KMS removes the outer layer and the recipient's phone decrypts th
 | Public access to storage | Firestore rules deny clients; private bucket; least-privilege service account |
 | One judge reaching another judge's demo | Each Google account gets its own copy, chosen from the verified sign-in, never from the browser (`demo.py`). Every route checks that the owner or document belongs to the caller's copy and answers **404** otherwise; team lists show only the caller's copy; the live call closes for another copy's owner. Resetting touches only the caller's copy, including its recordings |
 | Someone acting outside their part | The switcher sends who is acting (`X-Acting-As`; `acting_as` on the live call). The server accepts only the people in the copy and checks each action's person (`demo.only`): only Vikram changes his vault, keeps cards or answers alerts; only Priya registers as recipient, reports, sends proof and opens the vault; only a reviewer confirms. The reviewer is the person acting, never a typed name, so one reviewer can't confirm both steps |
+| Identifying demo visitors | The portal lists demo copies by hashed key. A visitor may give their copy an optional nickname once, after sign-in; it's cleaned to one short line, shown only to platform admins, never written to logs or the audit log (`demo.set_nickname`, `portal.get_demos`) |
 | Uninvited people using the demo | Google sign-in (Firebase Auth); the server verifies the ID token on every request (`auth.py`) and checks `ALLOWED_EMAILS` (addresses or `@domains`); the live call passes the token as `?token=` |
 
 **Known gaps before real users**
