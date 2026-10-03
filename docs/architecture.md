@@ -64,6 +64,7 @@ flowchart LR
 | --- | --- |
 | `main.py` | HTTP routes under `/api`, the live-call WebSocket, access gating, readable error handling for Gemini failures |
 | `fraud_guides.py` | Fraud reference guides (PR-2.3): what a genuine document looks like and how forgeries are made, for each document and country. Every item carries a knowledge label (observed, derived, simulated, validated, invalidated). Every version is kept in Firestore; a copy built into the code is used if none is saved or Firestore is down. Only checked knowledge reaches the certificate check. Design: `docs/proposals/fraud-foresight.md` |
+| `fraud_pipeline.py` | Fraud foresight pipeline (PR-2.5, PR-2.6): `fraud.dreamer` imagines attacks on our safeguards from the guide's checked tactics, the fixed list of safeguards and recent guardian events; `fraud.researcher` checks each one with Google Search; each is mapped to the safeguard that catches it, or marked a gap. "Confirmed" needs a grounding support from a cited source (`judge`). Confirmed scenarios and researched tactics wait for a reviewer; unconfirmed ones fade after 3 runs. One run at a time, with a cap on model calls per agent, a Stop button, and a live log of each step for the portal |
 | `loops.py` | One Gemini step per loop. Also holds the shared **Saathi persona**, the live-call instructions, and `reply_problems`, which checks every typed reply for wrong language or script, false "saved" claims and "shall I add" questions, and rewrites it once if needed |
 | `live.py` | Live-call relay between the browser and the Gemini Live API; captions; saves each exchange and extracts cards |
 | `speech.py` | Natural voice for typed replies (Gemini TTS), falling back through a list of TTS models, each with its own quota |
@@ -72,7 +73,7 @@ flowchart LR
 | `executor_agent.py` | Google ADK agent for the handover (tools: `search_archive`, `list_inventory`) with a fallback model |
 | `release.py` | Vault release state machine: two-person rule, override reasons, waiting period, owner cancel |
 | `escrow.py` | Cloud KMS wrap and unwrap of the vault key blob |
-| `gemini.py` | Shared Gemini client with retries and backoff; `generate_json` with Pydantic schemas and model fallback |
+| `gemini.py` | Shared Gemini client with retries and backoff; `generate_json` with Pydantic schemas and model fallback; `grounded_text` with Google Search, returning which source supports which sentence (plain text, because Gemini 3 leaves the grounding supports empty when a JSON schema is set). Only agents the registry allows `google_search` may call it |
 | `schemas.py` | Pydantic models used as Gemini `response_schema` and as the API contract |
 | `store.py` | Document store: `memory` (tests), `file` (local demo, survives restarts), `firestore` (Google Cloud) |
 | `media.py`, `config.py` | Original media (Cloud Storage or local folder); settings from the environment |
@@ -99,6 +100,7 @@ flowchart LR
 | Activation | `loops.check_document` + `loops.review_summary` | Certificate or proof image, with the fraud reference guide → verdict, likelihood genuine and a result for each warning sign | Assist | Two reviewers; override needs a reason |
 | Handover | `executor_agent.ask` (ADK) | Question → answer with cited sources | Act within limits | Only after release |
 | Settlement | `loops.plan_settlement` | Inventory → checklist + draft letters | Propose | Executor reviews and sends |
+| Fraud foresight | `fraud_pipeline.dream` + `fraud_pipeline.research` | Guide, safeguards, guardian events → scenarios with sources and the safeguard that catches each; new tactics with sources | Propose | A risk reviewer approves before anything joins a guide; only source-confirmed items can be approved |
 
 **Rules enforced in code, not just in prompts**
 

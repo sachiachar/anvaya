@@ -67,9 +67,39 @@ export type GuardianEvent = { id: string; at: number; response: "add_check" | "r
   agent: string; reason: string; status: "open" | "confirmed" | "reversed"; case_key: string | null;
   decided_by?: string; decision_reason?: string };
 
+export type Source = { title: string; url: string };
+
+/** Knowledge labels from docs/proposals/fraud-foresight.md §3. */
+export type Label = "observed" | "derived" | "simulated" | "validated" | "invalidated";
+
 export type Scenario = { id: string; at: number; scenario: string; safeguard: string; caught_by: string | null;
-  coverage: "covered" | "gap"; status: "verified" | "dreamt"; review: "pending" | "approved" | "discarded";
-  evidence: number };
+  coverage: "covered" | "partly" | "gap"; status: "verified" | "dreamt";
+  /** pending: a source confirms it and it waits for a reviewer; unconfirmed: no source yet (it fades after 3 runs). */
+  review: "pending" | "unconfirmed" | "approved" | "discarded" | "faded";
+  evidence: number; label?: Label; variant?: "close" | "far"; steps?: string[]; claim?: string;
+  sources?: Source[]; source_note?: string; coverage_reason?: string; run_id?: string;
+  /** If approved, this becomes a warning sign the certificate check uses, so a reviewer sees both parts. */
+  document_sign?: { look_for: string; genuine: string } | null };
+
+export type Draft = { id: string; at: number; guide_key: string; kind: "tactic"; tactic: string;
+  steps: { step: string; caught_by: string }[]; sign: { look_for: string; genuine: string } | null;
+  claim: string; sources: Source[]; source_note: string; review: "pending" | "approved" | "discarded" };
+
+export type RunStage = "imagine" | "check" | "map" | "save" | "research" | "skip";
+
+/** One line of a run's live view. */
+export type RunStep = { at: number; stage: RunStage; line: string; title?: string; confirmed?: boolean;
+  coverage?: "covered" | "partly" | "gap" };
+
+export type Run = { id: string; kind: "dream" | "research"; guide_key: string;
+  status: "running" | "done" | "failed" | "stopped"; started_at: number; finished_at?: number;
+  counts: Record<string, number>; error?: string | null; stage?: RunStage; steps?: RunStep[];
+  /** Model calls used so far, per agent, and the caps from the registry. */
+  calls?: Record<string, number>; limits?: Record<string, number | null>;
+  stop_requested?: boolean; stopped_reason?: string | null };
+
+export type Fraud = { scenarios: Scenario[]; drafts: Draft[]; runs: Run[]; guides: Guide[];
+  coverage: { covered: number; partly: number; gaps: number; faded: number } };
 
 export type Guide = { id: string; title: string; version: number; trust_tier: string; sources: number;
   signals: number; researched_at: number | null; status: "current" | "research_requested" };
@@ -94,10 +124,14 @@ export const platform = {
   guardian: () => request<{ events: GuardianEvent[]; by_response: Record<string, number>; false_alarm_rate: number | null }>(p("/guardian")),
   decideGuardian: (id: string, decision: "confirm" | "reverse", reason: string) =>
     request<GuardianEvent>(p(`/guardian/${id}/decision`), json({ decision, reason })),
-  fraud: () => request<{ scenarios: Scenario[]; coverage: { covered: number; gaps: number }; guides: Guide[] }>(p("/fraud")),
+  fraud: () => request<Fraud>(p("/fraud")),
   decideScenario: (id: string, decision: "approve" | "discard", reason: string) =>
     request<Scenario>(p(`/fraud/scenarios/${id}/decision`), json({ decision, reason })),
+  decideDraft: (id: string, decision: "approve" | "discard", reason: string) =>
+    request<Draft>(p(`/fraud/drafts/${id}/decision`), json({ decision, reason })),
   researchNow: (id: string) => request<{ status: string; message: string }>(p(`/fraud/guides/${id}/research`), { method: "POST" }),
+  stopRun: (id: string) => request<{ message: string }>(p(`/fraud/runs/${id}/stop`), { method: "POST" }),
+  dreamNow: (id: string) => request<{ status: string; message: string }>(p(`/fraud/guides/${id}/dream`), { method: "POST" }),
   demos: () => request<{ copies: DemoCopy[]; cleanup_after_days: number; nicknames_visible: boolean }>(p("/demos")),
   resetDemo: (id: string, reason: string) => request<DemoCopy>(p(`/demos/${id}/reset`), json({ reason })),
   setKillSwitch: (state: KillSwitchState, reason: string) =>

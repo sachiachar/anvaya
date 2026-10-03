@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   fmt, platform, type Agent, type AuditEntry, type Blocked, type BudgetRequest, type DemoCopy, type GuardianEvent,
-  type Guide, type KillSwitchState, type Me, type Permission, type Scenario, type Spend, type Use,
+  type Draft, type Guide, type KillSwitchState, type Me, type Permission, type Run, type RunStage, type Scenario,
+  type Source,
+  type Spend, type Use,
 } from "./api";
 
 // ---- Shared pieces --------------------------------------------------------------
@@ -422,51 +424,196 @@ export function GuardianPage({ me }: { me: Me }) {
 
 // ---- Fraud -------------------------------------------------------------------------
 
+const RUN_KIND = { dream: "Dreaming", research: "Research" } as const;
+
+/** The stages of each kind of run, with the live count under each. */
+const PIPELINE = {
+  dream: [
+    { key: "imagine", label: "Imagine", hint: "fraud.dreamer, no web access", count: (c: Record<string, number>) => c.imagined ?? 0, unit: "imagined" },
+    { key: "check", label: "Check sources", hint: "fraud.researcher, Google Search", count: (c: Record<string, number>) => c.confirmed ?? 0, unit: "confirmed" },
+    { key: "map", label: "Map to safeguards", hint: "Which one catches it?", count: (c: Record<string, number>) => c.kept ?? 0, unit: "mapped" },
+    { key: "save", label: "Review", hint: "A person decides", count: (c: Record<string, number>) => c.confirmed ?? 0, unit: "waiting" },
+  ],
+  research: [
+    { key: "research", label: "Search", hint: "fraud.researcher, Google Search", count: (c: Record<string, number>) => c.found ?? 0, unit: "new tactics" },
+    { key: "check", label: "Check sources", hint: "A source must confirm it", count: (c: Record<string, number>) => c.confirmed ?? 0, unit: "confirmed" },
+    { key: "skip", label: "Not kept", hint: "Known, or no source", count: (c: Record<string, number>) => c.unconfirmed ?? 0, unit: "dropped" },
+    { key: "save", label: "Review", hint: "A person decides", count: (c: Record<string, number>) => c.confirmed ?? 0, unit: "waiting" },
+  ],
+} as const;
+
+const STAGE_LABEL: Record<RunStage, string> = {
+  imagine: "Imagine", check: "Check", map: "Map", save: "Saved", research: "Search", skip: "Skipped",
+};
+
+/** The live view: which stage the run is in, what it's doing, and what it has spent. */
+function LiveRun({ run, reviewer, onStop }: { run: Run; reviewer: boolean; onStop: () => void }) {
+  const running = run.status === "running";
+  const active = running ? (run.stage === "skip" && run.kind === "dream" ? "check" : run.stage) : null;
+  const steps = [...(run.steps ?? [])].reverse();
+  const calls = Object.entries(run.calls ?? {});
+  return (
+    <Section title={running ? `Live: ${RUN_KIND[run.kind].toLowerCase()} in progress` : `Last run: ${RUN_KIND[run.kind].toLowerCase()}`}
+      aside={running ? (reviewer && (
+        <button className="pa-small" disabled={run.stop_requested} onClick={onStop}>
+          {run.stop_requested ? "Stopping…" : "Stop"}
+        </button>
+      )) : <Status value={run.status} />}>
+      <div className="pa-live">
+        <ol className="pa-pipeline" aria-label="Pipeline stages">
+          {PIPELINE[run.kind].map((st) => (
+            <li key={st.key} className={`pa-stage${active === st.key ? " is-active" : ""}`} aria-current={active === st.key ? "step" : undefined}>
+              <span>{st.label}</span>
+              <strong>{st.count(run.counts)}</strong>
+              <em>{st.unit} · {st.hint}</em>
+            </li>
+          ))}
+        </ol>
+        <p className="pa-meter">
+          {calls.length === 0 ? <span>No model calls yet</span> : calls.map(([agent, used]) => (
+            <span key={agent}>{agent}: <b>{used}</b> of {run.limits?.[`${agent}.max_model_calls_per_run`] ?? "?"} calls</span>
+          ))}
+          {run.stopped_reason && <span>Stopped: {run.stopped_reason}</span>}
+          {run.error && <span>Failed: {run.error}</span>}
+        </p>
+        {steps.length === 0 ? <Empty>Starting…</Empty> : (
+          <ul className="pa-feed" aria-live="polite">
+            {steps.map((st) => (
+              <li key={`${st.at}-${st.line}`}>
+                <span className="pa-chip">{STAGE_LABEL[st.stage]}</span>
+                <span className={st.coverage === "gap" ? "is-gap" : st.confirmed ? "is-confirmed" : undefined}>{st.line}</span>
+                <time>{new Date(st.at * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Section>
+  );
+}
+
+/** Links to the sources a scenario or tactic cites. They open in a new tab, without a referrer. */
+function Sources({ sources }: { sources?: Source[] }) {
+  if (!sources?.length) return null;
+  return (
+    <p className="pa-muted">Sources: {sources.map((s, i) => (
+      <span key={s.url}>{i > 0 && " · "}<a href={s.url} target="_blank" rel="noopener noreferrer">{s.title || "source"}</a></span>
+    ))}</p>
+  );
+}
+
+/** Both parts of a warning sign, in full: on approval, both go into the certificate check's instructions. */
+function SignPreview({ sign }: { sign: { look_for: string; genuine: string } }) {
+  return (
+    <div className="pa-note">
+      <p><strong>Adds a warning sign to the certificate check</strong></p>
+      <p>Look for: {sign.look_for}</p>
+      <p>A genuine document: {sign.genuine}</p>
+    </div>
+  );
+}
+
 export function FraudPage({ me }: { me: Me }) {
   const load = useCallback(() => platform.fraud(), []);
   const { data, error, reload } = useLoad(load);
   const [note, setNote] = useState<string | null>(null);
+  const running = data?.runs.some((r) => r.status === "running") ?? false;
+  // Live mode: while a run is going, check every 2 seconds, so each step and each new
+  // scenario appears as it happens.
+  useEffect(() => {
+    if (!running) return;
+    const t = window.setInterval(reload, 2000);
+    return () => window.clearInterval(t);
+  }, [running, reload]);
   if (!data) return <Loading error={error} />;
+  const start = (call: Promise<{ message: string }>) =>
+    call.then((r) => setNote(r.message)).catch((e) => setNote(String(e.message ?? e))).finally(reload);
+  const reviewer = can(me, "review_fraud");
+  const live = data.runs[0];
   return (
     <>
-      <p className="pa-lede">The dreaming agent imagines attacks on our safeguards; the research agent keeps the fraud reference guides current. A scenario affects checks only after a reviewer approves it.</p>
+      <p className="pa-lede">The dreaming agent imagines attacks on our safeguards, and the research agent checks each one, and new tactics, against cited sources. Only what a source confirms can be approved, and nothing changes a guide or a check until a reviewer approves it.</p>
       <div className="pa-kpis">
         <div className="pa-kpi"><span>Scenarios covered</span><strong>{data.coverage.covered}</strong><em>A safeguard catches it</em></div>
+        <div className="pa-kpi"><span>Partly covered</span><strong>{data.coverage.partly}</strong><em>Caught only sometimes</em></div>
         <div className="pa-kpi"><span>Gaps</span><strong className={data.coverage.gaps ? "pa-warn" : ""}>{data.coverage.gaps}</strong><em>No safeguard catches it yet</em></div>
+        <div className="pa-kpi"><span>Faded</span><strong>{data.coverage.faded}</strong><em>No source after 3 runs</em></div>
       </div>
-      <Section title="Safeguard coverage map">
-        {data.scenarios.length === 0 && <Empty>No scenarios yet. The dreaming agent adds them when it runs.</Empty>}
-        <ul className="pa-list">
-          {data.scenarios.map((s: Scenario) => (
-            <li key={s.id}>
-              <div className="pa-row">
-                <Status value={s.coverage === "gap" ? "gap" : "covered"} />
-                <Status value={s.status} />
-                <span className="pa-muted">Safeguard: {s.safeguard}</span>
-              </div>
-              <p><strong>{s.scenario}</strong></p>
-              <p className="pa-muted">{s.caught_by ? `Caught by: ${s.caught_by}` : "Not caught by any safeguard yet."}</p>
-              {s.review === "pending" ? (
-                can(me, "review_fraud") ? (
-                  <DecisionForm actions={[{ value: "approve", label: "Approve scenario" }, { value: "discard", label: "Discard", tone: "danger" }]}
-                    onDecide={(v, reason) => platform.decideScenario(s.id, v as "approve" | "discard", reason).then(reload)} />
-                ) : <p className="pa-muted">Waiting for a risk reviewer.</p>
-              ) : <p className="pa-muted">Review: {fmt.label(s.review)}</p>}
-            </li>
-          ))}
-        </ul>
-      </Section>
+      {live && <LiveRun run={live} reviewer={reviewer} onStop={() => start(platform.stopRun(live.id))} />}
       <Section title="Fraud reference guides">
         {note && <p className="pa-note" role="status">{note}</p>}
-        {data.guides.length === 0 ? <Empty>No guides yet. The research agent writes them when it runs.</Empty> : <table>
+        {data.guides.length === 0 ? <Empty>No guides yet.</Empty> : <table>
           <thead><tr><th>Guide</th><th className="num">Version</th><th>Trust</th><th className="num">Sources</th><th className="num">Signals</th><th>Researched</th><th></th></tr></thead>
           <tbody>{data.guides.map((g: Guide) => (
             <tr key={g.id}>
               <td>{g.title}</td><td className="num">{g.version}</td><td>{fmt.label(g.trust_tier)}</td>
               <td className="num">{g.sources}</td><td className="num">{g.signals}</td><td>{g.researched_at ? fmt.when(g.researched_at) : "Built in"}</td>
-              <td>{g.status === "research_requested" ? <Status value="research_requested" /> : can(me, "review_fraud") && (
-                <button className="pa-small" onClick={() => platform.researchNow(g.id).then((r) => { setNote(r.message); reload(); })}>Research now</button>
+              <td>{running ? <Status value="running" /> : reviewer && (
+                <span className="pa-row">
+                  <button className="pa-small" onClick={() => start(platform.dreamNow(g.id))}>Dream now</button>
+                  <button className="pa-small" onClick={() => start(platform.researchNow(g.id))}>Research now</button>
+                </span>
               )}</td>
+            </tr>
+          ))}</tbody>
+        </table>}
+      </Section>
+      <Section title="Safeguard coverage map">
+        {data.scenarios.length === 0 && <Empty>No scenarios yet. "Dream now" adds them.</Empty>}
+        <ul className="pa-list">
+          {data.scenarios.map((s: Scenario) => (
+            <li key={s.id} className={live && s.run_id === live.id ? "is-new" : undefined}>
+              <div className="pa-row">
+                {live && s.run_id === live.id && <Status value="new" />}
+                <Status value={s.coverage} />
+                <Status value={s.review === "unconfirmed" ? "unconfirmed" : s.status} />
+                {s.variant === "far" && <Status value="far-fetched" />}
+                <span className="pa-muted">Aims at: {s.safeguard}</span>
+              </div>
+              <p><strong>{s.scenario}</strong></p>
+              {s.steps && s.steps.length > 0 && <ol className="pa-muted">{s.steps.map((x) => <li key={x}>{x}</li>)}</ol>}
+              <p className="pa-muted">{s.caught_by ? `Caught by: ${s.caught_by}` : "Not caught by any safeguard yet."}{s.coverage_reason ? ` ${s.coverage_reason}` : ""}</p>
+              {s.document_sign && s.review === "pending" && <SignPreview sign={s.document_sign} />}
+              {s.source_note && <p className="pa-muted">What sources say: {s.source_note}</p>}
+              <Sources sources={s.sources} />
+              {s.review === "pending" || s.review === "unconfirmed" ? (
+                reviewer ? (
+                  <DecisionForm
+                    actions={s.review === "pending"
+                      ? [{ value: "approve", label: "Approve scenario" }, { value: "discard", label: "Discard", tone: "danger" }]
+                      : [{ value: "discard", label: "Discard", tone: "danger" }]}
+                    onDecide={(v, reason) => platform.decideScenario(s.id, v as "approve" | "discard", reason).then(reload)} />
+                ) : <p className="pa-muted">{s.review === "pending" ? "Waiting for a risk reviewer." : "No source confirms it yet."}</p>
+              ) : <p className="pa-muted">Review: {fmt.label(s.review)}</p>}
+            </li>
+          ))}
+        </ul>
+      </Section>
+      <Section title="New tactics to review">
+        {data.drafts.length === 0 && <Empty>None waiting. "Research now" looks for new tactics; only ones a source confirms appear here.</Empty>}
+        <ul className="pa-list">
+          {data.drafts.map((d: Draft) => (
+            <li key={d.id}>
+              <p><strong>{d.tactic}</strong></p>
+              <ol className="pa-muted">{d.steps.map((x) => <li key={x.step}>{x.step} <em>(caught by: {x.caught_by})</em></li>)}</ol>
+              {d.sign && <SignPreview sign={d.sign} />}
+              {d.source_note && <p className="pa-muted">What sources say: {d.source_note}</p>}
+              <Sources sources={d.sources} />
+              {reviewer ? (
+                <DecisionForm actions={[{ value: "approve", label: "Add to the guide" }, { value: "discard", label: "Discard", tone: "danger" }]}
+                  onDecide={(v, reason) => platform.decideDraft(d.id, v as "approve" | "discard", reason).then(reload)} />
+              ) : <p className="pa-muted">Waiting for a risk reviewer.</p>}
+            </li>
+          ))}
+        </ul>
+      </Section>
+      <Section title="Runs">
+        {data.runs.length === 0 ? <Empty>No runs yet.</Empty> : <table>
+          <thead><tr><th>Run</th><th>Started</th><th>Status</th><th>What happened</th></tr></thead>
+          <tbody>{data.runs.map((r: Run) => (
+            <tr key={r.id}>
+              <td>{RUN_KIND[r.kind]}</td><td>{fmt.when(r.started_at)}</td><td><Status value={r.status} /></td>
+              <td>{r.error ? `Failed: ${r.error}` : r.stopped_reason ? `Stopped: ${r.stopped_reason}` : Object.entries(r.counts).map(([k, v]) => `${fmt.label(k)} ${v}`).join(" · ")}</td>
             </tr>
           ))}</tbody>
         </table>}

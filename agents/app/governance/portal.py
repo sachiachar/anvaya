@@ -10,10 +10,10 @@ from __future__ import annotations
 import time
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import demo, fraud_guides
+from .. import demo, fraud_guides, fraud_pipeline
 from ..store import store
 from . import billing, core
 from .core import Actor, actor, audit, need, platform_settings, registry, small
@@ -173,11 +173,23 @@ def decide_guardian(event_id: str, body: GuardianDecision, who: Actor = Depends(
 @router.get("/fraud")
 def get_fraud(_: Actor = Depends(actor)) -> dict:
     ensure_current()
-    scenarios = sorted(store.list("fraud_scenarios"), key=lambda s: -s["at"])
+    fraud_pipeline.expire_stale()  # a run left 'running' by a restart doesn't block the page for good
+    scenarios = sorted((s for s in store.list("fraud_scenarios") if s.get("review") != "faded"),
+                       key=lambda s: -s["at"])
     return {"scenarios": scenarios,
             "coverage": {"covered": sum(s["coverage"] == "covered" for s in scenarios),
-                         "gaps": sum(s["coverage"] == "gap" for s in scenarios)},
+                         "partly": sum(s["coverage"] == "partly" for s in scenarios),
+                         "gaps": sum(s["coverage"] == "gap" for s in scenarios),
+                         "faded": len(store.list("fraud_scenarios", review="faded"))},
+            "drafts": sorted(store.list("fraud_drafts", review="pending"), key=lambda d: -d["at"]),
+            "runs": sorted(store.list("fraud_runs"), key=lambda r: -r["started_at"])[:10],
             "guides": fraud_guides.summaries()}
+
+
+def _claim(item_id: str) -> None:
+    """Only one decision per scenario or draft, even if two reviewers press at the same moment."""
+    if not store.create("fraud_decisions", {"id": item_id, "at": time.time()}):
+        raise HTTPException(409, "This has already been reviewed.")
 
 
 class ScenarioDecision(BaseModel):
@@ -187,27 +199,84 @@ class ScenarioDecision(BaseModel):
 
 @router.post("/fraud/scenarios/{scenario_id}/decision")
 def decide_scenario(scenario_id: str, body: ScenarioDecision, who: Actor = Depends(need("review_fraud"))) -> dict:
+    """Approve a confirmed scenario (it becomes validated and joins the guide), or discard any
+    open one (it becomes invalidated, and the dreamer is told it's ruled out)."""
     scenario = store.get("fraud_scenarios", scenario_id)
     if not scenario:
         raise HTTPException(404, "scenario not found")
-    if scenario["review"] != "pending":
+    if scenario["review"] not in ("pending", "unconfirmed"):
         raise HTTPException(409, "This scenario has already been reviewed.")
+    if body.decision == "approve" and scenario["review"] != "pending":
+        raise HTTPException(409, "Only a scenario a cited source confirms can be approved.")
+    _claim(scenario_id)
     audit(who, f"fraud.scenario.{body.decision}", scenario_id, body.reason)
+    if body.decision == "approve":
+        fraud_pipeline.approve_scenario(scenario)
     return store.update("fraud_scenarios", scenario_id, {
-        "review": "approved" if body.decision == "approve" else "discarded", "reviewed_by": who.email or "local"})
+        "review": "approved" if body.decision == "approve" else "discarded",
+        "label": "validated" if body.decision == "approve" else "invalidated",
+        "reviewed_by": who.key, "reviewed_at": time.time()})
 
 
-@router.post("/fraud/guides/{guide_id}/research")
-def research_now(guide_id: str, who: Actor = Depends(need("review_fraud"))) -> dict:
+@router.post("/fraud/drafts/{draft_id}/decision")
+def decide_draft(draft_id: str, body: ScenarioDecision, who: Actor = Depends(need("review_fraud"))) -> dict:
+    """Approve a researched tactic (a new guide version), or discard it."""
+    draft = store.get("fraud_drafts", draft_id)
+    if not draft:
+        raise HTTPException(404, "draft not found")
+    if draft["review"] != "pending":
+        raise HTTPException(409, "This draft has already been reviewed.")
+    _claim(draft_id)
+    audit(who, f"fraud.draft.{body.decision}", draft_id, body.reason)
+    if body.decision == "approve":
+        fraud_pipeline.approve_draft(draft)
+    return store.update("fraud_drafts", draft_id, {
+        "review": "approved" if body.decision == "approve" else "discarded",
+        "label": "derived" if body.decision == "approve" else "invalidated",
+        "reviewed_by": who.key, "reviewed_at": time.time()})
+
+
+def _start(kind: Literal["dream", "research"], guide_id: str, who: Actor, background: BackgroundTasks) -> dict:
     if not store.get("fraud_guides", guide_id):
         built_in = fraud_guides.BUILT_IN.get(guide_id)
         if not built_in:
             raise HTTPException(404, "guide not found")
-        fraud_guides.save_version(built_in)  # first request for a built-in guide: save it as version 1
-    audit(who, "fraud.research_requested", guide_id)
-    store.update("fraud_guides", guide_id, {"status": "research_requested", "requested_at": time.time()})
-    return {"status": "research_requested",
-            "message": "Research requested. The research agent (PR-2.5) picks this up when it runs."}
+        fraud_guides.save_version(built_in)  # first run for a built-in guide: save it as version 1
+    try:
+        run = fraud_pipeline.start_run(kind, guide_id, who.key)
+    except fraud_pipeline.Busy as e:
+        raise HTTPException(409, str(e)) from e
+    audit(who, f"fraud.{kind}_requested", guide_id)
+    if kind == "research":
+        store.update("fraud_guides", guide_id, {"status": "research_requested", "requested_at": time.time()})
+    background.add_task(fraud_pipeline.dream if kind == "dream" else fraud_pipeline.research, run)
+    return run
+
+
+@router.post("/fraud/guides/{guide_id}/research")
+def research_now(guide_id: str, background: BackgroundTasks, who: Actor = Depends(need("review_fraud"))) -> dict:
+    run = _start("research", guide_id, who, background)
+    return {"status": "research_requested", "run": run,
+            "message": "Research started. New tactics a source confirms will wait here for review."}
+
+
+@router.post("/fraud/runs/{run_id}/stop")
+def stop_run(run_id: str, who: Actor = Depends(need("review_fraud"))) -> dict:
+    """Stop a running fraud run to control cost. It stops before its next model call and keeps
+    what it has checked so far."""
+    try:
+        run = fraud_pipeline.request_stop(run_id)
+    except KeyError as e:
+        raise HTTPException(409, "This run isn't running.") from e
+    audit(who, "fraud.run_stopped", run_id)
+    return {"run": run, "message": "Stopping before the next step. What was checked so far is kept."}
+
+
+@router.post("/fraud/guides/{guide_id}/dream")
+def dream_now(guide_id: str, background: BackgroundTasks, who: Actor = Depends(need("review_fraud"))) -> dict:
+    run = _start("dream", guide_id, who, background)
+    return {"status": "dreaming", "run": run,
+            "message": "Dreaming started. New scenarios appear on the coverage map as they're checked."}
 
 
 def _allowance_used(key: str) -> float:

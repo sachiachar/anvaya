@@ -21,6 +21,7 @@ def new_id(prefix: str) -> str:
 
 class Store(Protocol):
     def put(self, collection: str, doc: dict[str, Any]) -> dict[str, Any]: ...
+    def create(self, collection: str, doc: dict[str, Any]) -> bool: ...
     def get(self, collection: str, doc_id: str) -> dict[str, Any] | None: ...
     def update(self, collection: str, doc_id: str, fields: dict[str, Any]) -> dict[str, Any]: ...
     def list(self, collection: str, **where: Any) -> list[dict[str, Any]]: ...
@@ -37,6 +38,15 @@ class MemoryStore:
         with self._lock:
             self._data.setdefault(collection, {})[doc["id"]] = copy.deepcopy(doc)
         return doc
+
+    def create(self, collection, doc):
+        """Write only if no document has this id yet. False if one already exists."""
+        with self._lock:
+            docs = self._data.setdefault(collection, {})
+            if doc["id"] in docs:
+                return False
+            docs[doc["id"]] = copy.deepcopy(doc)
+            return True
 
     def get(self, collection, doc_id):
         doc = self._data.get(collection, {}).get(doc_id)
@@ -93,6 +103,13 @@ class FileStore(MemoryStore):
             self._save()
         return result
 
+    def create(self, collection, doc):
+        created = super().create(collection, doc)
+        if created:
+            with self._lock:
+                self._save()
+        return created
+
     def update(self, collection, doc_id, fields):
         result = super().update(collection, doc_id, fields)
         with self._lock:
@@ -120,6 +137,21 @@ class FirestoreStore:
     def put(self, collection, doc):
         self._db.collection(collection).document(doc["id"]).set(doc)
         return doc
+
+    def create(self, collection, doc):
+        """In a transaction, so two writers can't both create the same id."""
+        from google.cloud import firestore
+
+        ref = self._db.collection(collection).document(doc["id"])
+
+        @firestore.transactional
+        def write(tx) -> bool:
+            if ref.get(transaction=tx).exists:
+                return False
+            tx.set(ref, doc)
+            return True
+
+        return write(self._db.transaction())
 
     def get(self, collection, doc_id):
         snap = self._db.collection(collection).document(doc_id).get()

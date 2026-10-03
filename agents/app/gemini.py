@@ -8,6 +8,7 @@ GEMINI_FALLBACK_MODEL.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import TypeVar
 
@@ -105,3 +106,50 @@ async def generate_json(
     if isinstance(response.parsed, schema):
         return response.parsed
     return schema.model_validate_json(response.text or "{}")
+
+
+@dataclass
+class Grounded:
+    """A plain-text answer from Google Search grounding, with which sources support which words."""
+    text: str
+    sources: list[tuple[str, str]] = field(default_factory=list)       # (title, url) per grounding chunk
+    supports: list[tuple[str, list[int]]] = field(default_factory=list)  # (answer segment, source indexes)
+
+
+async def grounded_text(*, model: str, prompt: str, system: str, agent: str) -> Grounded:
+    """Ask Gemini to answer with Google Search, and return the grounding data.
+
+    Plain text on purpose: with a JSON schema, Gemini 3 runs the searches but leaves the
+    grounding supports empty, and the fraud pipeline needs them to tell whether a source
+    really supports a claim. Only agents the registry allows `google_search` may call this.
+    """
+    governance.check_call(agent, model)
+    governance.check_tool(agent, "google_search")
+    governance.check_input(agent, governance.estimate_tokens(len(prompt) + len(system)))
+    config = types.GenerateContentConfig(
+        system_instruction=system,
+        tools=[types.Tool(google_search=types.GoogleSearch())],
+        temperature=0.2,
+        labels=governance.labels(agent) if governance.on_vertex() else None,
+        max_output_tokens=governance.limit(agent, "max_output_tokens"),
+        http_options=types.HttpOptions(retry_options=retry_for(agent)),
+    )
+    try:
+        response = await client().aio.models.generate_content(model=model, contents=prompt, config=config)
+    except errors.APIError:
+        governance.record_usage(agent, model, "direct", error=True)
+        raise
+    usage = response.usage_metadata
+    t_in = (usage.prompt_token_count or 0) if usage else 0
+    t_out = ((usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)) if usage else 0
+    governance.record_usage(agent, model, "direct", tokens_in=t_in, tokens_out=t_out)
+
+    meta = response.candidates[0].grounding_metadata if response.candidates else None
+    chunks = (meta.grounding_chunks or []) if meta else []
+    supports = (meta.grounding_supports or []) if meta else []
+    return Grounded(
+        text=response.text or "",
+        sources=[((c.web.title or "") if c.web else "", (c.web.uri or "") if c.web else "") for c in chunks],
+        supports=[((s.segment.text or "") if s.segment else "", list(s.grounding_chunk_indices or []))
+                  for s in supports],
+    )

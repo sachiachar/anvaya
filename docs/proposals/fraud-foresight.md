@@ -57,6 +57,8 @@ The kept-knowledge graph (#18, PR-7.9 and PR-7.10) already finds gaps such as a 
 
 Runs on request from the portal ("Research now", "Dream now") as a background task in the API. It never runs on a request a user is waiting for. It uses the `platform` budget pool.
 
+**Live mode and cost control.** The portal shows a run live: which stage it's in, each step as it happens, new scenarios as they're added, and the model calls used against the cap. A reviewer can press Stop; the run stops before its next model call and keeps what it has checked. Each agent has a cap on model calls per run in the registry (`max_model_calls_per_run`), and a run that reaches it stops itself. The kill switch pauses both agents, because neither is safety-critical.
+
 1. **Choose what to look at.** Rank areas (a safeguard paired with a kind of tactic) by importance plus curiosity (section 8). Take the top 2 sequences.
 2. **Imagine** (`fraud.dreamer`, no web access). Start from real material: the guide's sequences, the fixed list of safeguards, recent guardian events (agent, response and reason only), and OKF cues. Produce 2 close variants and 1 far-fetched variant per sequence. Label them `simulated`.
 3. **Check** (`fraud.researcher`, Google Search grounding). For each scenario, search for evidence and apply rule 3. The same step does PR-2.5's research on new tactics for a guide, labelled `derived`.

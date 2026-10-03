@@ -147,9 +147,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .pa-decide .pa-error { flex-basis: 100%; margin: 0; }
 
 .pa-status { display: inline-block; font-size: 0.75rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
-.pa-status-approved, .pa-status-confirmed, .pa-status-covered, .pa-status-verified, .pa-status-off { color: var(--pa-ok); background: var(--pa-ok-soft); }
-.pa-status-pending, .pa-status-open, .pa-status-dreamt, .pa-status-research_requested, .pa-status-optional_paused { color: var(--pa-warn); background: var(--pa-warn-soft); }
-.pa-status-rejected, .pa-status-reversed, .pa-status-gap, .pa-status-all_paused { color: var(--pa-danger); background: var(--pa-danger-soft); }
+.pa-status-approved, .pa-status-confirmed, .pa-status-covered, .pa-status-verified, .pa-status-off, .pa-status-done { color: var(--pa-ok); background: var(--pa-ok-soft); }
+.pa-status-new, .pa-status-pending, .pa-status-open, .pa-status-dreamt, .pa-status-research_requested, .pa-status-optional_paused, .pa-status-partly, .pa-status-running, .pa-status-unconfirmed, .pa-status-stopped, .pa-status-far-fetched { color: var(--pa-warn); background: var(--pa-warn-soft); }
+.pa-status-rejected, .pa-status-reversed, .pa-status-gap, .pa-status-all_paused, .pa-status-failed { color: var(--pa-danger); background: var(--pa-danger-soft); }
 
 .pa-signin { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 24px; background: var(--pa-navy); color: #f7f5ef; }
 .pa-signin h1 { margin: 0; color: #f7f5ef; }
@@ -216,4 +216,33 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .pa-decide button { flex: 1 1 auto; }
   .pa-row label { flex: 1 1 100%; }
   .pa-row select { width: 100%; }
+}
+
+/* ---- Fraud page: live view of a dreaming or research run ---- */
+.pa-live { border-color: var(--pa-accent); }
+.pa-pipeline { list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 0; margin: 4px 0 14px; }
+.pa-stage { border: 1px solid var(--pa-line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; position: relative; }
+.pa-stage span { color: var(--pa-muted); font-size: 0.8rem; }
+.pa-stage strong { font-family: Lora, Georgia, serif; font-size: 1.4rem; }
+.pa-stage em { font-style: normal; font-size: 0.78rem; color: var(--pa-muted); }
+.pa-stage.is-active { border-color: var(--pa-gold); box-shadow: 0 0 0 2px color-mix(in srgb, var(--pa-gold) 35%, transparent); }
+.pa-stage.is-active::after { content: ""; position: absolute; top: 10px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--pa-gold); animation: pa-pulse 1.2s ease-in-out infinite; }
+.pa-meter { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.85rem; color: var(--pa-muted); margin: 0 0 10px; }
+.pa-meter b { color: var(--pa-text); }
+.pa-feed { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; max-height: 340px; overflow-y: auto; }
+.pa-feed li { display: grid; grid-template-columns: 76px 1fr auto; gap: 10px; align-items: baseline; padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, var(--pa-line) 30%, transparent); animation: pa-in 0.35s ease-out; }
+.pa-feed .pa-chip { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--pa-accent); }
+.pa-feed time { font-size: 0.75rem; color: var(--pa-muted); white-space: nowrap; }
+.pa-feed .is-gap { color: var(--pa-danger); }
+.pa-feed .is-confirmed { color: var(--pa-ok); }
+.pa-list li.is-new { border-left: 3px solid var(--pa-gold); padding-left: 10px; animation: pa-in 0.5s ease-out; }
+@keyframes pa-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+@keyframes pa-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .pa-stage.is-active::after, .pa-feed li, .pa-list li.is-new { animation: none; }
+}
+@media (max-width: 640px) {
+  .pa-pipeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pa-feed li { grid-template-columns: 1fr auto; }
+  .pa-feed .pa-chip { grid-column: 1 / -1; }
 }
