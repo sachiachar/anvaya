@@ -70,7 +70,7 @@ What's built is recorded as numbered requirements (P0-1 to P0-11) in the complet
 | Live voice conversation with Saathi (Gemini Live), typing, photos and documents | Private demo per judge, with switching between people (PR-1) |
 | Suggestion cards with Keep; merging and updates; next steps | Guardian layer: two real reviewers, owner alert with cancel, fraud reference guides, fixed checks and a reviewer trace (PR-2) |
 | Vault encrypted on the phone; recipient invitation with key code | Claim file for each institution and a Bank view (PR-3) |
-| Certificate pre-check by Gemini; two reviewers; waiting period; owner cancel | Playback of real recordings (PR-4) |
+| Certificate pre-check by Gemini; two reviewers; waiting period; owner cancel | Accounts discovered and readiness checked at the source: simulated Account Aggregator flow and real statement upload (PR-11) |
 | Family's assistant (ADK) answering with cited sources; claims checklist and draft letters | Only the owner can reach their conversation; sensitive details masked; retention and deletion (PR-6) |
 | Sign-in with Google; access requests | Kept knowledge as an OKF graph; gap questions (PR-7) |
 | | AI quality measured on a synthetic test set (PR-8); live "inside the agents" panel (PR-9); agent gateway, limits, allowances, backstops, Model Armor (PR-10) |
@@ -89,10 +89,10 @@ Tracked in the [Prototype release milestone](https://github.com/sachiachar/anvay
 | PR-7 | Kept knowledge as an OKF graph; Keep is the commit; gaps drive the conversation | High-value | [#18](https://github.com/sachiachar/anvaya/issues/18) |
 | PR-8 | Measure AI quality on a synthetic test set and publish the numbers | High-value | [#22](https://github.com/sachiachar/anvaya/issues/22) |
 | PR-9 | Inside the agents: a live panel for judges | High-value | [#23](https://github.com/sachiachar/anvaya/issues/23) |
+| PR-11 | Connect to financial institutions (Account Aggregator, statements) and check each account's readiness for handover | High-value | [#41](https://github.com/sachiachar/anvaya/issues/41) |
 | PR-10 | Agent governance: gateway, registry, limits, allowances, backstops, Model Armor ([proposal](docs/proposals/agent-governance.md)) | High-value | [#24](https://github.com/sachiachar/anvaya/issues/24) |
-| PR-4 | Real voice recordings (playback) | Trimmed | [#11](https://github.com/sachiachar/anvaya/issues/11) |
 
-Moved to the [Grand finale milestone](https://github.com/sachiachar/anvaya/milestone/2) (4 December): signs of pressure (#14, #20), insider collusion (#16, #19), voice letters (#21), cloned-voice signals (#25), cooling-off delay (#26), per-tenant buckets and keys (#27), OKF export and coverage map (#28), and governance for a bank pilot (#29).
+Moved to the [Grand finale milestone](https://github.com/sachiachar/anvaya/milestone/2) (4 December): real recordings (#11), signs of pressure (#14, #20), insider collusion (#16, #19), voice letters (#21), cloned-voice signals (#25), cooling-off delay (#26), per-tenant buckets and keys (#27), OKF export and coverage map (#28), and governance for a bank pilot (#29).
 
 ## Architecture
 

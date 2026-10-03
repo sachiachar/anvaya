@@ -83,6 +83,24 @@ Anvaya doesn't replace your settlement process, and it doesn't certify legal hei
 - **Your institution** remains responsible for the settlement decision, as the regulations require.
 - **The family** receives guidance and draft letters, never legal advice. Legal help comes only from licensed partners.
 
+## Readiness checked at the source
+
+Today most succession planning relies on what a customer remembers. **What they forget is exactly what ends up unclaimed.** Anvaya checks at the source.
+
+- **Discovery.** With the customer's consent, their accounts and policies are found at the source, through India's **Account Aggregator** network, which had 2.61 billion accounts enabled for sharing at the end of 2025.[^aa] Customers can also upload their own consolidated statements (NSDL or CDSL, or an e-insurance account statement).
+- **A readiness check for each account:**
+  - Is a nominee registered? Account Aggregator data carries the nominee status (`REGISTERED` or `NOT-REGISTERED`) for deposits, mutual funds and equities.[^rebit]
+  - Is it the person the customer actually intends?
+  - Is the account dormant (the step before it becomes unclaimed), has a policy lapsed, and are joint holders and contact details current?
+- **Gaps become actions.** Each problem becomes a next step, or a gentle question from Saathi, with a link straight into **your** nominee-update journey.
+- **Better claim files.** Your claim file shows which accounts were confirmed at the source, and how ready each one was.
+- **Minimal and private.** Only account summaries and nominee status are requested, never transactions, and balances aren't kept.
+- **Why it has to happen early.** Consent belongs to the customer and lapses with them, so this has to happen *while they're here*, which is exactly when Anvaya works.
+
+**Why through you.** In the Account Aggregator network, the party receiving the data must be regulated by the RBI, SEBI, IRDAI or PFRDA.[^fiu] **Your institution is that regulated party. Anvaya is your technology service provider for the readiness check.** It's the safest route for customers, and a capability your customers can only get through you.
+
+Elsewhere in Asia, the same check plugs into each country's consent-based network, such as Singapore's SGFinDex, Korea's MyData and Japan's My Number account links.
+
 ## Fraud protection at every step
 
 Fraud doesn't only arrive with a forged certificate at the end. It can enter at any point in the journey. Anvaya runs a **guardian**: an independent layer of checks that watches every step and corrects course before anything takes effect.
@@ -107,7 +125,7 @@ Fraud doesn't only arrive with a forged certificate at the end. It can enter at 
 | **Faster settlement** | Complete, pre-checked files mean the settlement clock (15 days in India) starts sooner and finishes on time | Days from first contact to complete file; share settled within the regulatory deadline |
 | **Fewer rejected or reopened claims** | Documents and authority are checked before the file reaches you | Share of files needing more documents |
 | **Less fraud, at every step** | A guardian watches every step of the journey, not only the claim: forgery checks, two independent reviewers, owner alerts, protection against pressure on elderly customers, cloned voices and insider collusion | Suspect cases caught before reaching you; guardian interventions and false-alarm rate |
-| **Fewer unclaimed balances** | Every account the customer mentions lands on the family's checklist | Accounts claimed that the family didn't know about |
+| **Fewer unclaimed balances** | Accounts are discovered and checked at the source, not only remembered; dormant accounts and missing nominees are flagged early; every account lands on the family's checklist | Accounts found that the customer hadn't mentioned; dormant accounts reactivated; accounts claimed that the family didn't know about |
 | **The next generation** | The heir's first real experience of your institution is a kind and helpful one | Heir retention after settlement |
 | **Engaged customers** | A warm, useful reason to open your app, in the customer's own language | Sign-up and repeat use |
 | **Control and transparency** | Governed agents, budgets you can see and approve, and a governance dashboard for your institution | Cost per active customer within budget; approvals handled |
@@ -133,6 +151,7 @@ flowchart LR
 | **Branded app** | Anvaya under your brand, launched from your app or website | Your branding and sign-in (single sign-on) |
 | **Inside your app** | Anvaya's screens embedded in your mobile app | Single sign-on, and a place in your app's menu |
 | **Claims connection** | Claim packets delivered securely into your claims or case system | A secure intake point, and your document checklist |
+| **Readiness at the source** | Account discovery and readiness checks through the Account Aggregator network, with your institution as the regulated recipient and Anvaya as your technology service provider | Your existing Account Aggregator integration as the recipient |
 | **Your products** | Your nominee journey and products shown first | Links into your nominee-update journey and product pages |
 
 Anvaya never needs access to your core banking or policy administration systems. Most pilots start with the branded app and the claims connection, and add in-app embedding later.
@@ -224,7 +243,7 @@ Which law applies, and in what order, stays with licensed lawyers.
 | --- | --- |
 | **Scope** | One customer segment where the value is clearest, for example savings or life customers aged 50 and over, in two or three languages |
 | **Length** | Six months |
-| **Integration** | Branded app plus the claims connection; no core-system changes |
+| **Integration** | Branded app, the claims connection and readiness checks through your Account Aggregator integration; no core-system changes |
 | **Success measures** | Guardian interventions and false-alarm rate, uptake at each trigger moment, nomination completeness, days to complete file, share settled within the regulatory deadline, files needing more documents, sign-up and repeat use, customer satisfaction |
 | **Before live data** | Your security review, an independent penetration test, and data kept in-country where required (India regions for Indian institutions) |
 | **Governance** | Your governance dashboard from day one; you set your customers' allowance within the licence and approve requests for more |
@@ -244,7 +263,7 @@ Which law applies, and in what order, stays with licensed lawyers.
 
 | Live now | Coming in the prototype release (18 October 2026) | For the pilot |
 | --- | --- | --- |
-| Voice and typed conversation; reading policy photos; Keep cards; next steps; the vault on the phone; two-reviewer verification with a waiting period; the family's questions with sources; claims checklist and letters | The guardian's core checks (two real reviewers, owner alert with cancel, fraud reference guides, fixed checks and a reviewer trace); **the claim file and your Bank view**; owner-only access to conversations with numbers hidden; kept knowledge in the open format with gentle gap questions; governed agents with allowances and **your governance dashboard**; published quality measures | Per-bank stores with your own key; your budgets and the audit export; Apigee and Agent Gateway; pressure, cloned-voice and insider-pattern checks; trigger-moment prompts; single sign-on and in-app embedding; India data residency; the full partner catalogue |
+| Voice and typed conversation; reading policy photos; Keep cards; next steps; the vault on the phone; two-reviewer verification with a waiting period; the family's questions with sources; claims checklist and letters | The guardian's core checks (two real reviewers, owner alert with cancel, fraud reference guides, fixed checks and a reviewer trace); **the claim file and your Bank view**; **readiness checked at the source** (a simulated Account Aggregator flow and real statement upload); owner-only access to conversations with numbers hidden; kept knowledge in the open format with gentle gap questions; governed agents with allowances and **your governance dashboard**; published quality measures | Live Account Aggregator connection through your institution; per-bank stores with your own key; your budgets and the audit export; Apigee and Agent Gateway; pressure, cloned-voice and insider-pattern checks; trigger-moment prompts; single sign-on and in-app embedding; India data residency; the full partner catalogue |
 
 See [release-notes.md](release-notes.md).
 
@@ -276,6 +295,9 @@ We are looking for one bank and one insurer to shape the pilot with us: to be th
 [^kr]: Financial Services Commission and the insurance industry, reported in [*Korea insurers struggle to reduce unclaimed policy benefits*](https://www.insurancebusinessmag.com/asia/news/breaking-news/korea-insurers-struggle-to-reduce-unclaimed-policy-benefits-581883.aspx), Insurance Business Asia, 9 July 2026.
 [^my]: Accountant General Nor Yati Ahmad, reported in [*RM13.3bil in unclaimed money as of April*](https://www.freemalaysiatoday.com/category/nation/2025/05/17/rm13-3bil-in-unclaimed-money-as-of-april), Free Malaysia Today, 17 May 2025.
 [^au]: Australian Taxation Office, [*Total lost (fund-held) and ATO-held super*](https://www.ato.gov.au/about-ato/research-and-statistics/in-detail/super-statistics/super-accounts-data/super-data-lost-unclaimed-multiple-accounts-and-consolidations/total-lost-fund-held-and-ato-held-super), and the ATO media release [*$21 billion in lost super*](https://www.ato.gov.au/media-centre/21-billion-dollars-in-lost-super-find-yours).
+[^aa]: Account Aggregator ecosystem figures as of 31 December 2025, reported in [*Account Aggregator Framework: 2026 Guide*](https://hyperverge.co/blog/account-aggregator-framework-rbi/).
+[^rebit]: ReBIT, [*Account Aggregator deposit schema*](https://specifications.rebit.org.in/api_schema/account_aggregator/documentation/deposit.html): the holder's `nominee` attribute, `REGISTERED` or `NOT-REGISTERED`; the same field appears in the mutual fund and equities schemas.
+[^fiu]: Sahamati, [*Financial Information Users in the AA ecosystem*](https://sahamati.org.in/fiu/).
 [^sg]: CPF Board, [*CPF nominations*](https://www.cpf.gov.sg/member/infohub/reports-and-statistics/cpf-trends/cpf-nominations) (2023 data, updated 4 November 2024).
 
 ---
