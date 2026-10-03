@@ -356,4 +356,4 @@ Also verified by hand: the vault and recovery round trip (Node Web Crypto), live
 
 ## 12. Roadmap
 
-Sign-in and roles · notifications · a real legal-partner integration · Vertex AI RAG Engine for archive search · email and chat import · passkey-backed keys · a separate KMS release service · session resumption for long live calls · an evaluation set in CI · a pilot with a bank or insurer.
+Separate sign-in for each person outside the demo · notifications · a real legal-partner integration · Vertex AI RAG Engine for archive search · email and chat import · passkey-backed keys · a separate KMS release service · session resumption for long live calls · an evaluation set in CI · a pilot with a bank or insurer.

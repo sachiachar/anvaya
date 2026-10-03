@@ -1,6 +1,6 @@
 # Proposal: agent identity, permissions and budgets
 
-*Team Saathi · Draft for decision · 3 October 2026 · relates to [architecture.md](../architecture.md) §4 and §4.1, and [business-model.md](../business-model.md)*
+*Team Saathi · Agreed, and mostly built (status in §7.1) · 3 October 2026 · relates to [architecture.md](../architecture.md) §4 and §4.1, and [business-model.md](../business-model.md)*
 
 ## Summary
 
@@ -235,16 +235,18 @@ Google Cloud has two products that cover parts of this proposal. Neither covers 
 
 ### 7.1 Prototype release (about 4 days with dashboards and Model Armor)
 
-| ID | Item | Fixes |
-| --- | --- | --- |
-| G-1 | **Agent gateway and registry:** every call through `gateway.call(agent_id, …)`; models, tools and limits per agent from `registry.yaml`; CI check forbidding direct client use; labels on calls | 1, 2, 3 |
-| G-2 | **Limits per request:** max tokens, at most 2 retries, a cheaper-or-equal fallback, at most 6 model calls per handover run, 20-minute live calls | 6, 7, 8 |
-| G-3 | **Close the holes:** `/speech` only for Saathi's own replies; cache readiness, legal needs and settlement until the data changes; short summary for live calls | 5, 9 |
-| G-4 | **Token ledger and user budgets:** reserve and reconcile from `usage_metadata`; daily user allowances; fair-use rate limits; protected safety pool; graceful messages | 4, 10 |
-| G-5 | **Backstops:** Google Cloud budget with alerts; lower Gemini quotas as a hard cap; a simple kill-switch flag read by the gateway | 11 |
-| G-6 | **Approvals, minimal version:** "request more" for judges and users; approve or reject in the team console, time-limited and logged; two-person approval for agent budgets | — |
-| G-7 | **Governance dashboards** (§6.1): the platform dashboard in a separate **platform admin portal** (PR-12) and a tenant Governance view for the Bank role, covering spend and budget, agents, approvals, guardian and outcomes, with seeded data for the demo. The tenant audit export follows after the deadline. | — |
-| G-8 | **Model Armor:** screen the owner's messages, uploaded documents and tool responses for hidden instructions (PR-2.3.6, PR-2.8.4) and sensitive data (helps PR-6.5), through the gateway | — |
+Status on 3 October 2026 is in the last column; [#24](https://github.com/sachiachar/anvaya/issues/24) and [#42](https://github.com/sachiachar/anvaya/issues/42) have the details. Costs now come only from the Cloud Billing export (PR-10.9), not a price table.
+
+| ID | Item | Fixes | Status |
+| --- | --- | --- | --- |
+| G-1 | **Agent gateway and registry:** every call through `gateway.call(agent_id, …)`; models, tools and limits per agent from `registry.yaml`; CI check forbidding direct client use; labels on calls | 1, 2, 3 | Built (PR-10.1) |
+| G-2 | **Limits per request:** max tokens, at most 2 retries, a cheaper-or-equal fallback, at most 6 model calls per handover run, 20-minute live calls | 6, 7, 8 | Built (PR-10.2) |
+| G-3 | **Close the holes:** `/speech` only for Saathi's own replies; cache readiness, legal needs and settlement until the data changes; short summary for live calls | 5, 9 | Built (PR-10.3) |
+| G-4 | **Token ledger and user budgets:** reserve and reconcile from `usage_metadata`; daily user allowances; fair-use rate limits; protected safety pool; graceful messages | 4, 10 | Built (PR-10.4); no rate limits yet |
+| G-5 | **Backstops:** Google Cloud budget with alerts; lower Gemini quotas as a hard cap; a simple kill-switch flag read by the gateway | 11 | Kill switch built; budget alerts and quotas need a person (PR-10.5) |
+| G-6 | **Approvals, minimal version:** "request more" for judges and users; approve or reject in the team console, time-limited and logged; two-person approval for agent budgets | — | Portal approvals built; "ask for more" in the app to come (PR-10.6) |
+| G-7 | **Governance dashboards** (§6.1): the platform dashboard in a separate **platform admin portal** (PR-12) and a tenant Governance view for the Bank role, covering spend and budget, agents, approvals, guardian and outcomes, with seeded data for the demo. The tenant audit export follows after the deadline. | — | Platform portal built with real data only (PR-12); tenant view comes with the Bank role |
+| G-8 | **Model Armor:** screen the owner's messages, uploaded documents and tool responses for hidden instructions (PR-2.3.6, PR-2.8.4) and sensitive data (helps PR-6.5), through the gateway | — | Not started (PR-10.8) |
 
 ### 7.2 After the deadline (finale and pilot)
 

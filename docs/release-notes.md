@@ -31,6 +31,7 @@
   - the fraud coverage map and reference guides;
   - every private demo copy, with when it was last used and today's allowance used; your own is marked, and a platform admin can restore any copy to the start;
   - an audit log of every decision.
+- The portal works on a phone: a compact top bar, sections you swipe between, and tables that scroll inside their card. Every page has a Refresh button, and the agents table fits on a laptop screen.
 - Roles in the portal (platform admin, budget approver, risk reviewer, viewer) are checked on the server. Anyone else who signs in can only view.
 - The portal never shows conversation text or names. People appear as anonymous keys, and counts under 5 are hidden.
 - Every call to Gemini is checked against the register of agents: the agent must be registered and the model allowed. Refused calls are recorded, and each call's tokens are counted.
@@ -62,7 +63,7 @@
 - Spend can't yet be split by agent or tenant on the bill; those show use instead.
 
 ### Next
-Judges acting as the platform admin in the portal · guardian checks at every step · a claim file and bank view · accounts checked at the source · kept knowledge with gentle questions about what's missing · measured AI quality.
+Opening the demo to every judge, with a guided tour · "ask for more" in the app · judges acting as the platform admin in the portal · guardian checks at every step · a claim file and bank view · accounts checked at the source · kept knowledge with gentle questions about what's missing · measured AI quality.
 
 ## Prototype 0.1 · 28 September 2026 (AI Builder Cup 2026)
 
