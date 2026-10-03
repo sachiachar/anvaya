@@ -10,10 +10,12 @@ const STATE_TEXT: Record<Case["state"], string> = {
   cancelled: "Cancelled – the owner responded",
 };
 
-export default function Team() {
+/** A reviewer on our team: Anjali or Rahul, as chosen in the switcher. The server records
+ * whoever is acting, so the same person can't confirm both steps. */
+export default function Team({ reviewer }: { reviewer: string }) {
   return (
     <>
-      <Cases />
+      <Cases reviewer={reviewer} />
       <AccessRequests />
     </>
   );
@@ -50,9 +52,8 @@ function AccessRequests() {
   );
 }
 
-function Cases() {
+function Cases({ reviewer }: { reviewer: string }) {
   const [cases, setCases] = useState<Case[]>([]);
-  const [reviewer, setReviewer] = useState("");
   const { error, run } = useAction();
   const refresh = () => run(async () => setCases((await api.cases()).cases));
   useEffect(() => {
@@ -64,7 +65,7 @@ function Cases() {
   return (
     <Card title="Review cases" level="assist">
       <p className="muted">The AI pre-checks every document. Only a person on our team can confirm, and two different people must confirm the death and the legal authority.</p>
-      <input value={reviewer} onChange={(e) => setReviewer(e.target.value)} placeholder="Your name (reviewer)" aria-label="Reviewer name" />
+      <p className="muted">You are reviewing as <strong>{reviewer}</strong>. To confirm the second step, switch to the other reviewer.</p>
       <ErrorLine error={error} />
       {cases.length === 0 && <p className="muted">No open cases.</p>}
       <ul className="list">

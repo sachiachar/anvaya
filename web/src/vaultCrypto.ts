@@ -12,15 +12,20 @@
 // Demo simplification: keys are cached in localStorage. Production keeps them as
 // non-extractable keys in IndexedDB and can add a passkey as a second unlock.
 
+import { currentOwnerId } from "./api";
+
 const b64 = (buf: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(buf)));
 const unb64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
-const DATA_KEY = "life-after.owner.dataKey";
-const RECIPIENT_PRIVATE = "life-after.recipient.privateJwk";
+// Keys are kept per demo copy (PR-1.4): the owner's data key and the recipient's private key
+// have different names, and the copy's owner ID keeps two copies in one browser apart.
+const DATA_KEY = "owner.dataKey";
+const RECIPIENT_PRIVATE = "recipient.privateJwk";
+const scoped = (key: string) => `anvaya.${currentOwnerId()}.${key}`;
 
 function load(key: string): string | null {
   try {
-    return localStorage.getItem(key);
+    return localStorage.getItem(scoped(key));
   } catch {
     return null;
   }
@@ -28,7 +33,7 @@ function load(key: string): string | null {
 
 function save(key: string, value: string) {
   try {
-    localStorage.setItem(key, value);
+    localStorage.setItem(scoped(key), value);
   } catch {
     /* storage unavailable: key lives only for this session */
   }
@@ -36,7 +41,7 @@ function save(key: string, value: string) {
 
 function remove(key: string) {
   try {
-    localStorage.removeItem(key);
+    localStorage.removeItem(scoped(key));
   } catch {
     /* nothing to remove */
   }

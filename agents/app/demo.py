@@ -32,7 +32,21 @@ TOUCH_SECONDS = 3600  # how often "last used" is written, so not every request w
 # check the copy themselves and act only on the caller's own.
 NEUTRAL_ROUTES = {"request_access"}
 
+# The people in every copy (PR-1.3). Each acts as themselves, so rules such as "two different
+# reviewers" hold even though one judge plays them all (PR-1.4).
+PEOPLE = {
+    "vikram": {"name": "Vikram", "role": "owner"},
+    "priya": {"name": "Priya", "role": "family"},
+    "anjali": {"name": "Anjali", "role": "reviewer"},
+    "rahul": {"name": "Rahul", "role": "reviewer"},
+    "admin": {"name": "Platform admin", "role": "platform_admin"},
+}
+DEFAULT_PERSON = "vikram"
+ACTING_HEADER = "x-acting-as"
+WHO_DOES = {"owner": "Vikram", "family": "Priya", "reviewer": "a reviewer (Anjali or Rahul)"}
+
 _copy: ContextVar[str | None] = ContextVar("demo_copy", default=None)
+_person: ContextVar[str] = ContextVar("demo_person", default=DEFAULT_PERSON)
 
 
 def _persona() -> dict:
@@ -96,8 +110,36 @@ def reset() -> dict:
     return owner
 
 
-def guard(request: Request) -> None:
-    """Router dependency: a route with an owner in its path only works for the caller's own copy."""
+def act_as(person: str | None) -> str:
+    """Set who is acting within the caller's copy. Unknown people are refused."""
+    person = (person or DEFAULT_PERSON).strip().lower()
+    if person not in PEOPLE:
+        raise HTTPException(400, "unknown person")
+    _person.set(person)
+    return person
+
+
+def person() -> dict:
+    """The person acting now, within the caller's copy: {"id", "name", "role"}."""
+    pid = _person.get()
+    return {"id": pid, **PEOPLE[pid]}
+
+
+def only(*roles: str):
+    """Route dependency: only these people may take this action (PR-1.4)."""
+    def check() -> None:
+        if PEOPLE[_person.get()]["role"] not in roles:
+            who = " or ".join(WHO_DOES[r] for r in roles)
+            raise HTTPException(403, f"Only {who} can do this. Switch to them first.")
+    return check
+
+
+async def guard(request: Request) -> None:
+    """Router dependency: who is acting (from the switcher), and a route with an owner in its path
+    only works for the caller's own copy. Async on purpose: it runs in the request's own context,
+    so the acting person it sets reaches the route (a sync dependency runs in a worker thread,
+    whose changes would be lost)."""
+    act_as(request.headers.get(ACTING_HEADER))
     requested = request.path_params.get("owner_id")
     route = request.scope.get("route")
     if route is not None and route.name in NEUTRAL_ROUTES:

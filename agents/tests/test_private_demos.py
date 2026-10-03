@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from app import auth, main
+from app import auth, demo, main
 from app.config import settings
 from app.store import store
 
@@ -17,8 +17,8 @@ TOKENS = {
 }
 
 
-def h(who):
-    return {"Authorization": f"Bearer {who}"}
+def h(who, person="vikram"):
+    return {"Authorization": f"Bearer {who}", demo.ACTING_HEADER: person}
 
 
 @pytest.fixture()
@@ -75,11 +75,12 @@ def test_no_route_with_an_owner_reaches_another_copy(client, copies):
         if "{owner_id}" not in path or not hasattr(route, "methods"):
             continue
         for method in route.methods - {"HEAD", "OPTIONS"}:
-            r = client.request(method, path.replace("{owner_id}", a), headers=h("judge-b"))
-            if route.name == "request_access":  # neutral reply, nothing stored for A
-                assert r.status_code in (200, 422), path
-            else:
-                assert r.status_code == 404, f"{method} {path} gave {r.status_code}"
+            for person in demo.PEOPLE:  # whoever B is acting as
+                r = client.request(method, path.replace("{owner_id}", a), headers=h("judge-b", person))
+                if route.name == "request_access":  # neutral reply (or not Priya's to send), nothing stored
+                    assert r.status_code in (200, 403, 422), path
+                else:
+                    assert r.status_code == 404, f"{method} {path} as {person} gave {r.status_code}"
             checked += 1
     assert checked >= 25  # every owner route, not a handful
     assert not store.list("access_requests", owner_id=a)
@@ -88,14 +89,14 @@ def test_no_route_with_an_owner_reaches_another_copy(client, copies):
 def test_no_route_by_id_reaches_another_copy(client, copies):
     a, _ = copies
     _a_data(a)
-    b = h("judge-b")
+    # B acts as the person each action needs, so only the copy check stands in the way.
+    b, b_reviewer = h("judge-b"), h("judge-b", "anjali")
     assert client.post("/api/speech", headers=b, json={"turn_id": "turn_a"}).status_code == 404
     assert client.post("/api/proposals/m_a/decision", headers=b,
                        json={"collection": "moments", "decision": "approve"}).status_code == 404
     assert client.post("/api/tasks/task_a", headers=b, json={"status": "done"}).status_code == 404
-    assert client.post("/api/admin/cases/case_a/confirm-death", headers=b,
-                       json={"reviewer": "Rahul"}).status_code == 404
-    assert client.post("/api/access-requests/req_a/decision", headers=b,
+    assert client.post("/api/admin/cases/case_a/confirm-death", headers=b_reviewer, json={}).status_code == 404
+    assert client.post("/api/access-requests/req_a/decision", headers=b_reviewer,
                        json={"decision": "approve", "decided_by": "team"}).status_code == 404
     assert client.get("/api/admin/cases", headers=b).json()["cases"] == []
     assert client.get("/api/admin/access-requests", headers=b).json()["requests"] == []
