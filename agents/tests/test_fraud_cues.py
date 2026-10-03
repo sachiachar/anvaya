@@ -76,6 +76,8 @@ def test_a_few_real_owners_are_never_added_to_the_synthetic_counts():
     assert "person.relationship_missing" not in {c["pattern"] for c in fraud_cues.cues()}
     _real_owners_without_relationship(5)  # 5 real owners: now they count, with the synthetic ones
     assert {c["pattern"]: c["owners"] for c in fraud_cues.cues()}["person.relationship_missing"] == 8
+    _real_owners_without_relationship(9)  # 9 real owners count as 5: one more or less never shows
+    assert {c["pattern"]: c["owners"] for c in fraud_cues.cues()}["person.relationship_missing"] == 8
 
 
 def test_unknown_answers_and_old_catalogs_count_as_missing():
@@ -95,7 +97,7 @@ def test_unknown_answers_and_old_catalogs_count_as_missing():
         media.save(oid, knowledge.CATALOG, json.dumps(cat).encode(), "application/json")
         assert knowledge.catalog(oid)["concepts"][person["id"]]["graph"]["has"] == []  # stored the old way
     counts = {c["pattern"]: c["owners"] for c in fraud_cues.cues()}
-    assert counts["policy.nominee_missing"] == 5 and "nominee.not_kept" not in counts
+    assert counts["policy.nominee_missing"] == 5 and "nominee.not_kept" not in counts  # 5 real, no synthetic
     assert counts["person.relationship_missing"] == 5
 
 

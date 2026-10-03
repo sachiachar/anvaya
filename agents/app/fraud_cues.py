@@ -68,15 +68,16 @@ def cues(*, min_owners: int = MIN_OWNERS) -> list[dict]:
     """Patterns at least `min_owners` owners have, most common first: [{pattern, asset_class,
     owners, means}]. Each owner counts once per pattern, however many items show it.
 
-    Real owners join a count only when at least `min_owners` real owners share the pattern.
-    The synthetic owners' counts are fixed in this file, so otherwise subtracting them would
-    reveal a handful of real owners ("8 owners" = 7 synthetic + 1 real). With this rule a small
-    real count is never added, and the difference reveals nothing."""
+    Real owners join a count only when at least `min_owners` real owners share the pattern, and
+    then rounded down to a multiple of `min_owners`. The synthetic owners' counts are fixed in
+    this file, so otherwise subtracting them would reveal a handful of real owners ("8 owners" =
+    7 synthetic + 1 real). Rounding also means one owner more or less never changes a count, so
+    comparing runs, or the number of demo copies, reveals nothing about any one owner."""
     real: Counter[tuple[str, str]] = Counter()
     synthetic: Counter[tuple[str, str]] = Counter()
     for owner in store.list("owners")[:MAX_OWNERS]:
         (synthetic if owner.get("synthetic") else real).update(patterns_of(knowledge.graph_parts(owner["id"])))
-    counts = Counter({k: n for k, n in real.items() if n >= min_owners}) + synthetic
+    counts = Counter({k: n - n % min_owners for k, n in real.items() if n >= min_owners}) + synthetic
     return [{"pattern": p, "asset_class": a, "owners": n, "means": PATTERNS[p][0]}
             for (p, a), n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])) if n >= min_owners]
 
