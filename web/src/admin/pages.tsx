@@ -129,6 +129,12 @@ function describeUse(u: Use) {
     .filter(Boolean).join(", ");
 }
 
+/** Tokens, and live-call minutes when there are any: "12,400 · 3 min". */
+function tokensAndMinutes(u: Use) {
+  const minutes = u.minutes ? `${fmt.num(u.minutes)} min` : "";
+  return u.tokens ? [fmt.num(u.tokens), minutes].filter(Boolean).join(" · ") : minutes || "0";
+}
+
 function SpendSection({ spend }: { spend: Spend }) {
   if (!spend.available) {
     return (
@@ -234,11 +240,11 @@ export function OverviewPage({ me, fresh }: { me: Me; fresh: boolean }) {
               <li key={agent}>
                 <span className="pa-mono">{agent}</span>
                 <Bar value={a.tokens} max={agentMax} label={`${agent}: ${describeUse(a)}`} />
-                <span>{a.tokens ? fmt.num(a.tokens) : `${fmt.num(a.minutes)} min`}</span>
+                <span>{tokensAndMinutes(a)}</span>
               </li>
             ))}
           </ul>
-          <p className="pa-muted">Tokens counted by the agent gateway (live calls in minutes). Dollars come only from Google Cloud billing, above.</p>
+          <p className="pa-muted">Tokens counted by the agent gateway, and minutes for live calls. Dollars come only from Google Cloud billing, above.</p>
         </Section>
         <div>
           <Section title="Use by model, 30 days">
@@ -246,7 +252,7 @@ export function OverviewPage({ me, fresh }: { me: Me; fresh: boolean }) {
               <thead><tr><th>Model</th><th className="num">Calls</th><th className="num">Tokens</th></tr></thead>
               <tbody>{Object.entries(u.by_model).map(([m, v]) => (
                 <tr key={m}><td className="pa-mono">{m}</td><td className="num">{fmt.num(v.calls)}</td>
-                  <td className="num">{v.tokens ? fmt.num(v.tokens) : `${fmt.num(v.minutes)} min`}</td></tr>
+                  <td className="num">{tokensAndMinutes(v)}</td></tr>
               ))}</tbody>
             </table>
           </Section>

@@ -109,3 +109,45 @@ def test_live_call_ends_at_its_time_limit(monkeypatch):
     asyncio.run(live.call(FakeWS(), {"id": "o1", "name": "Vikram"}, lambda t: t))
     assert any(m.get("type") == "error" and "limit" in m["detail"] for m in sent)
     assert blocked("saathi.voice", "max_call_minutes")
+
+
+def test_live_call_records_its_tokens_once_per_reply(monkeypatch):
+    def usage(t_in, t_out, thoughts=None):
+        return SimpleNamespace(server_content=None, usage_metadata=SimpleNamespace(
+            prompt_token_count=t_in, response_token_count=t_out, thoughts_token_count=thoughts))
+
+    interrupted = SimpleNamespace(usage_metadata=None, server_content=SimpleNamespace(
+        input_transcription=None, output_transcription=None, interrupted=True, model_turn=None, turn_complete=False))
+    # Turn one: a reply that reports twice (only the latest counts), is interrupted, and a second
+    # reply that thinks. Turn two: one reply.
+    turns = [[usage(80, 300), usage(100, 400), interrupted, usage(120, 200, thoughts=50)], [usage(150, 300)], []]
+
+    class FakeWS:
+        async def accept(self): pass
+        async def send_json(self, data): pass
+        async def send_bytes(self, data): pass
+        async def receive(self):
+            await asyncio.sleep(3600)
+        async def close(self): pass
+
+    class FakeSession:
+        async def receive(self):
+            for message in turns.pop(0):
+                yield message
+
+    @contextlib.asynccontextmanager
+    async def connect(**_):
+        yield FakeSession()
+
+    def voice():
+        day = store.get("usage_days", core._today()) or {}
+        return day.get("agents", {}).get("saathi.voice", {"tokens_in": 0, "tokens_out": 0, "calls": 0})
+
+    monkeypatch.setattr(live, "client", lambda: SimpleNamespace(aio=SimpleNamespace(live=SimpleNamespace(connect=connect))))
+    monkeypatch.setattr(live.loops, "live_instructions", lambda *a, **k: "")
+    before = voice()
+    asyncio.run(live.call(FakeWS(), {"id": "o1", "name": "Vikram"}, lambda t: t))
+    after = voice()
+    assert after["calls"] - before["calls"] == 1
+    assert after["tokens_in"] - before["tokens_in"] == 100 + 120 + 150
+    assert after["tokens_out"] - before["tokens_out"] == 400 + 250 + 300
