@@ -11,7 +11,7 @@
 ## Risk
 
 - [ ] Touches the vault, handover, sign-in, governance, `firestore.rules` or deploy (owner review needed)
-- [ ] Adds a dependency, environment variable or registry entry (say which)
+- [ ] Adds or upgrades a dependency (latest stable, licence checked, `docs/dependencies.md` updated), environment variable or registry entry (say which)
 - [ ] Docs updated: release notes, architecture, README (or not needed)
 
 ## Coding agent

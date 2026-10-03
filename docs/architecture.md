@@ -330,6 +330,7 @@ Automated tests (`agents/tests/`), with Gemini stubbed so they run without crede
 - governance: server-side roles, approvals, the kill switch, and a portal that never returns conversation text or names;
 - the gateway: every file that calls Gemini goes through it, every agent named in code is registered, and every call is recorded in the ledger;
 - limits per request: output caps, retries, input size, call length and reply length.
+- dependencies: every direct dependency is in the inventory, every installed package has an allowed licence, and the Python and Node versions agree everywhere.
 
 Every pull request runs the linters (ruff for `agents/`, Biome for `web/`), these tests and the web build ([.github/workflows/ci.yml](../.github/workflows/ci.yml)).
 

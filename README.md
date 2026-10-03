@@ -22,6 +22,7 @@ Built for the **AI Builder Cup 2026** · Track: **BFSI** · Google Gemini + Goog
 | [Use cases](docs/use-cases.md) | Who uses it, what they do, what the AI does |
 | [Release notes](docs/release-notes.md) | What's in each version and known limitations |
 | [Demo script](docs/demo-script.md) | A timed 3-minute demo with the lines to say to Saathi |
+| [Libraries and services](docs/dependencies.md) | Every library, version and licence, and the Google services used, with the purpose of each |
 | [Brand](docs/brand.md) | The name, taglines by country and language, and the companion's name in each language |
 
 ## The problem
@@ -155,7 +156,7 @@ docs/                   Concept, architecture, use cases, release notes
 
 ## Run locally
 
-Needs Python 3.12+, [uv](https://docs.astral.sh/uv/), Node 20+ and a Gemini API key from [Google AI Studio](https://aistudio.google.com).
+Needs Python 3.14, [uv](https://docs.astral.sh/uv/), Node 24 and a Gemini API key from [Google AI Studio](https://aistudio.google.com).
 
 ```bash
 # 1. Agents API on :8080
