@@ -153,6 +153,35 @@ flowchart LR
 | `access_requests` | name, relationship, contact, note, status (pending_owner, pending_review, approved, declined) | Family members who weren't listed |
 | `handoffs`, `legal_documents` | Consented legal summaries; signed documents | Never contain vault data |
 
+### 5.1 Storage layout (planned for the prototype release)
+
+**Buckets per tenant and region; inside each, a folder per owner, a key per owner, and access tokens limited to one owner.** Tracked in [PR-6 (#17)](https://github.com/sachiachar/anvaya/issues/17) and [PR-7 (#18)](https://github.com/sachiachar/anvaya/issues/18).
+
+| Layer | Design |
+| --- | --- |
+| **Buckets** | One per region (`anvaya-in`, `anvaya-sg`), one per licensing bank or insurer (encrypted with that institution's own key), and one for judges' demos. Never one per owner: bucket creation is rate-limited, and the names can be probed. |
+| **Folder per owner** | `owners/<owner-id>/`, holding the kept-knowledge bundle (OKF), uploads and recordings. |
+| **Key per owner** | Envelope encryption: a data key per owner, wrapped by Cloud KMS. Destroying it makes the owner's data unreadable everywhere, including backups. |
+| **Tokens limited to one owner** | For each request, the API exchanges its credential for a short-lived token restricted to that owner's folder (Credential Access Boundaries), so Cloud Storage itself refuses access to any other owner. |
+
+**What lives where**
+- **Kept knowledge is an OKF bundle in Cloud Storage** ([OKF v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md)):
+  - one Markdown concept per kept item, with `type`, `sources`, `generated`, `verified: human:owner-<id>`, `status` and `stale_after`;
+  - an `index.md` that is regenerated after each Keep, and a history log per date.
+  - **Keep is the commit:** only owner-confirmed knowledge enters the bundle.
+- **Firestore holds workflow data only:** pending cards, cases and reviews, guardian events, next steps and access requests.
+- **The conversation:**
+  - sensitive details are masked before storage (Sensitive Data Protection);
+  - only the owner can reach it;
+  - it's kept only while useful;
+  - it's never released in the handover;
+  - the owner can delete it, by destroying its key.
+- **The family's assistant** reads the owner's `index.md` and the concepts it needs, or the whole kept bundle with context caching. It never reads the conversation.
+- **The bundle is a graph.** Typed links in the frontmatter (`institution`, `nominee`, `papers_at`, `intended_for`, `covered_by`, `contact`) make each owner's bundle a small graph, built in memory after each Keep, with no graph database.
+  - A fixed-rule check against the expected links for each type finds **gaps and conflicts**, ranked by impact on the family.
+  - Saathi raises at most one gently, and "skip" is remembered.
+  - Readiness becomes **link coverage**, shown as a knowledge coverage map, and the family's checklist comes from the graph.
+
 ## 6. API surface
 
 All routes are under `/api`.

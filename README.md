@@ -67,11 +67,15 @@ Tracked in the [Prototype release milestone](https://github.com/sachiachar/anvay
 
 | ID | Requirement | Issue |
 | --- | --- | --- |
-| PR-1 | Judges can use the live demo | [#1](https://github.com/sachiachar/anvaya/issues/1) |
+| PR-1 | Each judge gets a private demo and can switch between its people | [#1](https://github.com/sachiachar/anvaya/issues/1) |
 | PR-2 | Guardian layer: catch fraud at every agent step (PR-2.1 to PR-2.11) | [#2](https://github.com/sachiachar/anvaya/issues/2) |
 | PR-3 | Claim file for banks and insurers, with a Bank view | [#10](https://github.com/sachiachar/anvaya/issues/10) |
 | PR-4 | Real voice recordings and voice letters | [#11](https://github.com/sachiachar/anvaya/issues/11) |
 | PR-5 | Submission package for the judges | [#3](https://github.com/sachiachar/anvaya/issues/3) |
+| PR-6 | Secure each owner's conversation: buckets per tenant and region, a folder and key per owner, tokens limited to one owner | [#17](https://github.com/sachiachar/anvaya/issues/17) |
+| PR-7 | Kept knowledge as an OKF graph in Cloud Storage; Keep is the commit; gaps drive the conversation | [#18](https://github.com/sachiachar/anvaya/issues/18) |
+
+Moved to the [Grand finale milestone](https://github.com/sachiachar/anvaya/milestone/2) (4 December): insider-collusion analytics ([#19](https://github.com/sachiachar/anvaya/issues/19)), the private check-in for pressure ([#20](https://github.com/sachiachar/anvaya/issues/20)) and voice letters ([#21](https://github.com/sachiachar/anvaya/issues/21)).
 
 ## Architecture
 
