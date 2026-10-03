@@ -111,10 +111,13 @@ jobs:
           # The Cloud Billing export the portal reads actual spend from, as project.dataset.
           # A repository variable, not a secret. Empty: the portal says billing isn't available yet.
           BILLING_EXPORT_TABLE: ${{ vars.BILLING_EXPORT_TABLE }}
+          # Exa web search for the fraud research agent (agents/app/web_search.py). A secret in
+          # environment "production". Empty: fraud research says web search isn't set up yet.
+          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
         run: |
           gcloud run deploy life-after-agents --source agents \
             --project "${{ vars.GCP_PROJECT_ID }}" --region "${{ vars.GCP_REGION }}" --quiet \
-            --update-env-vars "^;^ALLOWED_EMAILS=${ALLOWED_EMAILS};PLATFORM_ROLES=${PLATFORM_ROLES};BILLING_EXPORT_TABLE=${BILLING_EXPORT_TABLE}"
+            --update-env-vars "^;^ALLOWED_EMAILS=${ALLOWED_EMAILS};PLATFORM_ROLES=${PLATFORM_ROLES};BILLING_EXPORT_TABLE=${BILLING_EXPORT_TABLE};EXA_API_KEY=${EXA_API_KEY}"
 
   allowlist:
     # Manual only: apply the allowlist without rebuilding anything.

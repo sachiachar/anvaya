@@ -36,7 +36,7 @@ Each rule has a test. None of them lives only in a prompt.
 
 1. **Imagined content never feeds on itself.** The dreaming step only takes `observed`, `derived` and `validated` items as starting points.
 2. **Only checked knowledge reaches the certificate check.** It receives `observed`, `derived` and `validated` items. `simulated` items never go in. `validated` projections are labelled "projection" and make up at most a third of the warning signs.
-3. **"Confirmed" means a source supports the claim.** A scenario counts as confirmed only when Gemini's grounding data shows a cited source supporting its central claim. A snippet that only mentions a word is not enough.
+3. **"Confirmed" means a source supports the claim.** A scenario counts as confirmed only when a cited source supports its central claim: the sentence quoted from the page must really appear in it (checked in code). A snippet that only mentions a word is not enough.
 4. **People decide what matters; the guardian's fixed rules handle the rest.** An item becomes `validated` either through a reviewer or through the guardian's rules for automatic admission (section 7). Those rules only allow changes that make Anvaya *more careful*. Anything that loosens a check, retires a warning sign or touches a hard rule always goes to a person. Learned values only change the order of work and propose changes; they never approve, block or change a hard rule. The certificate check stays an assistant: a stronger guide can make a case "Needs a closer look", but never decides it.
 5. **Unchecked ideas fade.** A `simulated` scenario not validated within 3 runs is archived.
 6. **Wrong ideas are remembered.** `invalidated` titles go to the dreaming step as "already ruled out".
@@ -61,11 +61,11 @@ Runs on request from the portal ("Research now", "Dream now") as a background ta
 
 1. **Choose what to look at.** Rank areas (a safeguard paired with a kind of tactic) by importance plus curiosity (section 8). Take the top 2 sequences.
 2. **Imagine** (`fraud.dreamer`, no web access). Start from real material: the guide's sequences, the fixed list of safeguards, recent guardian events (agent, response and reason only), and OKF cues. Produce 2 close variants and 1 far-fetched variant per sequence. Label them `simulated`.
-3. **Check** (`fraud.researcher`, Google Search grounding). For each scenario, search for evidence and apply rule 3. The same step does PR-2.5's research on new tactics for a guide, labelled `derived`.
+3. **Check** (`fraud.researcher`, web pages from Exa search; Google Search grounding was replaced on 3 October because of its quota). For each scenario, search for evidence and apply rule 3. The same step does PR-2.5's research on new tactics for a guide, labelled `derived`.
 4. **Map to safeguards.** For each scenario, name the safeguard that catches it, or "none". The fixed list until the guardian core exists: two reviewers, waiting period, owner alert and cancel link, key code, recipient invitation, certificate checks.
 5. **Admit, fade or queue.** The guardian's rules (section 7) admit some items automatically, let others fade, and send the rest to the reviewer's queue. Admitted items go into a new guide version. Every run is logged with its limits and what happened to each item.
 
-The registry entries for `fraud.researcher` and `fraud.dreamer` list only `google_search` (researcher) and no tools (dreamer). Saving drafts is our own code, not a model tool.
+The registry entries for `fraud.researcher` and `fraud.dreamer` list only `web_search` (researcher) and no tools (dreamer). Saving drafts is our own code, not a model tool.
 
 ## 7. Autonomy: what goes to a person
 

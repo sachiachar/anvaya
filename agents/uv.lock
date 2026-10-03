@@ -794,6 +794,7 @@ dependencies = [
     { name = "google-cloud-kms" },
     { name = "google-cloud-storage" },
     { name = "google-genai" },
+    { name = "httpx" },
     { name = "pydantic" },
     { name = "python-multipart" },
     { name = "pyyaml" },
@@ -802,7 +803,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "httpx2" },
     { name = "pytest" },
     { name = "ruff" },
@@ -818,6 +818,7 @@ requires-dist = [
     { name = "google-cloud-kms", specifier = ">=3.18.0" },
     { name = "google-cloud-storage", specifier = ">=3.16.0" },
     { name = "google-genai", specifier = ">=2.28.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "pydantic", specifier = ">=2.13.5" },
     { name = "python-multipart", specifier = ">=0.0.32" },
     { name = "pyyaml", specifier = ">=6.0.3" },
@@ -826,7 +827,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx", specifier = ">=0.28.1" },
     { name = "httpx2", specifier = ">=2.13.1" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "ruff", specifier = ">=0.16.10" },

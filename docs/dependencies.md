@@ -23,6 +23,7 @@ Everything Anvaya is built on, with each item's version, licence and purpose. Ve
 | pydantic | 2.13.5 | MIT | Request and response schemas; structured output from Gemini |
 | google-genai | 2.28.0 | Apache-2.0 | Gemini calls: conversation, extraction, documents, spoken replies, live calls |
 | google-adk | 2.11.0 | Apache-2.0 | The handover assistant agent (`executor_agent.py`) |
+| httpx | 0.28.1 | BSD-3-Clause | Calls Exa's search API for fraud research (`web_search.py`); also the test client's fallback |
 | google-cloud-bigquery | 3.46.1 | Apache-2.0 | Reads actual costs from the Cloud Billing export (admin portal) |
 | google-cloud-firestore | 2.34.0 | Apache-2.0 | Data store on Google Cloud (`STORE=firestore`) |
 | google-cloud-kms | 3.18.0 | Apache-2.0 | Wraps the vault escrow blob with the KMS key |
@@ -36,7 +37,6 @@ Everything Anvaya is built on, with each item's version, licence and purpose. Ve
 | --- | --- | --- | --- |
 | pytest | 9.1.1 | MIT | Runs the tests |
 | httpx2 | 2.13.1 | BSD-3-Clause | HTTP client used by FastAPI's test client |
-| httpx | 0.28.1 | BSD-3-Clause | Fallback HTTP client for the test client |
 | ruff | 0.16.10 | MIT | Lint |
 
 **Held back by an upstream limit.** These indirect packages aren't at their latest release, because `google-adk` 2.11.0 (its latest release) caps them. They move when ADK raises its limits, and Dependabot opens that pull request.
@@ -100,5 +100,13 @@ All of these are Google's proprietary managed services, used under the Google Cl
 | **Firebase Authentication** | Google sign-in; the server checks the token and the allowlist | `web/src/auth.ts`, `agents/app/auth.py` |
 | **Firebase Rules** | Publishes `firestore.rules` | `.github/workflows/deploy.yml` |
 | Vertex AI API | Turned on by `infra/deploy.sh` for later, but not used: the prototype release calls the Gemini API with a key, and a test checks this | `infra/deploy.sh` |
+
+## Outside services
+
+Services from other companies. Each needs the product owner's agreement before it's added.
+
+| Service | Purpose | What's sent | Key | Where in the code |
+| --- | --- | --- | --- | --- |
+| **Exa** (exa.ai), search API | Web search for the fraud research agent: finds pages that report fraud tactics, so a scenario or tactic can be checked against a quoted source. Replaced Google Search grounding on 3 October 2026, whose quota the free tier didn't cover. Paid per search, with free starting credit. | Fraud research queries only: a document type, a country, a claimed tactic. Never owner data (a test checks this). | `EXA_API_KEY`: the GitHub secret of that name (environment "production"), set on Cloud Run with each API deploy | `agents/app/web_search.py` |
 
 **Data use.** On the Gemini API's free tier, Google may use prompts and responses to improve its products. On the paid tier it doesn't. Keep billing on for any environment that handles more than synthetic demo data.

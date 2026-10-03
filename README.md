@@ -56,7 +56,7 @@ Fraud can enter at any step of agentic execution, not only at the handover. The 
 - **Detect:**
   - fixed rules for hard facts;
   - Gemini detectors for pressure in conversations, probing questions, synthetic audio and prompt injection;
-  - fraud reference guides for each document type and country, kept current by a research agent (Gemini with Google Search grounding) and red-teamed by a dreaming agent that also produces a safeguard coverage map.
+  - fraud reference guides for each document type and country, kept current by a research agent (Gemini reading web pages found with Exa search) and red-teamed by a dreaming agent that also produces a safeguard coverage map.
 - **Intervene:** continue, add a check, reduce autonomy one level, pause for a reviewer, or block. Enforced where actions happen, independent of the agents, with no vault access.
 - **Govern:** people review and can reverse every intervention. Interventions, false alarms and reviewer patterns are measured.
 
