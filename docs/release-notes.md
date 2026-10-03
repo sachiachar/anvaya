@@ -47,6 +47,11 @@
 - The map now looks like Obsidian's graph view: a dark canvas where items settle into place, bigger circles for items with more links, scroll to zoom, drag to move, and hover to light up an item's links. It zooms to fit until you move it, and "Fit the whole map" brings that back.
 - More connections: a wish or story now links to the people it names in its own words, including "my wife" or "my daughter", and to the accounts and banks it mentions. "Transfer of SBI account to my wife" links to the SBI account and to his wife.
 
+**Removing something recorded wrongly**
+- "What you've kept" on My plan lists every story, wish, account, policy and person Vikram has kept, with Remove. The knowledge map's side panel has the same button.
+- Removing deletes the item and every earlier version of it for good: the family and their assistant never see it. The record of changes keeps only "An item was removed by the owner".
+- Nothing can be removed while a handover is being reviewed, and the person who receives the vault can't be removed until Vikram chooses someone else.
+
 **Governance and the admin portal**
 - A separate platform admin portal for the Anvaya team, at https://anvaya-admin.web.app. It shows:
   - actual spend against the monthly budget, with a forecast, in US dollars, read from Google Cloud billing (up to yesterday);

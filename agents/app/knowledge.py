@@ -425,6 +425,51 @@ def relink(owner_id: str) -> int:
     return len(updates)
 
 
+REMOVED_TITLE = "An item was removed by the owner"
+
+
+def versions(owner_id: str, cid: str) -> list[str]:
+    """Every version of a kept item: the current one and each earlier one it replaced."""
+    concepts = catalog(owner_id)["concepts"]
+    found = {cid}
+    while True:
+        more = {k for k, e in concepts.items() if e.get("superseded_by") in found and k not in found}
+        if not more:
+            return sorted(found)
+        found |= more
+
+
+def remove(owner_id: str, cid: str) -> int:
+    """The owner removed something wrongly recorded: delete it and every earlier version from the
+    bundle, with their history files, so it never reaches the family or their assistant. The log
+    keeps one line, with no title or content. Other items' links are worked out again, so nothing
+    points at it. Returns how many versions were deleted."""
+    gone = versions(owner_id, cid)
+    paths = [catalog(owner_id)["concepts"][v]["path"] for v in gone]
+    for path in paths:
+        media.delete(owner_id, f"{ROOT}/{path}")
+    for name in media.names(owner_id, f"{ROOT}/.events/"):
+        if any(f"-{v}-" in name.rsplit("/", 1)[-1] for v in gone):
+            media.delete(owner_id, name)
+    at = time.time()
+    event = _event(owner_id, at, "Removal", {"id": new_removal_id(), "title": REMOVED_TITLE}, "")
+
+    def change(cat: dict) -> None:
+        for v in gone:
+            cat["concepts"].pop(v, None)
+        cat["events"] = [e for e in cat.get("events", []) if e["id"] not in gone][-MAX_EVENTS + 1:] + [event]
+
+    _change_catalog(owner_id, change)
+    relink(owner_id)
+    write_indexes(owner_id)
+    return len(gone)
+
+
+def new_removal_id() -> str:
+    """An id for the removal's log line that says nothing about what was removed."""
+    return f"rm_{random.getrandbits(48):012x}"
+
+
 # ---- index.md and log.md ------------------------------------------------------------------------
 
 
@@ -448,7 +493,8 @@ def _log(cat: dict) -> str:
     for e in sorted(cat.get("events", []), key=lambda e: (e["at"], e["id"], e["action"]), reverse=True):
         by_day.setdefault(e["at"][:10], []).append(e)
     for day, events in by_day.items():
-        lines += [f"## {day}", *[f"* **{e['action']}** [{e['title']}](/{e['path']})" for e in events], ""]
+        lines += [f"## {day}", *[f"* **{e['action']}** [{e['title']}](/{e['path']})" if e.get("path")
+                                 else f"* **{e['action']}** {e['title']}" for e in events], ""]
     return "\n".join(lines).rstrip() + "\n"
 
 

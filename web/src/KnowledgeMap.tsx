@@ -316,6 +316,14 @@ export default function KnowledgeMap() {
                   return <li key={`${e.from}-${e.to}-${e.label}`}><em>{e.label}</em> {other?.label}</li>;
                 })}
               </ul>
+              {!["owner", "institution", "mentioned"].includes(chosen.group) && (
+                <p>
+                  <button className="secondary" onClick={() => {
+                    if (!window.confirm(`Remove "${chosen.label}"? It will be deleted for good, and your family won't see it.`)) return;
+                    api.removeKept(chosen.id).then(() => setSelected(null)).catch((e) => setError(String(e.message ?? e)));
+                  }}>Remove, it's wrong</button>
+                </p>
+              )}
               <button className="link" onClick={() => setSelected(null)}>Close</button>
             </section>
           ) : (

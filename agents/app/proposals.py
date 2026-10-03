@@ -130,6 +130,12 @@ def save_inventory(owner_id: str, item: dict, source: dict[str, Any]) -> dict:
     return _pending("inventory", owner_id, item, **source)
 
 
+def same_name(a: str | None, b: str | None) -> bool:
+    """The same person by name, ignoring case and punctuation ("Priya" and "Priya Rao" too)."""
+    na, nb = _norm(a), _norm(b)
+    return bool(na and nb) and (na == nb or na.split()[0] == nb.split()[0])
+
+
 def _placeholder(p: dict) -> bool:
     """Someone saved by relationship only, before their name was known: "Wife" (wife)."""
     return _norm(p.get("name")) == _norm(p.get("relationship"))
