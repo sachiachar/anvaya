@@ -7,6 +7,7 @@ import hashlib
 import pathlib
 import shutil
 import threading
+import uuid
 
 from .config import settings
 
@@ -43,7 +44,11 @@ def save(owner_id: str, name: str, data: bytes, mime_type: str) -> str:
         return f"gs://{settings.media_bucket}/{path}"
     target = _local(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(data)
+    # Write a temporary file, then rename it into place: the rename is atomic, so a reader
+    # never sees a half-written file (Cloud Storage uploads are atomic already).
+    tmp = target.with_name(f".{target.name}.{uuid.uuid4().hex}.tmp")
+    tmp.write_bytes(data)
+    tmp.replace(target)
     return str(target)
 
 
@@ -105,8 +110,9 @@ def names(owner_id: str, prefix: str) -> list[str]:
         start = f"{owner_id}/"
         return sorted(b.name[len(start):] for b in _bucket().list_blobs(prefix=f"{owner_id}/{prefix}"))
     root = _local(owner_id)
-    return sorted(str(f.relative_to(root)) for f in (root / prefix).rglob("*") if f.is_file()) \
-        if (root / prefix).exists() else []
+    return sorted(str(f.relative_to(root)) for f in (root / prefix).rglob("*")
+                  if f.is_file() and not f.name.startswith(".")) \
+        if (root / prefix).exists() else []  # dot files are save()'s temporary files
 
 
 def delete(owner_id: str, name: str) -> None:
