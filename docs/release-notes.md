@@ -1,5 +1,18 @@
 # Anvaya: Release Notes
 
+## Not yet released
+
+### What's included
+
+**Talking to Saathi (owner)**
+- A gentle notice when the owner is close to, or has reached, today's allowance. Near the limit for spoken replies, replies stop being read aloud automatically, and the owner can turn it back on.
+
+**Governance and the admin portal**
+- Each person has a daily allowance, so one person can't use up capacity meant for everyone. Owners get 300,000 tokens, 30 voice minutes and 50 spoken replies a day; family members get 200,000 tokens. Use is counted on the server for each signed-in account.
+- Certificate checks and the guardian never count against anyone's allowance, so checking a certificate always works.
+- An approved request in the admin portal raises a person's allowance until it expires. Allowances reset each day.
+- A live call ends when the person's voice minutes for the day run out. Two calls at the same time can't each use the full allowance.
+
 ## Prototype 0.1 · 28 September 2026 (AI Builder Cup 2026)
 
 The first working prototype, built on Google Gemini and Google Cloud. See [architecture.md](architecture.md) for how it works and [use-cases.md](use-cases.md) for the full list of use cases.
