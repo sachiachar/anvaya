@@ -227,7 +227,7 @@ def test_fraud_page_lists_the_india_guide_and_research_saves_it_first(client, mo
         return run
 
     monkeypatch.setattr(fraud_pipeline, "research", no_run)
-    for collection in ("fraud_guides", "fraud_guide_versions", "fraud_runs"):
+    for collection in ("fraud_guides", "fraud_guide_versions", "fraud_runs", "fraud_run_lock"):
         for doc in store.list(collection):
             store.delete(collection, doc["id"])
     guides = client.get("/api/platform/fraud", headers=h("judge")).json()["guides"]

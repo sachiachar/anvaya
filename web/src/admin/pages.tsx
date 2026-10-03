@@ -502,6 +502,17 @@ function Sources({ sources }: { sources?: Source[] }) {
   );
 }
 
+/** Both parts of a warning sign, in full: on approval, both go into the certificate check's instructions. */
+function SignPreview({ sign }: { sign: { look_for: string; genuine: string } }) {
+  return (
+    <div className="pa-note">
+      <p><strong>Adds a warning sign to the certificate check</strong></p>
+      <p>Look for: {sign.look_for}</p>
+      <p>A genuine document: {sign.genuine}</p>
+    </div>
+  );
+}
+
 export function FraudPage({ me }: { me: Me }) {
   const load = useCallback(() => platform.fraud(), []);
   const { data, error, reload } = useLoad(load);
@@ -562,6 +573,7 @@ export function FraudPage({ me }: { me: Me }) {
               <p><strong>{s.scenario}</strong></p>
               {s.steps && s.steps.length > 0 && <ol className="pa-muted">{s.steps.map((x) => <li key={x}>{x}</li>)}</ol>}
               <p className="pa-muted">{s.caught_by ? `Caught by: ${s.caught_by}` : "Not caught by any safeguard yet."}{s.coverage_reason ? ` ${s.coverage_reason}` : ""}</p>
+              {s.document_sign && s.review === "pending" && <SignPreview sign={s.document_sign} />}
               {s.source_note && <p className="pa-muted">What sources say: {s.source_note}</p>}
               <Sources sources={s.sources} />
               {s.review === "pending" || s.review === "unconfirmed" ? (
@@ -584,7 +596,7 @@ export function FraudPage({ me }: { me: Me }) {
             <li key={d.id}>
               <p><strong>{d.tactic}</strong></p>
               <ol className="pa-muted">{d.steps.map((x) => <li key={x.step}>{x.step} <em>(caught by: {x.caught_by})</em></li>)}</ol>
-              {d.sign && <p className="pa-muted">Warning sign: {d.sign.look_for}</p>}
+              {d.sign && <SignPreview sign={d.sign} />}
               {d.source_note && <p className="pa-muted">What sources say: {d.source_note}</p>}
               <Sources sources={d.sources} />
               {reviewer ? (

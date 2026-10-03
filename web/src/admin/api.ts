@@ -77,7 +77,9 @@ export type Scenario = { id: string; at: number; scenario: string; safeguard: st
   /** pending: a source confirms it and it waits for a reviewer; unconfirmed: no source yet (it fades after 3 runs). */
   review: "pending" | "unconfirmed" | "approved" | "discarded" | "faded";
   evidence: number; label?: Label; variant?: "close" | "far"; steps?: string[]; claim?: string;
-  sources?: Source[]; source_note?: string; coverage_reason?: string; run_id?: string };
+  sources?: Source[]; source_note?: string; coverage_reason?: string; run_id?: string;
+  /** If approved, this becomes a warning sign the certificate check uses, so a reviewer sees both parts. */
+  document_sign?: { look_for: string; genuine: string } | null };
 
 export type Draft = { id: string; at: number; guide_key: string; kind: "tactic"; tactic: string;
   steps: { step: string; caught_by: string }[]; sign: { look_for: string; genuine: string } | null;

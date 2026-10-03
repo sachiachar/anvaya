@@ -74,8 +74,10 @@ class Guard:
         self.run = run
         self.calls: dict[str, int] = {}
 
-    def call(self, agent: str) -> None:
-        if (store.get("fraud_runs", self.run["id"]) or {}).get("stop_requested"):
+    def call(self, agent: str, *, finishing: bool = False) -> None:
+        """`finishing` marks the last call for a scenario already checked: Stop waits for it,
+        so a scenario a source has confirmed (and we've paid for) isn't thrown away."""
+        if not finishing and (store.get("fraud_runs", self.run["id"]) or {}).get("stop_requested"):
             raise Stopped("stopped by a reviewer")
         cap = governance.limit(agent, "max_model_calls_per_run")
         if cap is not None and self.calls.get(agent, 0) >= cap:
@@ -154,6 +156,24 @@ def _similar(a: str, b: str) -> bool:
     return bool(wa and wb) and len(wa & wb) / len(wa | wb) >= 0.6
 
 
+# Guide text goes into the certificate check's instructions once a reviewer approves it, so
+# text from the web must read as a description of a document, never as instructions.
+MAX_SIGN_CHARS = 300
+_INSTRUCTION = re.compile(
+    r"\b(ignore|disregard|instruction|prompt|system|you must|you should|rule out|confidence|verdict|approve|"
+    r"likely[_ ]valid|report (?:every|all)|always|never)\b", re.IGNORECASE)
+
+
+def _safe_sign(sign: DocumentSign) -> bool:
+    """A warning sign may join a guide only if both its parts are short and read as a
+    description, with nothing that looks like an instruction to the checking model."""
+    return all(0 < len(t) <= MAX_SIGN_CHARS and not _INSTRUCTION.search(t) for t in (sign.look_for, sign.genuine))
+
+
+def _web_url(url: str) -> bool:
+    return url.startswith(("https://", "http://"))
+
+
 class Evidence(BaseModel):
     confirmed: bool
     sources: list[dict] = []  # {"title", "url"}
@@ -176,7 +196,7 @@ def judge(claim: str, answer_text: str, sources: list[tuple[str, str]],
         words = _words(segment)
         if indexes and len(segment) >= 40 and key and len(words & key) * 3 >= len(key):
             backing.update(i for i in indexes if 0 <= i < len(sources))
-    found = [{"title": sources[i][0], "url": sources[i][1]} for i in sorted(backing)]
+    found = [{"title": sources[i][0], "url": sources[i][1]} for i in sorted(backing) if _web_url(sources[i][1])]
     return Evidence(confirmed=bool(found), sources=found, summary=summary)
 
 
@@ -198,24 +218,40 @@ async def check_claim(claim: str) -> Evidence:
 # ---- Runs: one at a time, every one logged ---------------------------------------------
 
 
-def start_run(kind: Literal["dream", "research"], guide_key: str, by: str) -> dict:
-    """Record a run before it starts. Refuses while another run is in progress."""
-    now = time.time()
+LOCK = ("fraud_run_lock", "active")
+
+
+def expire_stale(now: float | None = None) -> None:
+    """A run still 'running' after the timeout (for example after a server restart) is marked
+    failed and its lock released, so new runs can start."""
+    now = now or time.time()
     for run in store.list("fraud_runs", status="running"):
-        if now - run["started_at"] < RUN_TIMEOUT_SECONDS:
-            raise Busy("A fraud run is already in progress. Try again when it finishes.")
-        store.update("fraud_runs", run["id"], {"status": "failed", "error": "timed out", "finished_at": now})
+        if now - run["started_at"] >= RUN_TIMEOUT_SECONDS:
+            store.update("fraud_runs", run["id"], {"status": "failed", "error": "timed out", "finished_at": now})
+    lock = store.get(*LOCK)
+    if lock and now - lock["at"] >= RUN_TIMEOUT_SECONDS:
+        store.delete(*LOCK)
+
+
+def start_run(kind: Literal["dream", "research"], guide_key: str, by: str) -> dict:
+    """Record a run before it starts. One at a time: a create-only lock, so two requests at
+    the same moment can't both start one."""
+    now = time.time()
+    expire_stale(now)
+    run_id = new_id("run")
+    if not store.create(LOCK[0], {"id": LOCK[1], "run_id": run_id, "at": now}):
+        raise Busy("A fraud run is already in progress. Try again when it finishes.")
     limits = {k: governance.limit(a, k) for a, k in (
         (DREAMER, "max_sequences_per_run"), (DREAMER, "max_scenarios_per_sequence"),
         (RESEARCHER, "max_new_patterns_per_run"))}
     limits |= {f"{a}.max_model_calls_per_run": governance.limit(a, "max_model_calls_per_run") for a in (DREAMER, RESEARCHER)}
-    return store.put("fraud_runs", {"id": new_id("run"), "kind": kind, "guide_key": guide_key, "by": by,
+    return store.put("fraud_runs", {"id": run_id, "kind": kind, "guide_key": guide_key, "by": by,
                                     "status": "running", "started_at": now, "limits": limits, "counts": {},
                                     "calls": {}, "stop_requested": False})
 
 
 def request_stop(run_id: str) -> dict:
-    """Ask a running run to stop. It stops before its next model call."""
+    """Ask a running run to stop. It finishes the scenario in hand, then stops."""
     run = store.get("fraud_runs", run_id)
     if not run or run["status"] != "running":
         raise KeyError(run_id)
@@ -224,6 +260,9 @@ def request_stop(run_id: str) -> dict:
 
 def _finish(run: dict, counts: dict, error: str | None = None, stopped: str | None = None) -> dict:
     status = "stopped" if stopped else "failed" if error else "done"
+    lock = store.get(*LOCK)
+    if lock and lock.get("run_id") == run["id"]:
+        store.delete(*LOCK)
     return store.update("fraud_runs", run["id"], {
         "status": status, "finished_at": time.time(), "counts": counts, "error": error, "stopped_reason": stopped})
 
@@ -259,8 +298,11 @@ def _pick(scenarios: list[ImaginedScenario], existing: list[str]) -> list[Imagin
         for s in scenarios:
             if len([p for p in picked if p.variant == variant]) >= most:
                 break
+            s.targets = s.targets.strip().lower()
             if s.variant != variant or s.targets not in SAFEGUARDS:
                 continue
+            if s.document_sign and not _safe_sign(s.document_sign):
+                s.document_sign = None  # the scenario stays; the mark on the document is dropped
             if any(_similar(s.title, t) for t in [*existing, *(p.title for p in picked)]):
                 continue
             picked.append(s)
@@ -343,7 +385,7 @@ async def dream(run: dict) -> dict:
                 evidence = await check_claim(scenario.claim)
                 guard.say("check", f"Confirmed by {len(evidence.sources)} cited source(s)" if evidence.confirmed
                           else "No source confirms it yet", title=scenario.title, confirmed=evidence.confirmed)
-                guard.call(DREAMER)
+                guard.call(DREAMER, finishing=True)
                 guard.say("map", f"Which safeguard would catch “{scenario.title}”?", title=scenario.title)
                 caught_by, coverage, reason = await _map(scenario)
                 store.put("fraud_scenarios", {
@@ -423,6 +465,9 @@ async def research(run: dict) -> dict:
                 counts["unconfirmed"] += 1
                 guard.say("skip", f"No source confirms “{tactic.name}”; not kept", title=tactic.name)
                 continue
+            if tactic.sign and not _safe_sign(tactic.sign):
+                tactic.sign = None  # the tactic stays; its warning sign read like instructions
+                counts["signs_dropped"] = counts.get("signs_dropped", 0) + 1
             guard.say("save", f"New tactic waiting for a reviewer: “{tactic.name}”", title=tactic.name)
             counts["confirmed"] += 1
             store.put("fraud_drafts", {
@@ -453,12 +498,13 @@ def approve_draft(draft: dict) -> Guide:
     sources = [fraud_guides.Source(id=_source_id(s["url"]), title=s["title"] or s["url"], url=s["url"])
                for s in draft["sources"]]
     ids = [s.id for s in sources]
-    slug = re.sub(r"[^a-z0-9]+", "_", draft["tactic"].lower()).strip("_")[:40] or draft["id"]
+    # Unique by construction (the draft's id), so an approved tactic is never skipped as a duplicate.
+    slug = (re.sub(r"[^a-z0-9]+", "_", draft["tactic"].lower()).strip("_")[:40] or "tactic") + "_" + draft["id"][-6:]
     tactic = fraud_guides.Tactic(
         id=slug, name=draft["tactic"], label="derived", trust="human-reviewed", sources=ids,
         steps=[fraud_guides.Step(text=s["step"], caught_by=s["caught_by"]) for s in draft["steps"]])
     signs = []
-    if draft.get("sign"):
+    if draft.get("sign") and _safe_sign(DocumentSign(**draft["sign"])):
         signs.append(fraud_guides.Sign(id=f"{slug}_sign", look_for=draft["sign"]["look_for"],
                                        genuine=draft["sign"]["genuine"], label="derived", trust="human-reviewed",
                                        sources=ids))
@@ -473,7 +519,7 @@ def approve_scenario(scenario: dict) -> Guide:
                for s in scenario.get("sources", [])]
     ids = [s.id for s in sources]
     signs = []
-    if scenario.get("document_sign"):
+    if scenario.get("document_sign") and _safe_sign(DocumentSign(**scenario["document_sign"])):
         signs.append(fraud_guides.Sign(id=scenario["id"], look_for=scenario["document_sign"]["look_for"],
                                        genuine=scenario["document_sign"]["genuine"], label="validated",
                                        trust="human-reviewed", sources=ids, projection=True))

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from typing import Literal
 
 from pydantic import BaseModel
@@ -104,33 +105,44 @@ def current(key: str) -> Guide | None:
     return stored or BUILT_IN.get(key)
 
 
-def save_version(guide: Guide) -> Guide:
-    """Save the guide as a new version, keeping every earlier one, and update the portal's row.
-    Each version id is written only once, so two saves at the same moment can't overwrite each other."""
+def _save_next(key: str, build: Callable[[Guide | None], Guide]) -> Guide:
+    """Write the next version, built from the latest one. Each version id is written only once;
+    if someone else saved first, the next version is built again from theirs, so no change is lost."""
     for _ in range(5):
-        latest = _latest_stored(guide.key)
+        latest = _latest_stored(key)
+        guide = build(latest)
         saved = guide.model_copy(update={"version": (latest.version + 1) if latest else 1, "updated_at": time.time()})
         if store.create("fraud_guide_versions", {"id": f"{saved.key}.v{saved.version}", **saved.model_dump()}):
             store.put("fraud_guides", summary(saved))
             return saved
-    raise RuntimeError(f"Couldn't save a new version of {guide.key}")
+    raise RuntimeError(f"Couldn't save a new version of {key}")
+
+
+def save_version(guide: Guide) -> Guide:
+    """Save the guide as a new version, keeping every earlier one, and update the portal's row."""
+    return _save_next(guide.key, lambda _latest: guide)
 
 
 def add_items(key: str, *, signs: list[Sign] = (), tactics: list[Tactic] = (), scenarios: list[dict] = (),
               sources: list[Source] = ()) -> Guide:
     """A new version of the guide with these items added. Nothing is removed here: retiring a
-    warning sign is a separate decision for a person."""
-    guide = current(key)
-    if guide is None:
+    warning sign is a separate decision for a person. Items already in the guide aren't added twice."""
+    if current(key) is None:
         raise KeyError(key)
-    known = {s.id for s in guide.signs} | {t.id for t in guide.tactics}
-    cited = {s.id for s in guide.sources}
-    return save_version(guide.model_copy(update={
-        "signs": [*guide.signs, *(s for s in signs if s.id not in known)],
-        "tactics": [*guide.tactics, *(t for t in tactics if t.id not in known)],
-        "scenarios": [*guide.scenarios, *scenarios],
-        "sources": [*guide.sources, *{s.id: s for s in sources if s.id not in cited}.values()],
-    }))
+
+    def build(latest: Guide | None) -> Guide:
+        guide = latest or BUILT_IN[key]
+        known = {s.id for s in guide.signs} | {t.id for t in guide.tactics}
+        listed = {s.get("id") for s in guide.scenarios}
+        cited = {s.id for s in guide.sources}
+        return guide.model_copy(update={
+            "signs": [*guide.signs, *(s for s in signs if s.id not in known)],
+            "tactics": [*guide.tactics, *(t for t in tactics if t.id not in known)],
+            "scenarios": [*guide.scenarios, *(s for s in scenarios if s.get("id") not in listed)],
+            "sources": [*guide.sources, *{s.id: s for s in sources if s.id not in cited}.values()],
+        })
+
+    return _save_next(key, build)
 
 
 def summary(guide: Guide) -> dict:

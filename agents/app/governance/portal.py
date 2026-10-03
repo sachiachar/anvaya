@@ -173,6 +173,7 @@ def decide_guardian(event_id: str, body: GuardianDecision, who: Actor = Depends(
 @router.get("/fraud")
 def get_fraud(_: Actor = Depends(actor)) -> dict:
     ensure_current()
+    fraud_pipeline.expire_stale()  # a run left 'running' by a restart doesn't block the page for good
     scenarios = sorted((s for s in store.list("fraud_scenarios") if s.get("review") != "faded"),
                        key=lambda s: -s["at"])
     return {"scenarios": scenarios,
@@ -183,6 +184,12 @@ def get_fraud(_: Actor = Depends(actor)) -> dict:
             "drafts": sorted(store.list("fraud_drafts", review="pending"), key=lambda d: -d["at"]),
             "runs": sorted(store.list("fraud_runs"), key=lambda r: -r["started_at"])[:10],
             "guides": fraud_guides.summaries()}
+
+
+def _claim(item_id: str) -> None:
+    """Only one decision per scenario or draft, even if two reviewers press at the same moment."""
+    if not store.create("fraud_decisions", {"id": item_id, "at": time.time()}):
+        raise HTTPException(409, "This has already been reviewed.")
 
 
 class ScenarioDecision(BaseModel):
@@ -201,6 +208,7 @@ def decide_scenario(scenario_id: str, body: ScenarioDecision, who: Actor = Depen
         raise HTTPException(409, "This scenario has already been reviewed.")
     if body.decision == "approve" and scenario["review"] != "pending":
         raise HTTPException(409, "Only a scenario a cited source confirms can be approved.")
+    _claim(scenario_id)
     audit(who, f"fraud.scenario.{body.decision}", scenario_id, body.reason)
     if body.decision == "approve":
         fraud_pipeline.approve_scenario(scenario)
@@ -218,6 +226,7 @@ def decide_draft(draft_id: str, body: ScenarioDecision, who: Actor = Depends(nee
         raise HTTPException(404, "draft not found")
     if draft["review"] != "pending":
         raise HTTPException(409, "This draft has already been reviewed.")
+    _claim(draft_id)
     audit(who, f"fraud.draft.{body.decision}", draft_id, body.reason)
     if body.decision == "approve":
         fraud_pipeline.approve_draft(draft)

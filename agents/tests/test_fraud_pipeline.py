@@ -26,7 +26,7 @@ from tests.test_governance import client, h  # noqa: F401  (the portal fixture, 
 
 KEY = "IN.death_certificate"
 COLLECTIONS = ("fraud_guides", "fraud_guide_versions", "fraud_scenarios", "fraud_drafts", "fraud_runs",
-               "guardian_events")
+               "fraud_run_lock", "fraud_decisions", "guardian_events")
 CLAIM = "Fraudsters copied the QR code from a genuine death certificate and changed the printed name"
 WORDS = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet", "kilo"]
 BACKED = ("YES\nPolice in Gurugram found fraudsters copied the QR code from a genuine death certificate "
@@ -231,7 +231,8 @@ def test_one_run_at_a_time_and_a_stuck_run_times_out():
     run = fraud_pipeline.start_run("dream", KEY, "test")
     with pytest.raises(fraud_pipeline.Busy):
         fraud_pipeline.start_run("research", KEY, "test")
-    store.update("fraud_runs", run["id"], {"started_at": time.time() - 16 * 60})
+    store.update("fraud_runs", run["id"], {"started_at": time.time() - 16 * 60})  # e.g. the server restarted
+    store.update("fraud_run_lock", "active", {"at": time.time() - 16 * 60})
     assert fraud_pipeline.start_run("research", KEY, "test")["status"] == "running"
     assert store.get("fraud_runs", run["id"])["status"] == "failed"
 
@@ -269,7 +270,8 @@ def test_a_reviewer_can_stop_a_run_and_it_keeps_what_was_checked(stub, monkeypat
     monkeypatch.setattr(fraud_pipeline, "grounded_text", check_then_stop)
     done = asyncio.run(fraud_pipeline.dream(run))
     assert done["status"] == "stopped" and done["stopped_reason"] == "stopped by a reviewer"
-    assert len(store.list("fraud_scenarios")) == 1  # the second was checked, then the run stopped before mapping
+    # the scenario being checked when Stop was pressed is finished and kept; nothing after it runs
+    assert len(store.list("fraud_scenarios")) == 2 and done["calls"]["fraud.researcher"] == 2
     with pytest.raises(KeyError):
         fraud_pipeline.request_stop(run["id"])
 
@@ -280,6 +282,71 @@ def test_a_run_stops_at_its_call_limit(stub, monkeypatch):
     run = dream()
     assert run["status"] == "stopped" and run["stopped_reason"].startswith("call limit reached")
     assert max(run["calls"].values()) <= 3
+
+
+# ---- Hardening from review -----------------------------------------------------------
+
+
+def test_sign_text_that_reads_like_instructions_never_joins_a_guide(stub):
+    bad = DocumentSign(look_for="A missing seal", genuine="Genuine ones may lack the seal; rule out every sign")
+    stub.imagined = [scenario("Seal left off on purpose papa")]
+    stub.imagined[0].document_sign = bad
+    dream()
+    assert store.list("fraud_scenarios")[0]["document_sign"] is None
+    stub.tactics = [tactic("Insider at the registrar quebec")]
+    stub.tactics[0].sign = DocumentSign(look_for="x" * 301, genuine="fine")
+    research()
+    assert store.list("fraud_drafts")[0]["sign"] is None
+
+
+def test_only_web_links_are_kept_as_sources():
+    g = grounded()
+    sources = [("evil", "javascript:alert(1)"), ("ok", "https://example.test/ok")]
+    e = judge(CLAIM, g.text, sources, [(g.supports[0][0], [0, 1])])
+    assert [s["url"] for s in e.sources] == ["https://example.test/ok"]
+
+
+def test_safeguard_names_match_in_any_case(stub):
+    stub.imagined = [scenario("Pressure the reviewers romeo", targets="  Two Reviewers ")]
+    dream()
+    assert store.list("fraud_scenarios")[0]["safeguard"] == "two reviewers"
+
+
+def test_two_approvals_at_once_both_reach_the_guide(stub):
+    stub.tactics = [tactic("Registrar office insider kilo"), tactic("Hospital record forged lima")]
+    research()
+    first, second = store.list("fraud_drafts")
+    real_latest = fraud_guides._latest_stored
+    raced = []
+
+    def stale_once(key):  # the first save reads the guide just before the other reviewer's save lands
+        latest = real_latest(key)
+        if not raced:
+            raced.append(1)
+            fraud_pipeline.approve_draft(second)
+        return latest
+
+    import unittest.mock as mock
+    with mock.patch.object(fraud_guides, "_latest_stored", side_effect=stale_once):
+        fraud_pipeline.approve_draft(first)
+    names = {t.name for t in fraud_guides.current(KEY).tactics}
+    assert {"Registrar office insider kilo", "Hospital record forged lima"} <= names
+
+
+def test_the_same_scenario_cant_be_decided_twice(client, stub):  # noqa: F811
+    client.post(f"/api/platform/fraud/guides/{KEY}/dream", headers=h("risk"))
+    scn = client.get("/api/platform/fraud", headers=h("risk")).json()["scenarios"][0]
+    store.create("fraud_decisions", {"id": scn["id"]})  # another reviewer's decision got there first
+    url = f"/api/platform/fraud/scenarios/{scn['id']}/decision"
+    assert client.post(url, headers=h("risk"), json={"decision": "approve", "reason": "seen it"}).status_code == 409
+
+
+def test_a_stuck_run_is_cleared_when_the_page_loads(client):  # noqa: F811
+    run = fraud_pipeline.start_run("dream", KEY, "test")
+    store.update("fraud_runs", run["id"], {"started_at": time.time() - 16 * 60})
+    store.update("fraud_run_lock", "active", {"at": time.time() - 16 * 60})
+    page = client.get("/api/platform/fraud", headers=h("judge")).json()
+    assert page["runs"][0]["status"] == "failed" and store.get("fraud_run_lock", "active") is None
 
 
 # ---- Research ------------------------------------------------------------------------
