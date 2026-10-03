@@ -159,7 +159,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .pa-signin .pa-error { color: #f2a083; }
 
 @media (max-width: 900px) {
-  .pa { grid-template-columns: 1fr; }
+  /* minmax(0, 1fr): let the column shrink below its widest content (tables, charts). */
+  .pa { grid-template-columns: minmax(0, 1fr); }
   .pa-side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; }
   .pa-side nav { flex-direction: row; flex-wrap: wrap; }
   .pa-who { margin-top: 0; }
@@ -167,4 +168,52 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .pa-grid2 { grid-template-columns: 1fr; }
   .pa-bars li { grid-template-columns: 1fr 80px; }
   .pa-bars li .pa-bar { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* Phones: a compact top bar, sections in one row you swipe sideways, and tables that scroll
+   inside their card so the page itself never scrolls sideways. */
+@media (max-width: 720px) {
+  .pa-side {
+    position: sticky; top: 0; z-index: 10; padding: 10px 16px 0; gap: 8px 12px;
+    display: grid; grid-template-columns: 1fr auto; align-items: center;
+  }
+  .pa-brand img { width: 28px; height: 28px; }
+  .pa-brand strong { font-size: 1rem; }
+  .pa-brand span { font-size: 0.7rem; }
+  .pa-brand { grid-row: 1; grid-column: 1; }
+  .pa-who { grid-row: 1; grid-column: 2; flex-direction: row; align-items: center; gap: 10px; justify-self: end; }
+  .pa-who .pa-muted { display: none; }
+  .pa-side nav {
+    grid-row: 2; grid-column: 1 / -1; flex-wrap: nowrap; overflow-x: auto; gap: 4px; margin: 0 -16px; padding: 0 16px 8px;
+    scrollbar-width: none;
+  }
+  .pa-side nav::-webkit-scrollbar { display: none; }
+  .pa-side nav a { white-space: nowrap; padding: 8px 12px; }
+  .pa-side nav a.active { box-shadow: inset 0 -3px 0 var(--pa-gold); }
+
+  .pa-main { padding: 16px 16px 40px; }
+  .pa-head h1 { font-size: 1.5rem; }
+  .pa-card { padding: 14px; border-radius: 12px; }
+  .pa-card-head { flex-wrap: wrap; }
+  .pa-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .pa-kpi { padding: 12px; }
+  .pa-kpi strong { font-size: 1.3rem; }
+
+  /* Every table scrolls on its own; cells keep their words together. */
+  .pa-card table:not(.pa-list table, .pa-scroll table) { display: block; overflow-x: auto; }
+  /* The agents table scrolls in its own wrapper, with model and tool names kept whole. */
+  .pa-scroll table { min-width: 640px; }
+  .pa-agents td.pa-mono { overflow-wrap: normal; white-space: nowrap; }
+  th, td { padding: 8px; }
+
+  /* Summary lines in lists (date, tenant, key, request…) flow and wrap instead of columns. */
+  .pa-list table, .pa-list tbody, .pa-list tr { display: block; }
+  .pa-list tr { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+  .pa-list table td { padding: 0; }
+
+  .pa-decide label, .pa-decide label.pa-hours { flex: 1 1 100%; min-width: 0; }
+  .pa-decide input { width: 100%; }
+  .pa-decide button { flex: 1 1 auto; }
+  .pa-row label { flex: 1 1 100%; }
+  .pa-row select { width: 100%; }
 }
