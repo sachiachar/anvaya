@@ -37,7 +37,7 @@ def _by(days: list[dict], key: str) -> dict[str, dict]:
     return dict(sorted(out.items(), key=lambda kv: (-kv[1]["tokens"], -kv[1]["minutes"], kv[0])))
 
 
-def overview() -> dict:
+def overview(*, fresh: bool = False) -> dict:
     """Actual spend from Google Cloud billing; usage (not dollars) per agent, model and tenant."""
     days = _days()
     # Tenants with real use. Every call is "direct" until bank tenants arrive, so today's
@@ -47,7 +47,7 @@ def overview() -> dict:
                for t, v in _by(days, "tenants").items()}
     s = platform_settings()
     return {
-        "spend": billing.spend(),
+        "spend": billing.spend(fresh=fresh),
         "usage": {
             "daily": [{"day": d["day"], **_use(list(d["agents"].values()))} for d in days],
             "by_agent": _by(days, "agents"),
@@ -91,9 +91,10 @@ def me(who: Actor = Depends(actor)) -> Actor:
 
 
 @router.get("/overview")
-def get_overview(_: Actor = Depends(actor)) -> dict:
+def get_overview(fresh: bool = False, _: Actor = Depends(actor)) -> dict:
+    """fresh=true (the portal's Refresh button) reads billing again, at most once a minute."""
     ensure_seeded()
-    return overview()
+    return overview(fresh=fresh)
 
 
 @router.get("/agents")

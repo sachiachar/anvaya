@@ -84,7 +84,7 @@ const p = (path: string) => `/platform${path}`;
 
 export const platform = {
   me: () => request<Me>(p("/me")),
-  overview: () => request<Overview>(p("/overview")),
+  overview: (fresh = false) => request<Overview>(p(fresh ? "/overview?fresh=true" : "/overview")),
   agents: () => request<{ agents: Agent[]; blocked: Blocked[] }>(p("/agents")),
   approvals: () => request<{ pending: BudgetRequest[]; active: BudgetRequest[]; history: BudgetRequest[] }>(p("/approvals")),
   decideApproval: (id: string, decision: "approve" | "reject", reason: string, hours?: number) =>

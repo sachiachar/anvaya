@@ -23,6 +23,7 @@ from ..store import store
 log = logging.getLogger(__name__)
 
 CACHE_SECONDS = 3600
+FRESH_SECONDS = 60  # the Refresh button reads billing again at most this often
 RETRY_SECONDS = 600  # after a failure, try again sooner
 DAYS = 35
 DETAILED_PREFIX = "gcp_billing_export_resource_v1_"
@@ -110,14 +111,20 @@ def summarise(rows: list[dict], today: date, budget: float) -> dict:
     }
 
 
-def spend(now: float | None = None) -> dict:
-    """Actual spend from the billing export, cached for an hour; "not available" with a reason otherwise."""
+def spend(now: float | None = None, *, fresh: bool = False) -> dict:
+    """Actual spend from the billing export, cached for an hour; "not available" with a reason otherwise.
+
+    fresh=True skips the cache when it's more than a minute old, so repeated clicks on Refresh
+    can't run up BigQuery queries.
+    """
     if not settings.billing_export_table:
         return {"available": False, "reason": "not_configured", "message": NOT_AVAILABLE["not_configured"]}
     now = now or time.time()
     cached = store.get("billing_cache", "spend")
     if cached and cached.get("table") == settings.billing_export_table and now < cached.get("expires_at", 0):
-        return cached["result"]
+        recent = now - cached["result"].get("fetched_at", 0) < FRESH_SECONDS
+        if not fresh or recent:
+            return cached["result"]
     try:
         rows = _fetch_rows()
         result = summarise(rows, datetime.fromtimestamp(now, timezone.utc).date(), settings.monthly_budget_usd)
