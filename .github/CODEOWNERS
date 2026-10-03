@@ -1,0 +1,22 @@
+# Who must review changes. The last matching line wins.
+# To make this required, turn on "Require review from Code Owners" for main
+# (Settings → Rules → Rulesets, or Settings → Branches).
+
+# Everything
+*                               @sachiachar
+
+# Areas the PR template marks as needing an owner's review
+/agents/app/governance/         @sachiachar
+/agents/registry.yaml           @sachiachar
+/agents/app/release.py          @sachiachar
+/agents/app/escrow.py           @sachiachar
+/agents/app/auth.py             @sachiachar
+/agents/app/executor_agent.py   @sachiachar
+/web/src/vaultCrypto.ts         @sachiachar
+/web/src/admin/                 @sachiachar
+/firestore.rules                @sachiachar
+/firebase.json                  @sachiachar
+/infra/                         @sachiachar
+/.github/                       @sachiachar
+/.claude/                       @sachiachar
+/.githooks/                     @sachiachar
