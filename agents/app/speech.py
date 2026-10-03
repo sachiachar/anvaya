@@ -17,6 +17,7 @@ from google import genai
 from google.genai import errors, types
 
 from .config import settings
+from .governance import core as governance
 
 log = logging.getLogger(__name__)
 
@@ -47,9 +48,20 @@ def _as_wav(data: bytes, mime_type: str) -> bytes:
     return buffer.getvalue()
 
 
+AGENT = "saathi.speech"
+
+
 async def speak(text: str) -> bytes:
+    """Speak one of Saathi's replies. Each model is checked by the gateway (registry and kill
+    switch) before it's used, and every spoken reply is recorded in the usage ledger."""
     last_error: errors.APIError | None = None
+    refused: governance.Refused | None = None
     for model in settings.tts_models:
+        try:
+            governance.check_call(AGENT, model)
+        except governance.Refused as e:
+            refused = e
+            continue
         try:
             response = await _client().aio.models.generate_content(
                 model=model,
@@ -66,10 +78,18 @@ async def speak(text: str) -> bytes:
                 ),
             )
             audio = response.candidates[0].content.parts[0].inline_data
+            usage = response.usage_metadata
+            t_in = (usage.prompt_token_count or 0) if usage else 0
+            t_out = (usage.candidates_token_count or 0) if usage else 0
+            governance.record_usage(AGENT, model, "direct", tokens_in=t_in, tokens_out=t_out,
+                                    cost_usd=governance.cost_usd(model, t_in, t_out))
             return _as_wav(audio.data, audio.mime_type or "")
         except errors.APIError as e:
             log.warning("TTS model %s unavailable (%s); trying the next one", model, e.code)
+            governance.record_usage(AGENT, model, "direct", error=True)
             last_error = e
+    if last_error is None and refused is not None:
+        raise VoiceUnavailable(str(refused))
     if last_error is not None and last_error.code == 429:
         raise VoiceUnavailable("The natural voice is unavailable right now: usage limit reached.")
     raise VoiceUnavailable("The natural voice is unavailable right now.")

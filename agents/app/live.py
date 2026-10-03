@@ -28,13 +28,25 @@ from google.genai import types
 from . import loops, proposals
 from .config import settings
 from .gemini import client
+from .governance import core as governance
 from .store import new_id, store
 
 log = logging.getLogger(__name__)
 
 
+AGENT = "saathi.voice"
+
+
 async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> None:
     await ws.accept()
+    try:
+        # The gateway checks the agent's registry entry and the kill switch before connecting.
+        governance.check_call(AGENT, settings.live_model)
+    except governance.Refused as e:
+        await ws.send_json({"type": "error", "detail": str(e)})
+        await ws.close()
+        return
+    started: float | None = None
     config = types.LiveConnectConfig(
         response_modalities=["AUDIO"],
         speech_config=types.SpeechConfig(
@@ -51,6 +63,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
     )
     try:
         async with client().aio.live.connect(model=settings.live_model, config=config) as session:
+            started = time.time()
             await ws.send_json({"type": "ready"})
             upstream = asyncio.create_task(_from_browser(ws, session))
             downstream = asyncio.create_task(_to_browser(ws, session, owner, expand))
@@ -69,6 +82,10 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
         except Exception:
             pass
     finally:
+        if started is not None:  # record the call's minutes in the usage ledger
+            minutes = (time.time() - started) / 60
+            governance.record_usage(AGENT, settings.live_model, "direct", minutes=minutes,
+                                    cost_usd=minutes * governance.LIVE_USD_PER_MINUTE)
         try:
             await ws.close()
         except Exception:

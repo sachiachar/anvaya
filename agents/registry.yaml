@@ -24,15 +24,17 @@ agents:
     limits: {max_call_minutes: 20}
     budget_class: owner
     safety_critical: false
+    optional: true        # paused first by the kill switch
 
   - id: saathi.speech
     role: Speaks Saathi's own replies aloud
     autonomy: act_within_limits
-    models: {primary: gemini-3.8-flash-lite-tts, fallback: [gemini-3.8-flash-tts]}
+    models: {primary: gemini-3.8-flash-lite-tts, fallback: [gemini-3.8-flash-tts, gemini-3.1-flash-tts-preview]}
     tools: []
     limits: {max_characters: 1000}
     budget_class: owner
     safety_critical: false
+    optional: true        # paused first by the kill switch
 
   - id: capture.extractor
     role: Turns each exchange into suggestion cards

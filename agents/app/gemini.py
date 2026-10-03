@@ -61,6 +61,8 @@ async def generate_json(
         temperature=0.2,
         # No tools are passed here; turning this off also silences an SDK warning.
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+        # Billing labels per agent; only Vertex AI accepts them (the Gemini API key path doesn't).
+        labels=governance.labels(agent) if governance.on_vertex() else None,
     )
     contents = [types.Content(role="user", parts=parts)]
 

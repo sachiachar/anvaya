@@ -16,6 +16,7 @@ Nothing here holds conversation text or names: users appear as hashed keys.
 from __future__ import annotations
 
 import hashlib
+import os
 import pathlib
 import time
 from datetime import datetime, timezone
@@ -150,9 +151,24 @@ def check_call(agent: str, model: str) -> None:
         record_blocked(agent, "model", model, "Model not allowed for this agent")
         raise Refused(f"{agent} may not use {model}.")
     state = kill_switch()
-    if state == "all_paused" and not entry.get("safety_critical"):
+    paused = (state == "all_paused" and not entry.get("safety_critical")) or \
+             (state == "optional_paused" and entry.get("optional"))
+    if paused:
         record_blocked(agent, "kill_switch", state, "Paused by the kill switch")
         raise Refused("This feature is paused right now. Please try again later.")
+
+
+def on_vertex() -> bool:
+    """Request labels (billing per agent) work only on Vertex AI, not with a Gemini API key."""
+    return os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "false").lower() == "true"
+
+
+def labels(agent: str, tenant: str = "direct") -> dict[str, str]:
+    """Labels on each Gemini request, so the Google Cloud bill breaks down by agent and tenant.
+    Label values allow only lowercase letters, digits, '-' and '_'."""
+    def clean(v: str) -> str:
+        return "".join(c if c.isalnum() or c in "-_" else "_" for c in v.lower())[:63]
+    return {"agent": clean(agent), "tenant": clean(tenant), "app": "anvaya"}
 
 
 # ---- Recording (used by the gateway and the guardian) -------------------------

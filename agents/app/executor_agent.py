@@ -10,6 +10,9 @@ from __future__ import annotations
 import re
 
 from google.adk.agents import LlmAgent
+from google.adk.agents.run_config import RunConfig
+from google.adk.models.llm_request import LlmRequest
+from google.adk.models.llm_response import LlmResponse
 from google.adk.models import FallbackModel, Gemini
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
@@ -18,6 +21,7 @@ from google.genai import types
 
 from .config import settings
 from .gemini import RETRY
+from .governance import core as governance
 from .store import store
 
 APP_NAME = "life-after"
@@ -63,6 +67,36 @@ def list_inventory(tool_context: ToolContext) -> dict:
     return {"items": store.list("inventory", owner_id=owner_id, status="approved")}
 
 
+AGENT = "handover.assistant"
+
+
+def gateway_check(callback_context, llm_request: LlmRequest) -> LlmResponse | None:
+    """Before every model call the agent makes: the gateway checks the registry and kill switch."""
+    model = llm_request.model or settings.flash_model
+    callback_context.state["temp:model"] = model
+    if llm_request.config is not None:
+        llm_request.config.labels = governance.labels(AGENT) if governance.on_vertex() else None
+    governance.check_call(AGENT, model)
+    return None
+
+
+def gateway_record(callback_context, llm_response: LlmResponse) -> LlmResponse | None:
+    """After every model call: record its tokens and cost in the usage ledger."""
+    usage = llm_response.usage_metadata
+    model = callback_context.state.get("temp:model") or settings.flash_model
+    t_in = (usage.prompt_token_count or 0) if usage else 0
+    t_out = ((usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)) if usage else 0
+    governance.record_usage(AGENT, model, "direct", tokens_in=t_in, tokens_out=t_out,
+                            cost_usd=governance.cost_usd(model, t_in, t_out),
+                            error=bool(llm_response.error_code))
+    return None
+
+
+def _max_calls() -> int:
+    entry = governance.agent_entry(AGENT) or {}
+    return int(entry.get("limits", {}).get("max_model_calls_per_run", 6))
+
+
 def build_agent() -> LlmAgent:
     return LlmAgent(
         name="handover_assistant",
@@ -86,6 +120,8 @@ def build_agent() -> LlmAgent:
             "7. Be warm and brief. Reply in the language of the question."
         ),
         tools=[search_archive, list_inventory],
+        before_model_callback=gateway_check,
+        after_model_callback=gateway_record,
     )
 
 
@@ -107,6 +143,7 @@ async def ask(owner: dict, user_id: str, question: str, session_id: str | None =
         user_id=user_id,
         session_id=session_id,
         new_message=types.Content(role="user", parts=[types.Part(text=question)]),
+        run_config=RunConfig(max_llm_calls=_max_calls()),
     ):
         for call in event.get_function_calls():
             tools_used.append(call.name)
