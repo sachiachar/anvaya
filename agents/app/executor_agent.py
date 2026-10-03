@@ -32,8 +32,18 @@ APP_NAME = "life-after"
 # The whole bundle goes into the instructions up to this size (about 20,000 tokens, well within
 # the registry's 60,000-token input limit); above it, the index and read_concept instead.
 INLINE_LIMIT_CHARS = 80_000
+INDEX_LIMIT_CHARS = 40_000  # the index on its own, above the inline limit
 # Kept items are cited by their id: stories and facts (m_), accounts (inv_) and people (p_).
+# Any opening or closing "kept" tag inside kept text, whatever its capitals or spacing.
+_FENCE = re.compile(r"<\s*/?\s*kept", re.IGNORECASE)
 CITATION = re.compile(r"\[((?:m|inv|p)_[0-9a-f]{12})\]")
+
+
+def _index_text(owner_id: str, name: str) -> str:
+    index = (knowledge.read(owner_id, "index.md") or "Nothing was kept.")
+    if len(index) > INDEX_LIMIT_CHARS:  # never more than the input limit allows
+        index = index[:INDEX_LIMIT_CHARS].rsplit("\n", 1)[0] + "\n(More items are not listed here.)"
+    return _kept({"id": "index", "type": "Index", "confirmed": True, "text": index}, name)
 
 
 def read_bundle_index(tool_context: ToolContext) -> dict:
@@ -41,9 +51,9 @@ def read_bundle_index(tool_context: ToolContext) -> dict:
     description and its path, grouped by kind (stories, advice, wishes, people, accounts...).
 
     Returns:
-        The bundle's index.md, in Markdown.
+        The bundle's index.md.
     """
-    return {"index": knowledge.read(tool_context.state["owner_id"], "index.md") or "Nothing was kept."}
+    return {"index": _index_text(tool_context.state["owner_id"], tool_context.state.get("owner_name") or "the owner")}
 
 
 def read_concept(path: str, tool_context: ToolContext) -> dict:
@@ -55,8 +65,14 @@ def read_concept(path: str, tool_context: ToolContext) -> dict:
     Returns:
         The item's text, with its id to cite, or an error if there's no such item.
     """
-    text = knowledge.read(tool_context.state["owner_id"], path)
-    return {"path": path, "text": text} if text else {"error": "No kept item at that path."}
+    # Only current kept items, found by their path in the catalog: never the log, a replaced
+    # version, the machine files, or anything outside this owner's bundle.
+    wanted = "/" + path.strip().lstrip("/")
+    name = tool_context.state.get("owner_name") or "the owner"
+    for concept in knowledge.for_reading(tool_context.state["owner_id"]):
+        if concept["path"] == wanted:
+            return {"path": wanted, "text": _kept(concept, name)}
+    return {"error": "No kept item at that path."}
 
 
 def list_accounts(tool_context: ToolContext) -> dict:
@@ -79,6 +95,9 @@ def gateway_check(callback_context, llm_request: LlmRequest) -> LlmResponse | No
     callback_context.state["temp:model"] = model
     governance.check_call(AGENT, model)
     chars = sum(len(p.text or "") for c in (getattr(llm_request, "contents", None) or []) for p in (c.parts or []))
+    # The instructions count too: they carry the kept bundle (PR-7.5).
+    system = getattr(llm_request.config, "system_instruction", None) if llm_request.config is not None else None
+    chars += len(system) if isinstance(system, str) else len(str(system or ""))
     governance.check_input(AGENT, governance.estimate_tokens(chars))
     if llm_request.config is not None:
         llm_request.config.labels = governance.labels(AGENT) if governance.on_vertex() else None
@@ -125,7 +144,7 @@ RULES = (
 def _kept(concept: dict, name: str) -> str:
     """One kept item, fenced so its text reads as information (rule 8), never as instructions."""
     note = "" if concept["confirmed"] else f' note="not confirmed by {name}"'
-    text = concept["text"].strip().replace("</kept", "</ kept")  # a quote can't close the fence
+    text = _FENCE.sub(lambda m: "‹" + m.group()[1:], concept["text"].strip())  # no fake fences
     return f'<kept id="{concept["id"]}" type="{concept["type"]}"{note}>\n{text}\n</kept>'
 
 
@@ -139,10 +158,8 @@ def instruction(ctx) -> str:
         return f"{rules}\n\n{name} kept nothing yet."
     if len(whole) <= INLINE_LIMIT_CHARS:
         return f"{rules}\n\nEverything {name} kept:\n\n{whole}"
-    index = knowledge.read(owner_id, "index.md") or ""
     return (f"{rules}\n\n{name} kept too much to show here at once. This is the index; open the items "
-            f"you need with read_concept, and use list_accounts for accounts.\n\n"
-            + _kept({"id": "index", "type": "Index", "confirmed": True, "text": index}, name))
+            f"you need with read_concept, and use list_accounts for accounts.\n\n" + _index_text(owner_id, name))
 
 
 def build_agent() -> LlmAgent:
@@ -171,7 +188,7 @@ def _sources(owner_id: str, answer: str) -> list[dict]:
     out = []
     for cid in sorted(set(CITATION.findall(answer))):
         item = knowledge.get(owner_id, cid)
-        if item:
+        if item and item.get("okf_status") == "stable":  # only current kept items
             title = item.get("title") or item.get("name") or " ".join(
                 x for x in (item.get("institution"), item.get("product")) if x)
             out.append({"id": cid, "title": title})
