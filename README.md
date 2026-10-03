@@ -75,7 +75,7 @@ The **platform admin portal**, at https://anvaya-admin.web.app, is a separate si
 - judges' demo copies;
 - the audit log.
 
-Roles are enforced on the server (platform admin, budget approver, risk reviewer, viewer) and set with the `PLATFORM_ROLES` secret. Anyone else who can sign in is a read-only viewer. The portal never shows conversation text or names. Spend (from Google Cloud billing), use and refused calls are always real. Budget requests, guardian interventions, fraud scenarios and judges' demo copies show clearly labelled examples until those features are built.
+Roles are enforced on the server (platform admin, budget approver, risk reviewer, viewer) and set with the `PLATFORM_ROLES` secret. Anyone else who can sign in is a read-only viewer. The portal never shows conversation text or names. Spend (from Google Cloud billing), use and refused calls are always real. Everything else is real too: budget requests, guardian interventions, fraud scenarios and demo copies appear as those features record them.
 
 Live today:
 - every Gemini call from the conversation, extraction, document, readiness, legal, certificate and settlement steps names its agent;

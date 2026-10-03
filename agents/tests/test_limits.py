@@ -10,7 +10,7 @@ from google.genai import errors
 from app import executor_agent, gemini, live, speech
 from app.config import settings
 from app.governance import core
-from app.governance.seed import seed
+from app.governance.seed import clear_samples as seed
 from app.schemas import DocumentCheck
 from app.store import store
 

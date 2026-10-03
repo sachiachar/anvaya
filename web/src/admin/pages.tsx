@@ -22,9 +22,9 @@ function Loading({ error }: { error: string | null }) {
   return error ? <p className="pa-error" role="alert">{error}</p> : <p className="pa-muted">Loading…</p>;
 }
 
-// Shown on pages that still hold seeded examples. Spend, usage and blocked calls are always real.
-function SeededNote({ until }: { until: string }) {
-  return <p className="pa-note">Seeded examples, clearly synthetic, until {until}. Real entries appear here alongside them.</p>;
+// The portal shows only real data. An empty section says what will fill it.
+function Empty({ children }: { children: ReactNode }) {
+  return <p className="pa-muted">{children}</p>;
 }
 
 function Section({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
@@ -275,9 +275,6 @@ export function OverviewPage({ me, fresh }: { me: Me; fresh: boolean }) {
           )}
         </div>
       </div>
-      {can(me, "reseed") && (
-        <p><button className="pa-link" onClick={() => platform.reseed().then(reload)}>Reset the seeded examples</button></p>
-      )}
     </>
   );
 }
@@ -348,7 +345,6 @@ export function ApprovalsPage({ me }: { me: Me }) {
   return (
     <>
       <p className="pa-lede">Extra allowance needs a person's approval. Grants are time-limited, and nobody can approve their own request.</p>
-      <SeededNote until="people can ask for more allowance in the app" />
       <Section title={`Waiting for a decision (${data.pending.length})`}>
         {data.pending.length === 0 ? <p className="pa-muted">Nothing waiting.</p> : (
           <ul className="pa-list">
@@ -374,12 +370,12 @@ export function ApprovalsPage({ me }: { me: Me }) {
         )}
       </Section>
       <Section title="History">
-        <table>
+        {data.history.length === 0 ? <Empty>No decisions yet.</Empty> : <table>
           <thead><tr><th>Requested</th><th>Tenant</th><th>User</th><th>What</th><th>For</th><th>Why</th><th>Decision</th><th>By</th><th>Reason</th></tr></thead>
           <tbody>{data.history.map((r) => (
             <tr key={r.id}>{row(r)}<td><Status value={r.status} /></td><td>{r.decided_by}</td><td>{r.decision_reason}</td></tr>
           ))}</tbody>
-        </table>
+        </table>}
       </Section>
     </>
   );
@@ -394,12 +390,12 @@ export function GuardianPage({ me }: { me: Me }) {
   return (
     <>
       <p className="pa-lede">The guardian watches every agent step and can add a check, reduce autonomy, pause or block. It never approves or rejects a case: people review every intervention here.</p>
-      <SeededNote until="the guardian checks every step" />
       <div className="pa-kpis">
         {Object.entries(data.by_response).map(([k, v]) => <div className="pa-kpi" key={k}><span>{fmt.label(k)}</span><strong>{v}</strong></div>)}
         <div className="pa-kpi"><span>False alarms</span><strong>{data.false_alarm_rate === null ? "—" : fmt.pct(data.false_alarm_rate)}</strong><em>Reversed after review</em></div>
       </div>
       <Section title="Interventions">
+        {data.events.length === 0 && <Empty>No interventions yet. They appear here when the guardian adds a check, reduces autonomy, pauses or blocks a step.</Empty>}
         <ul className="pa-list">
           {data.events.map((e: GuardianEvent) => (
             <li key={e.id}>
@@ -434,12 +430,12 @@ export function FraudPage({ me }: { me: Me }) {
   return (
     <>
       <p className="pa-lede">The dreaming agent imagines attacks on our safeguards; the research agent keeps the fraud reference guides current. A scenario affects checks only after a reviewer approves it.</p>
-      <SeededNote until="the research and dreaming agents run" />
       <div className="pa-kpis">
         <div className="pa-kpi"><span>Scenarios covered</span><strong>{data.coverage.covered}</strong><em>A safeguard catches it</em></div>
         <div className="pa-kpi"><span>Gaps</span><strong className={data.coverage.gaps ? "pa-warn" : ""}>{data.coverage.gaps}</strong><em>No safeguard catches it yet</em></div>
       </div>
       <Section title="Safeguard coverage map">
+        {data.scenarios.length === 0 && <Empty>No scenarios yet. The dreaming agent adds them when it runs.</Empty>}
         <ul className="pa-list">
           {data.scenarios.map((s: Scenario) => (
             <li key={s.id}>
@@ -462,7 +458,7 @@ export function FraudPage({ me }: { me: Me }) {
       </Section>
       <Section title="Fraud reference guides">
         {note && <p className="pa-note" role="status">{note}</p>}
-        <table>
+        {data.guides.length === 0 ? <Empty>No guides yet. The research agent writes them when it runs.</Empty> : <table>
           <thead><tr><th>Guide</th><th className="num">Version</th><th>Trust</th><th className="num">Sources</th><th className="num">Signals</th><th>Researched</th><th></th></tr></thead>
           <tbody>{data.guides.map((g: Guide) => (
             <tr key={g.id}>
@@ -473,7 +469,7 @@ export function FraudPage({ me }: { me: Me }) {
               )}</td>
             </tr>
           ))}</tbody>
-        </table>
+        </table>}
       </Section>
     </>
   );

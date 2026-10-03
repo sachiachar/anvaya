@@ -11,7 +11,7 @@ import pytest
 from app import executor_agent, speech
 from app.config import settings
 from app.governance import core
-from app.governance.seed import seed
+from app.governance.seed import clear_samples as seed
 from app.store import store
 
 APP = pathlib.Path(__file__).resolve().parents[1] / "app"

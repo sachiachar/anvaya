@@ -3,7 +3,7 @@
 import { json, request } from "../api";
 
 export type Role = "viewer" | "budget_approver" | "risk_reviewer" | "platform_admin";
-export type Permission = "approve_budget" | "review_guardian" | "review_fraud" | "manage_demos" | "kill_switch" | "reseed";
+export type Permission = "approve_budget" | "review_guardian" | "review_fraud" | "manage_demos" | "kill_switch";
 export type KillSwitchState = "off" | "optional_paused" | "all_paused";
 
 export type Me = { email: string | null; key: string; role: Role; permissions: Permission[] };
@@ -100,7 +100,6 @@ export const platform = {
   resetDemo: (id: string, reason: string) => request<DemoCopy>(p(`/demos/${id}/reset`), json({ reason })),
   setKillSwitch: (state: KillSwitchState, reason: string) =>
     request<{ kill_switch: KillSwitchState }>(p("/kill-switch"), json({ state, reason })),
-  reseed: () => request<{ seeded: boolean }>(p("/reseed"), { method: "POST" }),
   audit: () => request<{ entries: AuditEntry[] }>(p("/audit")),
 };
 
