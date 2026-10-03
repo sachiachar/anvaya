@@ -291,3 +291,13 @@ def test_a_reader_never_sees_a_half_written_file(monkeypatch):
     assert seen[0][0] == old and not any(n.rsplit("/", 1)[-1].startswith(".") for n in seen[0][1])
     assert media.load(OWNER, "kept/probe.json") == new
     media.delete(OWNER, "kept/probe.json")
+
+
+def test_kept_items_have_the_list_fields_cards_have():
+    # A kept account without missing_fields blanked the app's conversation screen (iPhone, 4 October).
+    account = _keep("inventory", POLICY)
+    story = _keep("moments", {**STORY, "people": [], "places": []})
+    assert account["missing_fields"] == [] and knowledge.items(OWNER, "inventory")[0]["missing_fields"] == []
+    kept_story = knowledge.items(OWNER, "moments")[0]
+    assert kept_story["people"] == [] and kept_story["places"] == [] and kept_story["intended_for"] == []
+    assert story["status"] == "approved"

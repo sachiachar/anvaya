@@ -253,7 +253,7 @@ function ProposalCard({ p, onDecide }: {
     detail = [i.nominee_or_beneficiary && `Nominee: ${i.nominee_or_beneficiary}`,
       i.intended_for && `Meant for: ${i.intended_for}`, i.papers_at && `Papers: ${i.papers_at}`]
       .filter(Boolean).join(" · ") || null;
-    warning = i.missing_fields.length ? `Missing: ${i.missing_fields.join(", ")}` : null;
+    warning = i.missing_fields?.length ? `Missing: ${i.missing_fields.join(", ")}` : null;
   }
   return (
     <div className="proposal">
