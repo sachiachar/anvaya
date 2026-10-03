@@ -22,7 +22,7 @@ from __future__ import annotations
 import time
 from collections import Counter
 
-from . import knowledge
+from . import knowledge, media
 from .store import new_id, store
 
 MIN_OWNERS = 5
@@ -66,10 +66,17 @@ def patterns_of(graphs: list[dict]) -> set[tuple[str, str]]:
 
 def cues(*, min_owners: int = MIN_OWNERS) -> list[dict]:
     """Patterns at least `min_owners` owners have, most common first: [{pattern, asset_class,
-    owners, means}]. Each owner counts once per pattern, however many items show it."""
-    counts: Counter[tuple[str, str]] = Counter()
+    owners, means}]. Each owner counts once per pattern, however many items show it.
+
+    Real owners join a count only when at least `min_owners` real owners share the pattern.
+    The synthetic owners' counts are fixed in this file, so otherwise subtracting them would
+    reveal a handful of real owners ("8 owners" = 7 synthetic + 1 real). With this rule a small
+    real count is never added, and the difference reveals nothing."""
+    real: Counter[tuple[str, str]] = Counter()
+    synthetic: Counter[tuple[str, str]] = Counter()
     for owner in store.list("owners")[:MAX_OWNERS]:
-        counts.update(patterns_of(knowledge.graph_parts(owner["id"])))
+        (synthetic if owner.get("synthetic") else real).update(patterns_of(knowledge.graph_parts(owner["id"])))
+    counts = Counter({k: n for k, n in real.items() if n >= min_owners}) + synthetic
     return [{"pattern": p, "asset_class": a, "owners": n, "means": PATTERNS[p][0]}
             for (p, a), n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])) if n >= min_owners]
 
@@ -102,9 +109,9 @@ def ensure_synthetic_owners() -> int:
     made = 0
     for i, (nominee, heir, papers, relationship) in enumerate(_PLAN, 1):
         oid = synthetic_id(i)
-        if store.get("owners", oid):
-            continue
-        store.put("owners", {"id": oid, "name": f"Synthetic owner {i:02d}", "synthetic": True, "created_at": time.time()})
+        if store.get("owners", oid) and len(knowledge.graph_parts(oid)) == 3:
+            continue  # complete; one left half-made by an error is made again
+        media.delete_all(oid)
         seeded = {"generated_by": SYNTHETIC, "verified": False}
         knowledge.commit("people", {"id": new_id("p"), "name": f"Relative {i:02d}",
                                     "relationship": "son" if relationship else ""}, oid, **seeded)
@@ -115,5 +122,7 @@ def ensure_synthetic_owners() -> int:
                                        "product": "Flat", "account_hint": "••0000",
                                        "intended_for": f"Relative {i:02d}" if heir else None,
                                        "papers_at": "a cupboard at home" if papers else None}, oid, **seeded)
+        # The owner record last, so an owner that exists has all its items.
+        store.put("owners", {"id": oid, "name": f"Synthetic owner {i:02d}", "synthetic": True, "created_at": time.time()})
         made += 1
     return made

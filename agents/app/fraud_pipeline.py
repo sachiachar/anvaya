@@ -19,6 +19,7 @@ Rules in code, each with a test:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import re
@@ -388,8 +389,9 @@ async def dream(run: dict) -> dict:
         events, ruled_out = _recent_events(), _ruled_out(guide.key)
         # Starting points from kept knowledge: anonymous counts only (fraud_cues.py). The dreamer
         # never reads a bundle.
-        fraud_cues.ensure_synthetic_owners()
-        cues = fraud_cues.cues()
+        # Reading every owner's catalog blocks, so it runs off the event loop.
+        await asyncio.to_thread(fraud_cues.ensure_synthetic_owners)
+        cues = await asyncio.to_thread(fraud_cues.cues)
         by_pattern = {c["pattern"]: c for c in cues}
         existing = [s["scenario"] for s in store.list("fraud_scenarios", guide_key=guide.key)]
         guard = Guard(run)

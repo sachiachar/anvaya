@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from app import fraud_cues, fraud_pipeline, knowledge
+from app import fraud_cues, fraud_pipeline, knowledge, media
 from app.fraud_pipeline import Imagined
 from app.store import new_id, store
 from tests.test_fraud_pipeline import KEY, Stub, clean, scenario  # noqa: F401  (the pipeline's fixtures)
@@ -62,10 +62,48 @@ def test_only_counts_of_five_owners_or_more_are_reported():
     counts = {c["pattern"]: c["owners"] for c in fraud_cues.cues()}
     assert counts == {"policy.nominee_missing": 7, "property.heir_missing": 6, "property.papers_missing": 6}
     # person.relationship_missing has 3 synthetic owners: below the minimum, so dropped.
-    for i in range(2):
+
+
+def _real_owners_without_relationship(n: int) -> None:
+    for i in range(n):
         store.put("owners", {"id": f"owner_extra_{i}", "name": "x"})
         knowledge.commit("people", {"id": new_id("p"), "name": f"Kin {i}", "relationship": ""}, f"owner_extra_{i}")
-    assert {c["pattern"]: c["owners"] for c in fraud_cues.cues()}["person.relationship_missing"] == 5
+
+
+def test_a_few_real_owners_are_never_added_to_the_synthetic_counts():
+    fraud_cues.ensure_synthetic_owners()
+    _real_owners_without_relationship(4)  # 3 synthetic + 4 real would be 7: but 4 real is too few to add
+    assert "person.relationship_missing" not in {c["pattern"] for c in fraud_cues.cues()}
+    _real_owners_without_relationship(5)  # 5 real owners: now they count, with the synthetic ones
+    assert {c["pattern"]: c["owners"] for c in fraud_cues.cues()}["person.relationship_missing"] == 8
+
+
+def test_unknown_answers_and_old_catalogs_count_as_missing():
+    from app import gaps
+
+    assert knowledge.UNKNOWN == gaps.UNKNOWN  # the same "not known" answers as the gap check
+    for i in range(5):
+        oid = f"owner_unsure_{i}"
+        store.put("owners", {"id": oid, "name": "x"})
+        knowledge.commit("inventory", {"id": new_id("inv"), "category": "insurance", "institution": "LIC",
+                                       "product": "Policy", "account_hint": "••1111",
+                                       "nominee_or_beneficiary": "Not sure"}, oid)
+        person = knowledge.commit("people", {"id": new_id("p"), "name": "Kin", "relationship": "unknown"}, oid)
+        # A catalog written before `relationship` was a presence flag: has [] for the person.
+        cat = knowledge.catalog(oid)
+        cat["concepts"][person["id"]]["graph"]["has"] = []
+        media.save(oid, knowledge.CATALOG, json.dumps(cat).encode(), "application/json")
+        assert knowledge.catalog(oid)["concepts"][person["id"]]["graph"]["has"] == []  # stored the old way
+    counts = {c["pattern"]: c["owners"] for c in fraud_cues.cues()}
+    assert counts["policy.nominee_missing"] == 5 and "nominee.not_kept" not in counts
+    assert counts["person.relationship_missing"] == 5
+
+
+def test_a_half_made_synthetic_owner_is_made_again():
+    fraud_cues.ensure_synthetic_owners()
+    media.delete_all(fraud_cues.synthetic_id(3))  # its items are lost; its owner record remains
+    assert fraud_cues.ensure_synthetic_owners() == 1
+    assert len(knowledge.graph_parts(fraud_cues.synthetic_id(3))) == 3
 
 
 def test_cues_carry_no_owner_names_ids_or_details():
