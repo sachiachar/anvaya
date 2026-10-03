@@ -155,8 +155,9 @@ export const api = {
     return request<{ owner_turn: Turn; assistant_turn: Turn }>(o("/conversation"), { method: "POST", body: form });
   },
 
-  speech: async (text: string): Promise<Blob> => {
-    const res = await fetch("/api/speech", await withAuth(json({ text })));
+  /** Spoken version of one of Saathi's replies, by its ID (the server speaks only Saathi's own replies). */
+  speech: async (turnId: string): Promise<Blob> => {
+    const res = await fetch("/api/speech", await withAuth(json({ turn_id: turnId })));
     if (!res.ok) throw new Error(`speech failed: ${res.status}`);
     return res.blob();
   },

@@ -48,7 +48,7 @@ export default function Conversation() {
     if (!speak) return;
     stopSpeaking();
     try {
-      const url = URL.createObjectURL(await api.speech(turn.text));
+      const url = URL.createObjectURL(await api.speech(turn.id));
       const audio = new Audio(url);
       audio.onended = () => URL.revokeObjectURL(url);
       player.current = audio;
