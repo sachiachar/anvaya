@@ -2,6 +2,7 @@
 valid OKF, an update deprecates the old version, the index can be rebuilt, numbers are masked,
 the vault never enters, and Firestore keeps drafts only."""
 
+import pathlib
 import threading
 
 import pytest
@@ -265,3 +266,28 @@ def test_two_first_requests_start_an_old_copy_only_once():
         t.join()
     assert knowledge.family(OWNER) == ["Priya Rao (daughter)"]
     assert len(knowledge.catalog(OWNER)["concepts"]) == 1
+
+
+
+def test_a_reader_never_sees_a_half_written_file(monkeypatch):
+    """save() writes a temporary file and renames it into place. Here every write pauses halfway
+    and another reader looks: it must still get the old file, and names() must not list the
+    temporary one. (This is what made test_overlapping_keeps_never_lose_a_concept flaky.)"""
+    old, new = b'{"v": "old"}' * 50, b'{"v": "new"}' * 80
+    media.save(OWNER, "kept/probe.json", old, "application/json")
+    seen = []
+
+    def write_half_then_look(self, data):
+        with open(self, "wb") as f:
+            f.write(data[: len(data) // 2])
+            f.flush()
+            seen.append((media.load(OWNER, "kept/probe.json"), media.names(OWNER, "kept/")))
+            f.write(data[len(data) // 2:])
+        return len(data)
+
+    monkeypatch.setattr(pathlib.Path, "write_bytes", write_half_then_look)
+    media.save(OWNER, "kept/probe.json", new, "application/json")
+    monkeypatch.undo()
+    assert seen[0][0] == old and not any(n.rsplit("/", 1)[-1].startswith(".") for n in seen[0][1])
+    assert media.load(OWNER, "kept/probe.json") == new
+    media.delete(OWNER, "kept/probe.json")
