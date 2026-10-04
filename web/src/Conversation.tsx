@@ -341,7 +341,7 @@ function AllowanceNotice({ allowance, muted, onAsked }: { allowance: Allowance; 
         </p>
       ))}
       {(reached.length > 0 || near.length > 0) && !asking && (
-        <button className="link" onClick={() => setAsking(true)}>Ask for more</button>
+        <button className="link" onClick={() => { setKind(first.kind); setAsking(true); }}>Ask for more</button>
       )}
       {asking && (
         <div className="row">

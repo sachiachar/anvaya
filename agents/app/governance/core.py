@@ -232,8 +232,14 @@ def request_more(user: str, kind: str, amount: int, hours: int, reason: str, *, 
         raise RequestRefused(f"ask for between 1 and {REQUEST_LIMITS[kind]}")
     if not 1 <= hours <= REQUEST_MAX_HOURS:
         raise RequestRefused(f"ask for between 1 and {REQUEST_MAX_HOURS} hours")
-    if store.list("budget_requests", user_key=user, kind=kind, status="pending"):
-        raise RequestRefused("a request for this is already waiting")
+    # One at a time per kind, waiting or still running, so extra allowance can never add up past one
+    # request's limit (a demo admin approves their own copy's requests, PR-12.9).
+    now = time.time()
+    for r in store.list("budget_requests", user_key=user, kind=kind):
+        if r["status"] == "pending":
+            raise RequestRefused("a request for this is already waiting")
+        if r["status"] == "approved" and r.get("expires_at", 0) > now:
+            raise RequestRefused("you already have extra allowance for this until it expires")
     return store.put("budget_requests", {"id": new_id("req"), "at": time.time(), "tenant": tenant, "user_key": user,
                                          "copy_id": copy_id, "kind": kind, "amount": amount, "hours": hours,
                                          "reason": reason, "requested_by": requested_by, "status": "pending"})

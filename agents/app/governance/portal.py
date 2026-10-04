@@ -38,7 +38,7 @@ def _by(days: list[dict], key: str) -> dict[str, dict]:
     return dict(sorted(out.items(), key=lambda kv: (-kv[1]["tokens"], -kv[1]["minutes"], kv[0])))
 
 
-def overview(*, fresh: bool = False) -> dict:
+def overview(*, fresh: bool = False, who: Actor | None = None) -> dict:
     """Actual spend from Google Cloud billing; usage (not dollars) per agent, model and tenant."""
     days = _days()
     # Tenants with real use. Every call is "direct" until bank tenants arrive, so today's
@@ -57,7 +57,8 @@ def overview(*, fresh: bool = False) -> dict:
         },
         "kill_switch": s.get("kill_switch", "off"),
         "quota": s.get("quota"),
-        "pending_approvals": len(store.list("budget_requests", status="pending")),
+        "pending_approvals": len([r for r in store.list("budget_requests", status="pending")
+                                  if who is None or who.role != "demo_admin" or r.get("copy_id") == who.key]),
         "open_interventions": len(store.list("guardian_events", status="open")),
         "blocked_30d": len([b for b in store.list("gateway_blocked") if b["at"] > time.time() - 30 * 86400]),
     }
@@ -92,10 +93,10 @@ def me(who: Actor = Depends(actor)) -> Actor:
 
 
 @router.get("/overview")
-def get_overview(fresh: bool = False, _: Actor = Depends(actor)) -> dict:
+def get_overview(fresh: bool = False, who: Actor = Depends(actor)) -> dict:
     """fresh=true (the portal's Refresh button) reads billing again, at most once a minute."""
     ensure_current()
-    return overview(fresh=fresh)
+    return overview(fresh=fresh, who=who)
 
 
 @router.get("/agents")
@@ -139,7 +140,8 @@ def decide_approval(request_id: str, body: Decision, who: Actor = Depends(need("
     fields = {"status": "approved" if body.decision == "approve" else "rejected", "decided_at": now,
               "decided_by": who.email or "local", "decision_reason": body.reason}
     if body.decision == "approve":
-        fields["expires_at"] = now + (body.hours or req["hours"]) * 3600
+        # An approver can shorten a grant, never lengthen it past what was asked (at most 72 hours).
+        fields["expires_at"] = now + min(body.hours or req["hours"], req["hours"]) * 3600
     audit(who, f"budget.{body.decision}", request_id, body.reason, amount=req["amount"], kind=req["kind"])
     return store.update("budget_requests", request_id, fields)
 

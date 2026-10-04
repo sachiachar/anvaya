@@ -88,6 +88,23 @@ def test_approving_raises_the_allowance_until_it_expires(client):
     assert [e["action"] for e in audit] == ["budget.approve"]  # a demo admin sees only their own decisions
 
 
+def test_grants_never_stack_and_never_run_longer_than_asked(client):
+    req = _ask(client, hours=24).json()["request"]["id"]
+    r = client.post(f"/api/platform/approvals/{req}/decision", headers=h("judge-a"),
+                    json={"decision": "approve", "reason": "Fine for a day", "hours": 168})
+    assert r.json()["expires_at"] - r.json()["decided_at"] <= 24 * 3600  # never longer than asked
+    again = _ask(client)
+    assert again.status_code == 409 and "until it expires" in again.json()["detail"]  # no stacking
+    assert _ask(client, kind="voice_minutes", amount=30).status_code == 200  # another kind is fine
+
+
+def test_the_overview_counts_only_their_own_waiting_requests(client):
+    _ask(client, who="judge-b")
+    assert client.get("/api/platform/overview", headers=h("judge-a")).json()["pending_approvals"] == 0
+    _ask(client)
+    assert client.get("/api/platform/overview", headers=h("judge-a")).json()["pending_approvals"] == 1
+
+
 def test_real_roles_still_cannot_approve_their_own_request(client):
     req = _ask(client, who="approver").json()["request"]["id"]
     assert client.get("/api/platform/me", headers=h("approver")).json()["role"] == "budget_approver"
