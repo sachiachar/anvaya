@@ -11,6 +11,7 @@ from app import fraud_cues, fraud_pipeline, knowledge, media
 from app.fraud_pipeline import Imagined
 from app.store import new_id, store
 from tests.test_fraud_pipeline import KEY, Stub, clean, scenario  # noqa: F401  (the pipeline's fixtures)
+from tests.test_governance import client, h  # noqa: F401  (the portal fixture, signed-in roles)
 
 SECRETS = ("Ravi Shankar", "123456789012", "my brother cheated me", "Canara", "gold in the locker", "Synthetic Insurer",
            "Relative 0", "cupboard", "owner_synthetic")
@@ -154,3 +155,25 @@ def test_a_scenario_keeps_only_a_real_cue(monkeypatch):
     assert saved["Claim as the nominee of a policy with none recorded"]["owners"] == 7
     assert saved["Something else entirely"] is None
     Imagined(scenarios=[real])  # the schema accepts a cue
+
+
+def test_the_minimum_is_a_portal_setting_with_a_floor(client):  # noqa: F811
+    from app.governance.seed import clear_samples
+
+    fraud_cues.ensure_synthetic_owners()
+    url = "/api/platform/privacy/cue-min-owners"
+    assert client.get("/api/platform/fraud", headers=h("admin")).json()["privacy"]["min_owners"] == 5
+    # Only a platform admin, with a reason, and never below the floor.
+    assert client.post(url, headers=h("risk"), json={"min_owners": 10, "reason": "tighter"}).status_code == 403
+    assert client.post(url, headers=h("admin"), json={"min_owners": 3, "reason": "looser"}).status_code == 422
+    assert client.post(url, headers=h("admin"), json={"min_owners": 10, "reason": ""}).status_code == 422
+    r = client.post(url, headers=h("admin"), json={"min_owners": 10, "reason": "Fewer, larger groups"})
+    assert r.status_code == 200 and r.json()["min_owners"] == 10
+    assert fraud_cues.cues() == []  # 7, 6 and 6 synthetic owners: all below 10 now
+    assert any(e["action"] == "privacy.cue_min_owners" and e["target"] == "10"
+               for e in client.get("/api/platform/audit", headers=h("admin")).json()["entries"])
+    clear_samples()  # a data-version clean-up keeps settings people chose
+    assert fraud_cues.min_owners() == 10
+    store.update("platform_settings", "settings", {"cue_min_owners": 2})  # even if stored below the floor
+    assert fraud_cues.min_owners() == 5
+    store.update("platform_settings", "settings", {"cue_min_owners": None})  # back to the default for other tests

@@ -35,7 +35,8 @@ PERMISSIONS: dict[str, set[str]] = {
     "viewer": set(),
     "budget_approver": {"approve_budget"},
     "risk_reviewer": {"review_guardian", "review_fraud"},
-    "platform_admin": {"approve_budget", "review_guardian", "review_fraud", "manage_demos", "kill_switch"},
+    "platform_admin": {"approve_budget", "review_guardian", "review_fraud", "manage_demos", "kill_switch",
+                       "manage_privacy"},
 }
 KILL_SWITCH_STATES = ("off", "optional_paused", "all_paused")
 SMALL_COUNT = 5

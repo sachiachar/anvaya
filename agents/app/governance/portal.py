@@ -13,7 +13,7 @@ from typing import Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import demo, fraud_guides, fraud_pipeline
+from .. import demo, fraud_cues, fraud_guides, fraud_pipeline
 from ..store import store
 from . import billing, core
 from .core import Actor, actor, audit, need, platform_settings, registry, small
@@ -182,6 +182,7 @@ def get_fraud(_: Actor = Depends(actor)) -> dict:
                          "gaps": sum(s["coverage"] == "gap" for s in scenarios),
                          "faded": len(store.list("fraud_scenarios", review="faded"))},
             "drafts": sorted(store.list("fraud_drafts", review="pending"), key=lambda d: -d["at"]),
+            "privacy": _cue_privacy(),
             "runs": sorted(store.list("fraud_runs"), key=lambda r: -r["started_at"])[:10],
             "guides": fraud_guides.summaries()}
 
@@ -313,6 +314,31 @@ def reset_demo(copy_id: str, body: Reason, who: Actor = Depends(need("manage_dem
     audit(who, "demo.reset", copy_id, body.reason)
     demo.reset(copy_id)  # the copy's demo data back to the start; never another copy's
     return store.update("demo_copies", copy_id, {"reset_at": time.time()})
+
+
+def _cue_privacy() -> dict:
+    s = platform_settings()
+    return {"min_owners": fraud_cues.min_owners(), "floor": fraud_cues.FLOOR, "ceiling": fraud_cues.CEILING,
+            "changed_at": s.get(f"{fraud_cues.SETTING}_changed_at"), "reason": s.get(f"{fraud_cues.SETTING}_reason")}
+
+
+class CueMinimum(BaseModel):
+    min_owners: int
+    reason: str = Field(min_length=3, max_length=500)
+
+
+@router.post("/privacy/cue-min-owners")
+def set_cue_min_owners(body: CueMinimum, who: Actor = Depends(need("manage_privacy"))) -> dict:
+    """How many owners must share a gap before it becomes a cue for dreaming (fraud-foresight §5).
+    A platform admin's setting, logged; it can be raised freely but never set below the floor."""
+    if not fraud_cues.FLOOR <= body.min_owners <= fraud_cues.CEILING:
+        raise HTTPException(422, f"Choose between {fraud_cues.FLOOR} and {fraud_cues.CEILING}; below "
+                                 f"{fraud_cues.FLOOR}, a count could point at one owner.")
+    audit(who, "privacy.cue_min_owners", str(body.min_owners), body.reason)
+    store.update("platform_settings", "settings", {fraud_cues.SETTING: body.min_owners,
+                                                   f"{fraud_cues.SETTING}_reason": body.reason,
+                                                   f"{fraud_cues.SETTING}_changed_at": time.time()})
+    return _cue_privacy()
 
 
 class KillSwitch(BaseModel):

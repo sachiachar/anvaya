@@ -10,7 +10,8 @@ they make good starting points for dreaming. This module turns them into anonymo
   - A closed list of patterns, defined here and matching the gap check's kinds (gaps.py). Each cue
     is a pattern, an asset class and how many owners have it. No owner ids or keys, names,
     institutions, amounts or dates.
-  - Only counts of MIN_OWNERS or more are reported; smaller ones are dropped.
+  - Only counts of at least the minimum (an admin portal setting, never below FLOOR) are
+    reported; smaller ones are dropped.
   - The fraud agents never read bundles: they receive only these cues.
 
 The demo has synthetic owners (ensure_synthetic_owners) so the counts can reach the minimum.
@@ -23,10 +24,22 @@ import time
 from collections import Counter
 
 from . import knowledge, media
+from .governance.core import platform_settings
 from .store import new_id, store
 
-MIN_OWNERS = 5
+# The minimum number of owners a cue needs is a setting a platform admin changes in the admin
+# portal (Fraud page), audited. The privacy floor below is the one number kept in code: the
+# setting can go higher, never lower, so a click can't make a count point at one owner.
+SETTING = "cue_min_owners"
+FLOOR = 5
+CEILING = 1000
 MAX_OWNERS = 2000  # owners scanned per run; the counts are a sample above this
+
+
+def min_owners() -> int:
+    """The current minimum: the admin portal's setting, never below FLOOR."""
+    value = platform_settings().get(SETTING)
+    return max(FLOOR, min(CEILING, int(value))) if isinstance(value, int) else FLOOR
 
 # The closed list. Each pattern: what it means (shown to the dreamer), and the gap kind in gaps.py
 # it corresponds to, so a validated scenario can later raise that gap's priority.
@@ -64,22 +77,24 @@ def patterns_of(graphs: list[dict]) -> set[tuple[str, str]]:
     return found
 
 
-def cues(*, min_owners: int = MIN_OWNERS) -> list[dict]:
-    """Patterns at least `min_owners` owners have, most common first: [{pattern, asset_class,
-    owners, means}]. Each owner counts once per pattern, however many items show it.
+def cues(*, minimum: int | None = None) -> list[dict]:
+    """Patterns at least the minimum number of owners have, most common first: [{pattern,
+    asset_class, owners, means}]. Each owner counts once per pattern, however many items show it.
 
-    Real owners join a count only when at least `min_owners` real owners share the pattern, and
-    then rounded down to a multiple of `min_owners`. The synthetic owners' counts are fixed in
-    this file, so otherwise subtracting them would reveal a handful of real owners ("8 owners" =
-    7 synthetic + 1 real). Rounding also means one owner more or less never changes a count, so
-    comparing runs, or the number of demo copies, reveals nothing about any one owner."""
+    The minimum is the admin portal's setting (min_owners()). Real owners join a count only when
+    at least that many real owners share the pattern, and then rounded down to a multiple of it.
+    The synthetic owners' counts are fixed in this file, so otherwise subtracting them would
+    reveal a handful of real owners ("8 owners" = 7 synthetic + 1 real). Rounding also means one
+    owner more or less never changes a count, so comparing runs, or the number of demo copies,
+    reveals nothing about any one owner."""
+    min_owners_ = minimum if minimum is not None else min_owners()
     real: Counter[tuple[str, str]] = Counter()
     synthetic: Counter[tuple[str, str]] = Counter()
     for owner in store.list("owners")[:MAX_OWNERS]:
         (synthetic if owner.get("synthetic") else real).update(patterns_of(knowledge.graph_parts(owner["id"])))
-    counts = Counter({k: n - n % min_owners for k, n in real.items() if n >= min_owners}) + synthetic
+    counts = Counter({k: n - n % min_owners_ for k, n in real.items() if n >= min_owners_}) + synthetic
     return [{"pattern": p, "asset_class": a, "owners": n, "means": PATTERNS[p][0]}
-            for (p, a), n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])) if n >= min_owners]
+            for (p, a), n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])) if n >= min_owners_]
 
 
 def describe(found: list[dict]) -> str:
