@@ -50,6 +50,7 @@ function AdminLink() {
     <section className="card">
       <h2>Platform admin</h2>
       <p>The governance team works in a separate portal: spend from Google Cloud billing, every agent and its limits, refused calls, budget requests, guardian interventions and the audit log.</p>
+      <p>There you're the platform admin of your own demo: when Vikram asks for more allowance, approve or reject it under Approvals.</p>
       <p className="muted">It opens in a new tab. Sign in there with the same Google account.</p>
       <p><a className="button" href={ADMIN_URL} target="_blank" rel="noreferrer">Open the admin portal</a></p>
     </section>

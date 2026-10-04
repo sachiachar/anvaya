@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { type Allowance, api, type InventoryItem, type Moment, type Person, type Proposal, type Turn } from "./api";
+import { type Allowance, api, type InventoryItem, type Moment, type MoreKind, type Person, type Proposal, type Turn } from "./api";
 import { LiveCall, type CallEvent } from "./liveCall";
 
 const GREETING: Turn = {
@@ -191,7 +191,7 @@ export default function Conversation() {
         {thinking && <li className="bubble assistant typing" aria-label="Thinking">…</li>}
       </ol>
       <div ref={bottom} />
-      {allowance && <AllowanceNotice allowance={allowance} muted={!speak} />}
+      {allowance && <AllowanceNotice allowance={allowance} muted={!speak} onAsked={refreshAllowance} />}
       {error && <p className="error" role="alert">{error}</p>}
 
       {inCall ? (
@@ -288,18 +288,73 @@ const MEASURE: Record<string, string> = {
 };
 
 /** A gentle note near or at today's allowance (PR-10.4). It never blocks the screen. */
-function AllowanceNotice({ allowance, muted }: { allowance: Allowance; muted: boolean }) {
+// What each measure's request asks for, and the unit shown (daily_allowance is in thousands of tokens).
+const MORE: Record<string, { kind: MoreKind; unit: string; step: number }> = {
+  tokens: { kind: "daily_allowance", unit: "thousand tokens", step: 100 },
+  voice_minutes: { kind: "voice_minutes", unit: "voice minutes", step: 30 },
+  spoken_replies: { kind: "spoken_replies", unit: "spoken replies", step: 50 },
+};
+const KIND_TEXT: Record<MoreKind, string> = {
+  daily_allowance: "thousand tokens", voice_minutes: "voice minutes", spoken_replies: "spoken replies",
+};
+
+function AllowanceNotice({ allowance, muted, onAsked }: { allowance: Allowance; muted: boolean; onAsked: () => void }) {
   const owner = allowance.pools.owner ?? {};
-  const reached = Object.entries(owner).filter(([, m]) => m.state === "reached").map(([k]) => MEASURE[k] ?? k);
-  const near = Object.entries(owner).filter(([, m]) => m.state === "warning").map(([k]) => MEASURE[k] ?? k);
-  if (!reached.length && !near.length) return null;
+  const reachedKeys = Object.entries(owner).filter(([, m]) => m.state === "reached").map(([k]) => k);
+  const nearKeys = Object.entries(owner).filter(([, m]) => m.state === "warning").map(([k]) => k);
+  const reached = reachedKeys.map((k) => MEASURE[k] ?? k);
+  const near = nearKeys.map((k) => MEASURE[k] ?? k);
+  const requests = allowance.requests ?? [];
+  const [asking, setAsking] = useState(false);
+  const first = MORE[reachedKeys[0] ?? nearKeys[0] ?? "tokens"] ?? MORE.tokens;
+  const [kind, setKind] = useState<MoreKind>(first.kind);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!reached.length && !near.length && !requests.length) return null;
+  const amount = Object.values(MORE).find((m) => m.kind === kind)?.step ?? 100;
+  const waiting = requests.some((r) => r.kind === kind && r.status === "pending");
+  const ask = () => {
+    setBusy(true);
+    setError(null);
+    api.askForMore(kind, Math.min(amount, allowance.limits?.[kind] ?? amount), reason.trim())
+      .then(() => { setAsking(false); setReason(""); onAsked(); })
+      .catch((e) => setError(String(e.message ?? e)))
+      .finally(() => setBusy(false));
+  };
   return (
-    <p className="muted" role="status">
-      {reached.length > 0
-        ? `You've used today's ${reached.join(" and ")}. It resets tomorrow, or you can ask for more.`
-        : `You've talked a lot with Saathi today: you're close to today's ${near.join(" and ")}.`}
-      {muted && owner.spoken_replies && owner.spoken_replies.state !== "ok" &&
-        " Replies aren't read aloud automatically now; tap “🔈 Replies muted” to turn it back on."}
-    </p>
+    <div className="muted" role="status">
+      {(reached.length > 0 || near.length > 0) && (
+        <p>
+          {reached.length > 0
+            ? `You've used today's ${reached.join(" and ")}. It resets tomorrow, or you can ask for more.`
+            : `You've talked a lot with Saathi today: you're close to today's ${near.join(" and ")}.`}
+          {muted && owner.spoken_replies && owner.spoken_replies.state !== "ok" &&
+            " Replies aren't read aloud automatically now; tap “🔈 Replies muted” to turn it back on."}
+        </p>
+      )}
+      {requests.map((r) => (
+        <p key={r.id}>
+          {r.status === "pending"
+            ? `You asked for ${r.amount} more ${KIND_TEXT[r.kind]}: waiting for approval.`
+            : `Approved: ${r.amount} more ${KIND_TEXT[r.kind]} until ${new Date((r.expires_at ?? 0) * 1000).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" })}.`}
+        </p>
+      ))}
+      {(reached.length > 0 || near.length > 0) && !asking && (
+        <button className="link" onClick={() => setAsking(true)}>Ask for more</button>
+      )}
+      {asking && (
+        <div className="row">
+          <select value={kind} onChange={(e) => setKind(e.target.value as MoreKind)} aria-label="What you need more of">
+            {Object.values(MORE).map((m) => <option key={m.kind} value={m.kind}>{m.step} more {m.unit}</option>)}
+          </select>
+          <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300}
+            placeholder="Why? e.g. recording a long family story" aria-label="Why you need more" />
+          <button disabled={busy || waiting || reason.trim().length < 3} onClick={ask}>{waiting ? "Already asked" : "Ask"}</button>
+          <button className="secondary" onClick={() => setAsking(false)}>Cancel</button>
+        </div>
+      )}
+      {error && <p className="error">{error}</p>}
+    </div>
   );
 }

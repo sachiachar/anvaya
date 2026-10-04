@@ -30,9 +30,12 @@ from pydantic import BaseModel
 from ..config import settings
 from ..store import new_id, store
 
-ROLES = ("viewer", "budget_approver", "risk_reviewer", "platform_admin")
+ROLES = ("viewer", "demo_admin", "budget_approver", "risk_reviewer", "platform_admin")
 PERMISSIONS: dict[str, set[str]] = {
     "viewer": set(),
+    # A visitor with their own demo copy (PR-12.9): decides their own copy's budget requests only
+    # (portal.py scopes every list and decision to the copy); everything else read-only.
+    "demo_admin": {"approve_budget"},
     "budget_approver": {"approve_budget"},
     "risk_reviewer": {"review_guardian", "review_fraud"},
     "platform_admin": {"approve_budget", "review_guardian", "review_fraud", "manage_demos", "kill_switch",
@@ -76,8 +79,10 @@ def actor(request: Request) -> Actor:
     role = role_for(email)
     if role not in ROLES:
         raise HTTPException(403, "You don't have access to the platform admin portal.")
-    return Actor(email=email, key=user_key(user.uid if user else "local"), role=role,
-                 permissions=sorted(PERMISSIONS[role]))
+    key = user_key(user.uid if user else "local")
+    if role == "viewer" and store.get("demo_copies", key):
+        role = "demo_admin"  # the platform admin of their own demo copy, and nothing more
+    return Actor(email=email, key=key, role=role, permissions=sorted(PERMISSIONS[role]))
 
 
 def need(permission: str):
@@ -90,7 +95,7 @@ def need(permission: str):
 
 def audit(who: Actor, action: str, target: str, reason: str | None = None, **detail) -> None:
     store.put("platform_audit", {"id": new_id("aud"), "at": time.time(), "actor": who.email or "local",
-                                 "role": who.role, "action": action, "target": target,
+                                 "actor_key": who.key, "role": who.role, "action": action, "target": target,
                                  "reason": reason, "detail": detail})
 
 
@@ -206,6 +211,41 @@ METRIC = {"saathi.voice": "voice_minutes", "saathi.speech": "spoken_replies"}
 # Approved request kinds and the measure they raise (daily_allowance is in thousands of tokens).
 GRANT_METRIC = {"daily_allowance": ("tokens", 1000), "voice_minutes": ("voice_minutes", 1),
                 "spoken_replies": ("spoken_replies", 1)}
+
+
+# Asking for more (PR-10.6): what a person may ask for in one request, and for how long.
+REQUEST_LIMITS = {"daily_allowance": 300, "voice_minutes": 60, "spoken_replies": 100}  # thousands of tokens, minutes, replies
+REQUEST_MAX_HOURS = 72
+
+
+class RequestRefused(ValueError):
+    """A request for more that isn't allowed (too much, too long, or one already waiting)."""
+
+
+def request_more(user: str, kind: str, amount: int, hours: int, reason: str, *, requested_by: str,
+                 copy_id: str, tenant: str = "direct") -> dict:
+    """A person asks for more of today's allowance. A person in the admin portal decides
+    (approvals); an approved request raises the allowance until it expires."""
+    if kind not in REQUEST_LIMITS:
+        raise RequestRefused("unknown kind of allowance")
+    if not 1 <= amount <= REQUEST_LIMITS[kind]:
+        raise RequestRefused(f"ask for between 1 and {REQUEST_LIMITS[kind]}")
+    if not 1 <= hours <= REQUEST_MAX_HOURS:
+        raise RequestRefused(f"ask for between 1 and {REQUEST_MAX_HOURS} hours")
+    if store.list("budget_requests", user_key=user, kind=kind, status="pending"):
+        raise RequestRefused("a request for this is already waiting")
+    return store.put("budget_requests", {"id": new_id("req"), "at": time.time(), "tenant": tenant, "user_key": user,
+                                         "copy_id": copy_id, "kind": kind, "amount": amount, "hours": hours,
+                                         "reason": reason, "requested_by": requested_by, "status": "pending"})
+
+
+def my_requests(user: str) -> list[dict]:
+    """A person's requests that are waiting, or approved and still running, newest first."""
+    now = time.time()
+    mine = [r for r in store.list("budget_requests", user_key=user)
+            if r["status"] == "pending" or (r["status"] == "approved" and r.get("expires_at", 0) > now)]
+    return sorted(({k: r.get(k) for k in ("id", "at", "kind", "amount", "hours", "status", "expires_at")} for r in mine),
+                  key=lambda r: -r["at"])
 
 
 def set_current_user(key: str | None) -> None:

@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from google.auth.exceptions import DefaultCredentialsError
 from google.genai import errors as genai_errors
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from . import (auth, demo, escrow, fraud_guides, gaps, knowledge, knowledge_map, live, loops, media, proposals,
                release, speech, tasks)
@@ -856,7 +856,32 @@ def healthz() -> dict:
 def my_allowance() -> dict:
     """Today's use against the signed-in person's daily allowance (PR-10.4), so the app can
     warn near the limit."""
-    return {"pools": governance_core.allowance_status(), "warn_at": governance_core.WARN_AT}
+    user = governance_core.current_user()
+    return {"pools": governance_core.allowance_status(), "warn_at": governance_core.WARN_AT,
+            "requests": governance_core.my_requests(user) if user else [],
+            "limits": governance_core.REQUEST_LIMITS}
+
+
+class MoreRequest(BaseModel):
+    kind: Literal["daily_allowance", "voice_minutes", "spoken_replies"]
+    amount: int
+    hours: int = 24
+    reason: str = Field(min_length=3, max_length=300)
+
+
+@api.post("/allowance/request")
+def ask_for_more(body: MoreRequest) -> dict:
+    """Ask for more of today's allowance (PR-10.6). A platform admin, or in a demo the copy's own
+    demo admin, decides in the admin portal; approval raises the allowance until it expires."""
+    user = governance_core.current_user()
+    if not user:
+        raise HTTPException(401, "Please sign in.")
+    try:
+        req = governance_core.request_more(user, body.kind, body.amount, body.hours, body.reason,
+                                           requested_by=demo.person()["name"], copy_id=demo.current())
+    except governance_core.RequestRefused as e:
+        raise HTTPException(409, str(e)) from e
+    return {"request": {k: req[k] for k in ("id", "at", "kind", "amount", "hours", "status")}}
 
 
 @api.get("/me")

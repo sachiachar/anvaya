@@ -106,9 +106,11 @@ def get_agents(_: Actor = Depends(actor)) -> dict:
 
 
 @router.get("/approvals")
-def get_approvals(_: Actor = Depends(actor)) -> dict:
+def get_approvals(who: Actor = Depends(actor)) -> dict:
     ensure_current()
     reqs = sorted(store.list("budget_requests"), key=lambda r: -r["at"])
+    if who.role == "demo_admin":  # only their own demo copy's requests
+        reqs = [r for r in reqs if r.get("copy_id") == who.key]
     now = time.time()
     return {"pending": [r for r in reqs if r["status"] == "pending"],
             "active": [r for r in reqs if r["status"] == "approved" and r.get("expires_at", 0) > now],
@@ -124,11 +126,14 @@ class Decision(BaseModel):
 @router.post("/approvals/{request_id}/decision")
 def decide_approval(request_id: str, body: Decision, who: Actor = Depends(need("approve_budget"))) -> dict:
     req = store.get("budget_requests", request_id)
-    if not req:
+    if not req or (who.role == "demo_admin" and req.get("copy_id") != who.key):
         raise HTTPException(404, "request not found")
     if req["status"] != "pending":
         raise HTTPException(409, "This request has already been decided.")
-    if req["user_key"] == who.key:
+    # Nobody approves their own request. A demo admin deciding a request from their own copy acts
+    # as that copy's platform admin, a different person in the demo from the one who asked
+    # (PR-12.9); for real roles the rule always holds.
+    if req["user_key"] == who.key and who.role != "demo_admin":
         raise HTTPException(403, "You can't approve your own request.")
     now = time.time()
     fields = {"status": "approved" if body.decision == "approve" else "rejected", "decided_at": now,
@@ -293,7 +298,10 @@ def get_demos(who: Actor = Depends(actor)) -> dict:
     platform admins; the viewer's own copy is marked."""
     ensure_current()
     copies = []
-    for d in sorted(store.list("demo_copies"), key=lambda d: -d.get("last_used_at", 0)):
+    copies_seen = store.list("demo_copies")
+    if who.role == "demo_admin":  # only their own copy
+        copies_seen = [d for d in copies_seen if d["id"] == who.key]
+    for d in sorted(copies_seen, key=lambda d: -d.get("last_used_at", 0)):
         row = {k: d.get(k) for k in ("id", "user_key", "created_at", "last_used_at", "status", "reset_at")}
         row |= {"allowance_used": _allowance_used(d["id"]), "is_you": d["id"] == who.key}
         if who.role == "platform_admin":
@@ -356,7 +364,9 @@ def set_kill_switch(body: KillSwitch, who: Actor = Depends(need("kill_switch")))
 
 
 @router.get("/audit")
-def get_audit(_: Actor = Depends(actor)) -> dict:
+def get_audit(who: Actor = Depends(actor)) -> dict:
     entries = sorted(store.list("platform_audit"), key=lambda e: -e["at"])
+    if who.role == "demo_admin":  # only their own decisions
+        entries = [e for e in entries if e.get("actor_key") == who.key]
     return {"entries": entries[:200]}
 

@@ -125,7 +125,12 @@ export type Task = {
 };
 
 export type AllowanceMeasure = { used: number; limit: number; share: number; state: "ok" | "warning" | "reached" };
-export type Allowance = { pools: Record<string, Record<string, AllowanceMeasure>>; warn_at: number };
+export type MoreKind = "daily_allowance" | "voice_minutes" | "spoken_replies";
+export type MoreRequest = { id: string; at: number; kind: MoreKind; amount: number; hours: number;
+  status: "pending" | "approved"; expires_at?: number | null };
+export type Allowance = { pools: Record<string, Record<string, AllowanceMeasure>>; warn_at: number;
+  /** Your requests for more that are waiting, or approved and still running (PR-10.6). */
+  requests?: MoreRequest[]; limits?: Record<MoreKind, number> };
 
 export type AccessRequest = { id: string; name: string; relationship: string; contact: string; note: string; at: number };
 
@@ -190,6 +195,8 @@ export const api = {
   setNickname: (nickname: string | null) => request<{ nickname: string | null }>("/me/nickname", json({ nickname })),
   /** Today's use against the signed-in person's daily allowance (PR-10.4). */
   allowance: () => request<Allowance>("/allowance"),
+  askForMore: (kind: MoreKind, amount: number, reason: string, hours = 24) =>
+    request<{ request: MoreRequest }>("/allowance/request", json({ kind, amount, reason, hours })),
   seed: () => request<{ owner: Record<string, unknown> }>("/demo/seed", { method: "POST" }),
   owner: () => request<{ name: string; family: string[] } & Record<string, unknown>>(o("")),
   archive: () => request<{ moments: Moment[]; inventory: InventoryItem[] }>(o("/archive")),
