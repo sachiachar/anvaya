@@ -39,13 +39,20 @@ function VaultRecipient({ onVault }: { onVault: () => void }) {
   const [loaded, setLoaded] = useState(false);
   const { busy, error, run } = useAction();
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // Each part on its own: a slow or failed family list never blocks approving or sealing.
   const refresh = () => run(async () => {
-    const r = await api.getRecipient().catch(() => null);
-    setRecipient(r);
-    setCode(r ? await keyFingerprint(r.public_key_jwk) : null);
-    setInvite(await api.getInvite().catch(() => null));
-    setFamily((await api.owner()).family ?? []);
-    setLoaded(true);
+    setLoadError(null);
+    try {
+      const r = await api.getRecipient().catch((e) => { if (/no vault recipient/.test(String(e?.message))) return null; throw e; });
+      setRecipient(r);
+      setCode(r ? await keyFingerprint(r.public_key_jwk) : null);
+      setInvite(await api.getInvite().catch((e) => { if (/hasn't chosen a vault recipient/.test(String(e?.message))) return null; throw e; }));
+      setLoaded(true);
+    } catch (e) {
+      setLoadError(friendlyError(e));
+    }
+    api.owner().then((o) => setFamily(o.family ?? [])).catch(() => { /* typing a name still works */ });
   });
   useEffect(() => { refresh(); }, []);
 
@@ -70,7 +77,13 @@ function VaultRecipient({ onVault }: { onVault: () => void }) {
     <section className="v2-panel" aria-labelledby="recipient-title">
       <p className="v2-eyebrow">Your vault</p>
       <h2 id="recipient-title">Who receives your vault</h2>
-      {!loaded && <p className="v2-muted">Loading…</p>}
+      {!loaded && !loadError && <p className="v2-muted">Loading…</p>}
+      {loadError && (
+        <div className="v2-stack">
+          <p className="v2-error" role="alert">{loadError}</p>
+          <button className="v2-btn quiet" disabled={busy} onClick={refresh}>Try again</button>
+        </div>
+      )}
       {loaded && (
         <>
           <ol className="v2-handshake" aria-label="Steps">

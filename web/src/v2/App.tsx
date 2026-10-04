@@ -34,9 +34,11 @@ export default function App() {
   const [drawer, setDrawer] = useState(false);
   const [tab, setTab] = useState<OwnerTab>("talk");
   const [talkTopic, setTalkTopic] = useState<string | null>(null); // "Talk about this" from the book
+  const [topicVisit, setTopicVisit] = useState(0); // a fresh Talk for each topic picked; clearing it doesn't restart Talk
   const owner: OwnerNav = {
-    tab, go: (t) => { setTab(t); window.scrollTo({ top: 0 }); },
-    talkAbout: (q) => { setTalkTopic(q); setTab("talk"); window.scrollTo({ top: 0 }); }, topic: talkTopic,
+    tab, go: (t) => { setTab(t); setTalkTopic(null); window.scrollTo({ top: 0 }); },
+    talkAbout: (q) => { setTalkTopic(q); setTopicVisit((v) => v + 1); setTab("talk"); window.scrollTo({ top: 0 }); },
+    topic: talkTopic, visit: topicVisit, clearTopic: () => setTalkTopic(null),
   };
   const [showHow, setShowHow] = useState(() => {
     try { return localStorage.getItem(SHOW_HOW_KEY) === "1"; } catch { return false; }
@@ -63,7 +65,12 @@ export default function App() {
     if (session !== "checking" && session !== "in") return;
     if (authEnabled && !email) return;
     api.me()
-      .then((m) => { setPeople(m.people); setAskNickname(m.ask_nickname); return api.owner().catch(() => api.seed()); })
+      .then((m) => { setPeople(m.people); setAskNickname(m.ask_nickname); return api.owner().catch((e) => {
+        // Set up the demo copy only when it doesn't exist yet, never because of a passing error:
+        // setting it up again would wipe everything in it.
+        if (/owner not found/.test(String(e?.message))) return api.seed();
+        throw e;
+      }); })
       .then(() => { setSession("in"); setReady(true); })
       .catch((e) => {
         if (e instanceof AuthError) { setDenied(e.message); setSession("denied"); }
@@ -118,7 +125,8 @@ export default function App() {
   );
 }
 
-type OwnerNav = { tab: OwnerTab; go: (t: OwnerTab) => void; talkAbout: (question: string) => void; topic: string | null };
+type OwnerNav = { tab: OwnerTab; go: (t: OwnerTab) => void; talkAbout: (question: string) => void; topic: string | null;
+  visit: number; clearTopic: () => void };
 
 // Each person sees their own screens; the server checks who is acting on every request (PR-1.3).
 function screen(person: DemoPerson, owner: OwnerNav) {
@@ -149,7 +157,7 @@ function screen(person: DemoPerson, owner: OwnerNav) {
 function OwnerTabScreen({ owner }: { owner: OwnerNav }) {
   switch (owner.tab) {
     case "talk":
-      return <Talk key={owner.topic ?? ""} topic={owner.topic} />;
+      return <Talk key={owner.visit} topic={owner.topic} onTopicUsed={owner.clearTopic} />;
     case "kept":
       return <Book onTalkAbout={owner.talkAbout} onReview={() => owner.go("talk")} />;
     case "family":

@@ -22,11 +22,21 @@ export default function VaultTab({ onFamily }: { onFamily: () => void }) {
   const [form, setForm] = useState({ category: "password", label: "", secret: "", saathiMaySeeLabel: true });
   const [reveal, setReveal] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
+  const [recipientKnown, setRecipientKnown] = useState(false);
   const { busy, error, run } = useAction();
 
+  const [checkError, setCheckError] = useState<string | null>(null);
+  // Separately, and honestly: if either can't be checked, say so rather than "not sealed" or "nothing locked".
   const refresh = () => run(async () => {
-    setItems((await api.vaultItems()).items);
-    setRecipient(await api.getRecipient().catch(() => null));
+    setCheckError(null);
+    const [list, who] = await Promise.allSettled([
+      api.vaultItems(),
+      api.getRecipient().catch((e) => { if (/no vault recipient/.test(String(e?.message))) return null; throw e; }),
+    ]);
+    if (list.status === "fulfilled") setItems(list.value.items);
+    if (who.status === "fulfilled") { setRecipient(who.value); setRecipientKnown(true); }
+    const failed = [list, who].find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
+    if (failed) setCheckError(friendlyError(failed.reason));
   });
   useEffect(() => { refresh(); }, []);
 
@@ -48,6 +58,13 @@ export default function VaultTab({ onFamily }: { onFamily: () => void }) {
         <p>Locked on this phone. Nobody else can read it: not Anvaya, not your bank, not Saathi.</p>
       </header>
 
+      {checkError && (
+        <div className="v2-stack">
+          <p className="v2-error" role="alert">{checkError} Your vault couldn't be checked just now.</p>
+          <button className="v2-btn quiet" disabled={busy} onClick={refresh}>Try again</button>
+        </div>
+      )}
+      {recipientKnown && (
       <section className={`v2-vault-status${sealed ? " is-sealed" : ""}`} aria-live="polite">
         {sealed ? <Lock /> : <Shield />}
         <div>
@@ -65,7 +82,9 @@ export default function VaultTab({ onFamily }: { onFamily: () => void }) {
           )}
         </div>
       </section>
+      )}
 
+      {items && (
       <section className="v2-panel" aria-labelledby="vault-items">
         <h2 id="vault-items">{items?.length ? `${items.length === 1 ? "1 secret" : `${items.length} secrets`} locked` : "Nothing locked yet"}</h2>
         {items?.length ? (
@@ -83,6 +102,7 @@ export default function VaultTab({ onFamily }: { onFamily: () => void }) {
           <p className="v2-muted v2-small">A private label is locked along with its secret, so it shows here only as “a secret with a private label”. {recipient?.name ?? "Your recipient"} sees it when the vault is opened.</p>
         )}
       </section>
+      )}
 
       <section className="v2-panel" aria-labelledby="vault-add">
         <h2 id="vault-add">Lock a new secret</h2>

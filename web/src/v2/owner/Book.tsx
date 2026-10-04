@@ -32,10 +32,13 @@ export default function Book({ onTalkAbout, onReview }: { onTalkAbout: (question
   const [waiting, setWaiting] = useState(0);
   const [open, setOpen] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<KeptItem | null>(null);
+  // Separate busy flags: opening the book, changing a page, and Saathi looking for gaps.
+  const load = useAction();
   const { busy, error, run } = useAction();
+  const look = useAction();
 
   useEffect(() => {
-    run(async () => setItems((await api.kept()).items));
+    load.run(async () => setItems((await api.kept()).items));
     api.owner().then((o) => setOwner({ name: String(o.name ?? ""), family: o.family ?? [] })).catch(() => {});
     api.tasks().then((r) => { setScore(r.score); setTasks(r.tasks); }).catch(() => setTasks([]));
     api.gaps().then((r) => setGaps(r.gaps)).catch(() => {});
@@ -43,7 +46,7 @@ export default function Book({ onTalkAbout, onReview }: { onTalkAbout: (question
   }, []);
 
   /** Next steps are worked out by Saathi on request only (it's a model call), never on opening. */
-  const findMissing = () => run(async () => { const r = await api.readiness(); setScore(r.score); setTasks(r.tasks); });
+  const findMissing = () => look.run(async () => { const r = await api.readiness(); setScore(r.score); setTasks(r.tasks); });
   const closeTask = (t: Task, status: "done" | "dismissed") =>
     run(async () => { await api.updateTask(t.id, status); setTasks((all) => all?.filter((x) => x.id !== t.id) ?? null); });
   const skipGap = (g: Gap) => run(async () => setGaps((await api.skipGap(g.key)).gaps));
@@ -149,12 +152,14 @@ export default function Book({ onTalkAbout, onReview }: { onTalkAbout: (question
             </li>
           ))}
         </ul>
-        <button className="v2-link" disabled={busy} onClick={findMissing}>
-          {busy ? "Saathi is looking…" : score === null ? "Ask Saathi what's still missing" : "Look again for what's missing"}
+        <button className="v2-link" disabled={look.busy} onClick={findMissing}>
+          {look.busy ? "Saathi is looking…" : score === null ? "Ask Saathi what's still missing" : "Look again for what's missing"}
         </button>
       </section>
 
-      {error && <p className="v2-error" role="alert">{friendlyError(new Error(error))}</p>}
+      {[load.error, error, look.error].filter(Boolean).map((e) => (
+        <p key={e} className="v2-error" role="alert">{friendlyError(new Error(e ?? ""))}</p>
+      ))}
       {firstName && <p className="v2-muted v2-small v2-book-foot">Only what you keep is in your book, {firstName}. Saathi never adds a page without your Keep.</p>}
     </div>
   );
