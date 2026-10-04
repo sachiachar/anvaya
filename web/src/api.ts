@@ -147,6 +147,15 @@ async function withAuth(init?: RequestInit): Promise<RequestInit> {
   return { ...init, headers };
 }
 
+/** A person's own model key (PR-10.10). The key itself never comes back from the server. */
+export type KeyKind = "studio" | "vertex_express";
+export type KeyResult = "works" | "not_available" | "out_of_quota" | "refused" | "not_allowed" | "error";
+export type KeyFeature = { id: string; label: string; result: KeyResult; ms: number };
+export type ModelAccess = { kind: KeyKind; last4: string; status: "working" | "failing"; features: KeyFeature[];
+  tested_at: number; saved_at: number; failed_at: number | null; failure: number | string | null };
+export type ModelAccessState = { policy: { enabled: boolean; kinds: KeyKind[] }; access: ModelAccess | null;
+  ready: boolean; kinds: KeyKind[] };
+
 export class AuthError extends Error {}
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -200,6 +209,15 @@ export const api = {
   askForMore: (kind: MoreKind, amount: number, reason: string, hours = 24) =>
     request<{ request: MoreRequest }>("/allowance/request", json({ kind, amount, reason, hours })),
   seed: () => request<{ owner: Record<string, unknown> }>("/demo/seed", { method: "POST" }),
+  /** Your own model key (PR-10.10): its status only, never the key. */
+  modelAccess: () => request<ModelAccessState>("/model-access"),
+  /** Tests a key on every model Anvaya uses. Nothing is stored. */
+  testModelKey: (kind: KeyKind, key: string) =>
+    request<{ features: KeyFeature[]; usable: boolean }>("/model-access/test", json({ kind, key })),
+  /** Tests the key again, then stores it encrypted. */
+  saveModelKey: (kind: KeyKind, key: string) =>
+    request<{ access: ModelAccess; features: KeyFeature[] }>("/model-access", { ...json({ kind, key }), method: "PUT" }),
+  removeModelKey: () => request<{ access: null }>("/model-access", { method: "DELETE" }),
   owner: () => request<{ name: string; family: string[] } & Record<string, unknown>>(o("")),
   archive: () => request<{ moments: Moment[]; inventory: InventoryItem[] }>(o("/archive")),
   /** The owner's kept knowledge as a graph, for the demo's live knowledge map. */

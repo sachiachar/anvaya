@@ -39,7 +39,7 @@ PERMISSIONS: dict[str, set[str]] = {
     "budget_approver": {"approve_budget"},
     "risk_reviewer": {"review_guardian", "review_fraud"},
     "platform_admin": {"approve_budget", "review_guardian", "review_fraud", "manage_demos", "kill_switch",
-                       "manage_privacy"},
+                       "manage_privacy", "manage_model_access"},
 }
 KILL_SWITCH_STATES = ("off", "optional_paused", "all_paused")
 SMALL_COUNT = 5
@@ -308,7 +308,18 @@ def remaining(agent: str) -> float | None:
 
 
 def check_allowance(agent: str) -> None:
-    """Refuse a call when the person has used today's allowance for the agent's pool."""
+    """Refuse a call when the person has used today's allowance for the agent's pool. Not when
+    their own model key will answer first (PR-10.10): their testing costs us nothing. If their key
+    fails and the call moves to ours, the key chain checks again (check_allowance_now)."""
+    from . import keys  # keys uses this module
+
+    if not keys.counts_against_allowance():
+        return
+    check_allowance_now(agent)
+
+
+def check_allowance_now(agent: str) -> None:
+    """The allowance check itself, whatever key the person has: used when a call falls back to ours."""
     left = remaining(agent)
     if left is not None and left <= 0:
         metric = METRIC.get(agent, "tokens")
@@ -350,8 +361,12 @@ def _today() -> str:
 
 
 def record_usage(agent: str, model: str, tenant: str, *, tokens_in: int = 0, tokens_out: int = 0,
-                 minutes: float = 0.0, error: bool = False) -> None:
+                 minutes: float = 0.0, error: bool = False, key_source: str = "platform") -> None:
     """Add one model call to today's ledger (the gateway calls this after every call).
+
+    `key_source` is whose key answered (keys.py, PR-10.10): "platform", or a person's own
+    ("judge_studio", "judge_vertex"). Only calls on the platform key count against the
+    person's daily allowance.
 
     An atomic increment, so calls that finish at the same time (on several server instances)
     never overwrite each other's counts in the portal's usage figures. Dollars come only
@@ -364,8 +379,13 @@ def record_usage(agent: str, model: str, tenant: str, *, tokens_in: int = 0, tok
         # "model_use", not "models": older days hold a dollar figure per model there.
         "model_use": {model: {"calls": 1, "tokens": tokens_in + tokens_out, "minutes": minutes}},
         "tenants": {tenant: {"calls": 1, "tokens": tokens_in + tokens_out, "minutes": minutes}},
+        "key_sources": {key_source: {"calls": 1, "tokens": tokens_in + tokens_out, "minutes": minutes}},
     }, {"day": day_id})
-    if not error:
+    if user := current_user():  # per person and key source, for the portal's Model keys report
+        store.increment("key_usage", f"{day_id}:{user}", {key_source: {
+            "calls": 1, "tokens": tokens_in + tokens_out, "minutes": minutes, "errors": int(error)}},
+            {"day": day_id, "user_key": user})
+    if not error and key_source == "platform":
         count_for_user(agent, tokens=tokens_in + tokens_out, minutes=minutes)
 
 

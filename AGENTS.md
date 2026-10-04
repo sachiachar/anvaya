@@ -56,7 +56,7 @@ These protect users and the budget. Tests enforce several of them, so don't weak
 4. **No conversation text or names** in the platform admin portal or in logs. Users appear only as hashed keys. The one exception: a nickname a visitor chooses for their own demo copy, which is optional, shown only to platform admins, and never logged.
 5. **No real personal data.** Use synthetic data in code, tests, fixtures, prompts and screenshots. Mask account and policy numbers (last 4 digits only).
 6. **No secrets in the repo.** Configuration comes from environment variables (`agents/app/config.py`); document new ones in `agents/.env.example` or `web/.env.example`. Never read, print or commit `.env` files.
-7. **The prototype release uses the Gemini API key path, not Vertex AI.** A test checks this.
+7. **The prototype release uses the Gemini API key path, not Vertex AI.** A test checks this. The one exception: a person's own Vertex AI express-mode key (PR-10.10), used only for the calls they cause.
 8. **Rules belong in code, not only in prompts.** If a model must always or never do something, enforce it in code and add a test.
 9. **Tests run without the cloud.** Use the memory store and stub Gemini, as the existing tests do.
 

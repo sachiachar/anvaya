@@ -1,10 +1,11 @@
 // Platform admin portal API (/api/platform). Roles are checked on the server;
 // the portal only hides buttons a role can't use.
-import { json, request } from "../api";
+import { json, request, type KeyFeature, type KeyKind, type ModelAccess } from "../api";
 
 /** demo_admin: a visitor with their own demo copy, who decides that copy's requests only (PR-12.9). */
 export type Role = "viewer" | "demo_admin" | "budget_approver" | "risk_reviewer" | "platform_admin";
-export type Permission = "approve_budget" | "review_guardian" | "review_fraud" | "manage_demos" | "kill_switch" | "manage_privacy";
+export type Permission = "approve_budget" | "review_guardian" | "review_fraud" | "manage_demos" | "kill_switch" | "manage_privacy"
+  | "manage_model_access";
 export type KillSwitchState = "off" | "optional_paused" | "all_paused";
 
 export type Me = { email: string | null; key: string; role: Role; permissions: Permission[] };
@@ -115,6 +116,16 @@ export type DemoCopy = { id: string; user_key: string; created_at: number; last_
   /** Only for platform admins: the visitor's optional nickname. */
   nickname?: string | null };
 
+/** Model keys (PR-10.10): usage by whose key answered. "platform" is ours, as failover. */
+export type KeySource = "platform" | "judge_studio" | "judge_vertex";
+export type KeyUse = { calls: number; tokens: number; minutes: number; errors: number; failovers: number };
+export type KeyPolicy = { enabled: boolean; kinds: KeyKind[]; set_by_admin?: boolean };
+export type KeyPerson = { user_key: string; is_you: boolean; nickname?: string | null; policy: KeyPolicy;
+  access: ModelAccess | null; usage_30d: Partial<Record<KeySource, KeyUse>> };
+export type ModelKeys = { days: number; totals: Partial<Record<KeySource, KeyUse>>; people: KeyPerson[];
+  default: KeyPolicy; platform_key: { failed_at?: number; code?: number }; ready: boolean; kinds: KeyKind[];
+  can_manage: boolean };
+
 export type AuditEntry = { id: string; at: number; actor: string; role: string; action: string; target: string;
   reason: string | null };
 
@@ -145,6 +156,14 @@ export const platform = {
   setKillSwitch: (state: KillSwitchState, reason: string) =>
     request<{ kill_switch: KillSwitchState }>(p("/kill-switch"), json({ state, reason })),
   audit: () => request<{ entries: AuditEntry[] }>(p("/audit")),
+  modelKeys: () => request<ModelKeys>(p("/model-keys")),
+  setKeyDefault: (enabled: boolean, kinds: KeyKind[], reason: string) =>
+    request<KeyPolicy>(p("/model-keys/default"), json({ enabled, kinds, reason })),
+  setKeyPolicy: (userKey: string, enabled: boolean, kinds: KeyKind[], reason: string) =>
+    request<KeyPolicy>(p(`/model-keys/${userKey}/policy`), json({ enabled, kinds, reason })),
+  testKey: (userKey: string, reason: string) =>
+    request<{ features: KeyFeature[]; usable: boolean }>(p(`/model-keys/${userKey}/test`), json({ reason })),
+  removeKey: (userKey: string, reason: string) => request<{ access: null }>(p(`/model-keys/${userKey}/remove`), json({ reason })),
 };
 
 // ---- Formatting ----------------------------------------------------------------

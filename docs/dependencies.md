@@ -26,7 +26,7 @@ Everything Anvaya is built on, with each item's version, licence and purpose. Ve
 | httpx | 0.28.1 | BSD-3-Clause | Calls Exa's search API for fraud research (`web_search.py`); also the test client's fallback |
 | google-cloud-bigquery | 3.46.1 | Apache-2.0 | Reads actual costs from the Cloud Billing export (admin portal) |
 | google-cloud-firestore | 2.34.0 | Apache-2.0 | Data store on Google Cloud (`STORE=firestore`) |
-| google-cloud-kms | 3.18.0 | Apache-2.0 | Wraps the vault escrow blob with the KMS key |
+| google-cloud-kms | 3.18.0 | Apache-2.0 | Wraps the vault escrow blob with the KMS key, and encrypts the model keys people add themselves (PR-10.10) |
 | google-cloud-storage | 3.16.0 | Apache-2.0 | Recordings and documents in a private bucket |
 | google-auth | 2.59.1 | Apache-2.0 | Verifies the Google sign-in token on every request (`auth.py`) |
 | pyyaml | 6.0.3 | MIT | Reads the agent registry (`registry.yaml`), and writes and reads the frontmatter of kept-knowledge concepts (OKF) |
@@ -104,14 +104,14 @@ All of these are Google's proprietary managed services, used under the Google Cl
 | **Firestore** | Stores cases, cards, the ledger and the audit log; clients have no direct access (`firestore.rules`) | `agents/app/store.py` |
 | **Cloud Storage** | Private bucket for recordings and documents | `agents/app/media.py` |
 | **Cloud Billing export to BigQuery** | Actual spend for the admin portal, read from the detailed usage cost export (dataset `anvaya_platform`, set by `BILLING_EXPORT_TABLE`) | `agents/app/governance/billing.py` |
-| **Cloud KMS** | Key that wraps the vault escrow blob | `agents/app/escrow.py` |
+| **Cloud KMS** | Two keys: `vault-escrow` wraps the vault escrow blob; `model-keys` encrypts the Gemini keys people add themselves (PR-10.10), with the person's user key bound in | `agents/app/escrow.py`, `agents/app/governance/keys.py` |
 | **Secret Manager** | Holds the Gemini API key for Cloud Run | `infra/deploy.sh` |
 | **Cloud Build, Artifact Registry** | Build and store the API container on each deploy | `gcloud run deploy --source` |
 | **IAM, Workload Identity Federation** (IAM Credentials, STS) | Least-privilege service accounts; GitHub Actions deploys without stored keys | `infra/setup-github-actions.sh` |
 | **Firebase Hosting** | Serves the app (`anvaya-saathi`), the admin portal (`anvaya-admin`) and the old address's redirect | `firebase.json` |
 | **Firebase Authentication** | Google sign-in; the server checks the token and the allowlist | `web/src/auth.ts`, `agents/app/auth.py` |
 | **Firebase Rules** | Publishes `firestore.rules` | `.github/workflows/deploy.yml` |
-| Vertex AI API | Turned on by `infra/deploy.sh` for later, but not used: the prototype release calls the Gemini API with a key, and a test checks this | `infra/deploy.sh` |
+| Vertex AI API | The platform doesn't use it: the prototype release calls the Gemini API with a key, and a test checks this. Only a person's own Vertex AI express-mode key (PR-10.10) reaches it, for the calls they cause, billed to them | `agents/app/gemini.py` (`make_client`), `infra/deploy.sh` |
 
 ## Outside services
 

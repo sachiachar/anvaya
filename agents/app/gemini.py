@@ -3,21 +3,28 @@
 Resilience: every call retries with exponential backoff on overload and server
 errors, and if the main model is still unavailable it falls back to the agent's own
 fallback model from the registry. An agent with no fallback reports the model as busy.
+
+Keys (PR-10.10, governance/keys.py): each call tries the key of the person who caused it first,
+and the platform key only as failover. A key that's refused, out of quota or can't reach the
+model moves the call straight on to the next key, before any fallback model.
 """
 
 from __future__ import annotations
 
 import logging
+from collections import OrderedDict
 from functools import lru_cache
-from typing import TypeVar
+from typing import Awaitable, Callable, TypeVar
 
 from google import genai
 from google.genai import errors, types
 from pydantic import BaseModel
 
 from .governance import core as governance
+from .governance import keys
 
 T = TypeVar("T", bound=BaseModel)
+R = TypeVar("R")
 log = logging.getLogger(__name__)
 
 TRANSIENT_CODES = [429, 500, 502, 503, 504]
@@ -45,6 +52,60 @@ def client() -> genai.Client:
     # Reads GOOGLE_GENAI_USE_VERTEXAI / GOOGLE_CLOUD_PROJECT / GOOGLE_CLOUD_LOCATION
     # (or GOOGLE_API_KEY) from the environment.
     return genai.Client(http_options=types.HttpOptions(retry_options=RETRY))
+
+
+_own_clients: OrderedDict[str, genai.Client] = OrderedDict()
+OWN_CLIENTS_MAX = 64
+
+
+def make_client(kind: str, key: str) -> genai.Client:
+    """A client for a person's own key. Vertex AI only for a Vertex express-mode key; the
+    platform itself stays on the Gemini API key path."""
+    return genai.Client(vertexai=kind == "vertex_express", api_key=key,
+                        http_options=types.HttpOptions(retry_options=RETRY))
+
+
+def client_for(kind: str | None, key: str | None) -> genai.Client:
+    """The platform client, or a person's own (cached by a hash of the key, never the key)."""
+    if key is None or kind is None:
+        return client()
+    name = keys.client_cache_key(kind, key)
+    if name in _own_clients:
+        _own_clients.move_to_end(name)
+        return _own_clients[name]
+    made = _own_clients[name] = make_client(kind, key)
+    while len(_own_clients) > OWN_CLIENTS_MAX:
+        _own_clients.popitem(last=False)
+    return made
+
+
+async def with_keys(agent: str, call: Callable[[genai.Client, bool], Awaitable[R]],
+                    platform: Callable[[], genai.Client] | None = None) -> tuple[R, str]:
+    """Run `call(client, last)` on each key in turn until one answers; returns (result, source).
+    `last` is False while another key is left, so the caller can skip waiting out a 429 there.
+    `platform` builds the platform's client when the caller has its own (speech: one try)."""
+    links = keys.chain()
+    for i, (source, kind, key) in enumerate(links):
+        last = i == len(links) - 1
+        if source == keys.PLATFORM and i > 0:
+            governance.check_allowance_now(agent)  # their key failed: our key counts again
+        c = (platform or client)() if key is None else client_for(kind, key)
+        try:
+            result = await call(c, last)
+        except errors.APIError as e:
+            if not last and keys.fails_over(e):
+                keys.failed(agent, source, e.code)
+                continue
+            e.key_source = source  # so the ledger records the error against the key that failed
+            raise
+        keys.worked(source)
+        return result, source
+    raise AssertionError("the key chain always ends with the platform key")
+
+
+def no_429(retry: types.HttpRetryOptions) -> types.HttpRetryOptions:
+    """Retries without waiting out a 429: another key is left to try."""
+    return retry.model_copy(update={"http_status_codes": [c for c in TRANSIENT_CODES if c != 429]})
 
 
 async def generate_json(
@@ -85,14 +146,24 @@ async def generate_json(
     )
     contents = [types.Content(role="user", parts=parts)]
 
+    def on(model_name: str, cfg: types.GenerateContentConfig):
+        async def call(c: genai.Client, last: bool):
+            if not last:
+                cfg_here = cfg.model_copy(update={"http_options": types.HttpOptions(
+                    retry_options=no_429(cfg.http_options.retry_options))})
+            else:
+                cfg_here = cfg
+            return await c.aio.models.generate_content(model=model_name, contents=contents, config=cfg_here)
+        return call
+
     used = model
     try:
-        response = await client().aio.models.generate_content(model=model, contents=contents, config=config)
+        response, source = await with_keys(agent, on(model, config))
     except errors.APIError as e:
         # The fallback is the agent's own, from the registry; never a model the agent isn't allowed.
         fallbacks = [m for m in (governance.agent_entry(agent) or {}).get("models", {}).get("fallback", []) if m != model]
         if e.code not in TRANSIENT_CODES or not fallbacks:
-            governance.record_usage(agent, model, "direct", error=True)
+            governance.record_usage(agent, model, "direct", error=True, key_source=getattr(e, "key_source", keys.PLATFORM))
             if e.code in TRANSIENT_CODES:
                 raise ModelBusy(f"{model} is busy or out of quota ({e.code}); try again in a few minutes.") from e
             raise
@@ -102,11 +173,11 @@ async def generate_json(
         used = fallback
         # One attempt on the fallback model; its retries already ran on the primary.
         fallback_config = config.model_copy(update={"http_options": types.HttpOptions(retry_options=retry_for(agent, 1))})
-        response = await client().aio.models.generate_content(model=fallback, contents=contents, config=fallback_config)
+        response, source = await with_keys(agent, on(fallback, fallback_config))
     usage = response.usage_metadata
     t_in = (usage.prompt_token_count or 0) if usage else 0
     t_out = ((usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)) if usage else 0
-    governance.record_usage(agent, used, "direct", tokens_in=t_in, tokens_out=t_out)
+    governance.record_usage(agent, used, "direct", tokens_in=t_in, tokens_out=t_out, key_source=source)
 
     if isinstance(response.parsed, schema):
         return response.parsed

@@ -17,6 +17,7 @@ from google import genai
 from google.genai import errors, types
 
 from .config import settings
+from .gemini import with_keys
 from .governance import core as governance
 
 log = logging.getLogger(__name__)
@@ -29,6 +30,9 @@ class VoiceUnavailable(Exception):
 @lru_cache(maxsize=1)
 def _client() -> genai.Client:
     return genai.Client(http_options=types.HttpOptions(retry_options=types.HttpRetryOptions(attempts=1)))
+
+
+ONE_TRY = types.HttpOptions(retry_options=types.HttpRetryOptions(attempts=1))
 
 
 def _as_wav(data: bytes, mime_type: str) -> bytes:
@@ -67,29 +71,32 @@ async def speak(text: str) -> bytes:
             refused = e
             continue
         try:
-            response = await _client().aio.models.generate_content(
-                model=model,
+            config = types.GenerateContentConfig(
+                response_modalities=["AUDIO"],
+                speech_config=types.SpeechConfig(
+                    voice_config=types.VoiceConfig(
+                        prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=settings.tts_voice)
+                    )
+                ),
+                http_options=ONE_TRY,  # a late spoken reply is no use: no retries, on any key
+            )
+
+            async def call(client, _last, model=model, config=config):
                 # Plain text only: these models read any style instruction aloud, and they
                 # don't accept a system instruction. The warmth comes from the chosen voice.
-                contents=text,
-                config=types.GenerateContentConfig(
-                    response_modalities=["AUDIO"],
-                    speech_config=types.SpeechConfig(
-                        voice_config=types.VoiceConfig(
-                            prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=settings.tts_voice)
-                        )
-                    ),
-                ),
-            )
+                return await client.aio.models.generate_content(model=model, contents=text, config=config)
+
+            response, source = await with_keys(AGENT, call, platform=lambda: _client())
             audio = response.candidates[0].content.parts[0].inline_data
             usage = response.usage_metadata
             t_in = (usage.prompt_token_count or 0) if usage else 0
             t_out = (usage.candidates_token_count or 0) if usage else 0
-            governance.record_usage(AGENT, model, "direct", tokens_in=t_in, tokens_out=t_out)
+            governance.record_usage(AGENT, model, "direct", tokens_in=t_in, tokens_out=t_out, key_source=source)
             return _as_wav(audio.data, audio.mime_type or "")
         except errors.APIError as e:
             log.warning("TTS model %s unavailable (%s); trying the next one", model, e.code)
-            governance.record_usage(AGENT, model, "direct", error=True)
+            governance.record_usage(AGENT, model, "direct", error=True,
+                                    key_source=getattr(e, "key_source", "platform"))
             last_error = e
     if last_error is None and refused is not None:
         raise VoiceUnavailable(str(refused))

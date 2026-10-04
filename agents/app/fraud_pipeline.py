@@ -380,6 +380,7 @@ def _fade(guide_key: str) -> int:
 
 async def dream(run: dict) -> dict:
     """One dreaming run for a guide. Never raises: a failure is recorded on the run."""
+    governance.set_current_user(run["by"])  # every step uses the starter's own key first (PR-10.10)
     counts = {"sequences": 0, "imagined": 0, "kept": 0, "confirmed": 0, "unconfirmed": 0, "faded": 0}
     try:
         guide = fraud_guides.current(run["guide_key"])
@@ -454,6 +455,7 @@ def _source_id(url: str) -> str:
 async def research(run: dict) -> dict:
     """Look for new tactics for one guide. Confirmed ones become drafts for a reviewer; if
     nothing is confirmed, nothing changes."""
+    governance.set_current_user(run["by"])  # every step uses the starter's own key first (PR-10.10)
     counts = {"found": 0, "confirmed": 0, "unconfirmed": 0}
     try:
         guide = fraud_guides.current(run["guide_key"])

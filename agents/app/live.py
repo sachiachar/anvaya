@@ -17,6 +17,7 @@ WebSocket protocol
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import time
@@ -27,8 +28,9 @@ from google.genai import types
 
 from . import loops, proposals
 from .config import settings
-from .gemini import client
+from .gemini import client_for
 from .governance import core as governance
+from .governance import keys
 from .store import new_id, store
 
 log = logging.getLogger(__name__)
@@ -60,19 +62,37 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
     )
+    source = keys.PLATFORM
     try:
-        async with client().aio.live.connect(model=settings.live_model, config=config) as session:
+        async with contextlib.AsyncExitStack() as stack:
+            # The person's own key first, ours only as failover (PR-10.10). The key that connects
+            # is kept for the whole call, even if the person changes their key meanwhile.
+            links = keys.chain()
+            for i, (source, kind, key) in enumerate(links):
+                if source == keys.PLATFORM and i > 0:
+                    governance.check_allowance_now(AGENT)  # their key failed: our key counts again
+                try:
+                    session = await stack.enter_async_context(
+                        client_for(kind, key).aio.live.connect(model=settings.live_model, config=config))
+                    break
+                except Exception as e:  # only a refused or exhausted key moves on, as for every call
+                    if i == len(links) - 1 or not keys.fails_over(e):
+                        raise
+                    keys.failed(AGENT, source, getattr(e, "code", None))
+            keys.worked(source)
             started = time.time()
             await ws.send_json({"type": "ready"})
             upstream = asyncio.create_task(_from_browser(ws, session))
             downstream = asyncio.create_task(_to_browser(ws, session, owner, expand, reply_tokens))
             cap = governance.limit(AGENT, "max_call_minutes", 20)
-            left = governance.remaining(AGENT)  # the person's voice minutes left today (PR-10.4)
+            # The person's voice minutes left today (PR-10.4); not counted on their own key.
+            left = governance.remaining(AGENT) if source == keys.PLATFORM else None
             by_allowance = left is not None and left < cap
             planned = left if by_allowance else cap
-            # Hold the planned minutes, so a second call at the same time sees what's really left.
-            governance.reserve(AGENT, planned)
-            reserved = planned
+            if source == keys.PLATFORM:
+                # Hold the planned minutes, so a second call at the same time sees what's really left.
+                governance.reserve(AGENT, planned)
+                reserved = planned
             done, pending = await asyncio.wait({upstream, downstream}, timeout=planned * 60,
                                                return_when=asyncio.FIRST_COMPLETED)
             for task in pending:
@@ -94,7 +114,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
     except Exception as e:  # report to the app instead of dropping the call silently
         log.exception("live call failed")
         try:
-            await ws.send_json({"type": "error", "detail": f"Live call failed: {e}"})
+            await ws.send_json({"type": "error", "detail": f"Live call failed: {keys.redact(str(e))}"})
         except Exception:
             pass
     finally:
@@ -104,7 +124,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
             minutes = (time.time() - started) / 60
             governance.record_usage(AGENT, settings.live_model, "direct", minutes=minutes,
                                     tokens_in=sum(t[0] for t in reply_tokens.values()),
-                                    tokens_out=sum(t[1] for t in reply_tokens.values()))
+                                    tokens_out=sum(t[1] for t in reply_tokens.values()), key_source=source)
         try:
             await ws.close()
         except Exception:

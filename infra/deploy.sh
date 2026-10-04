@@ -11,6 +11,8 @@ BUCKET="${PROJECT_ID}-life-after-media"
 KEYRING="life-after"
 KEY="vault-escrow"
 KMS_KEY_NAME="projects/${PROJECT_ID}/locations/${REGION}/keyRings/${KEYRING}/cryptoKeys/${KEY}"
+MODEL_KEYS_KEY="model-keys"   # people's own model keys (PR-10.10), separate from the vault's
+MODEL_KEYS_KMS_KEY_NAME="projects/${PROJECT_ID}/locations/${REGION}/keyRings/${KEYRING}/cryptoKeys/${MODEL_KEYS_KEY}"
 
 # Who may use the demo: emails and/or @domains, comma-separated. Defaults to agents/.env.
 ALLOWED_EMAILS="${ALLOWED_EMAILS:-$(grep -E '^ALLOWED_EMAILS=' agents/.env | cut -d= -f2-)}"
@@ -48,6 +50,12 @@ gcloud kms keys describe "$KEY" --keyring "$KEYRING" --location "$REGION" >/dev/
 gcloud kms keys add-iam-policy-binding "$KEY" --keyring "$KEYRING" --location "$REGION" \
   --member "serviceAccount:$SA" --role roles/cloudkms.cryptoKeyEncrypterDecrypter >/dev/null
 
+echo "== Cloud KMS key for people's own model keys (only the agents service account may use it)"
+gcloud kms keys describe "$MODEL_KEYS_KEY" --keyring "$KEYRING" --location "$REGION" >/dev/null 2>&1 || \
+  gcloud kms keys create "$MODEL_KEYS_KEY" --keyring "$KEYRING" --location "$REGION" --purpose encryption
+gcloud kms keys add-iam-policy-binding "$MODEL_KEYS_KEY" --keyring "$KEYRING" --location "$REGION" \
+  --member "serviceAccount:$SA" --role roles/cloudkms.cryptoKeyEncrypterDecrypter >/dev/null
+
 echo "== Gemini API key (AI Studio) in Secret Manager"
 # Gemini runs through the AI Studio API key, not Vertex AI, so the same models
 # (including gemini-3.8-live) work locally and on Cloud Run.
@@ -64,7 +72,7 @@ echo "== Deploy agents to Cloud Run"
 gcloud run deploy "$SERVICE" --source agents --region "$REGION" --service-account "$SA" \
   --allow-unauthenticated --memory 1Gi --timeout 3600 --cpu-boost \
   --set-secrets "GOOGLE_API_KEY=gemini-api-key:latest" \
-  --set-env-vars "^;^GOOGLE_GENAI_USE_VERTEXAI=false;STORE=firestore;MEDIA_BUCKET=$BUCKET;KMS_KEY_NAME=$KMS_KEY_NAME;RELEASE_WAIT_SECONDS=60;AUTH_REQUIRED=true;FIREBASE_PROJECT_ID=$PROJECT_ID;ALLOWED_EMAILS=$ALLOWED_EMAILS;BILLING_EXPORT_TABLE=$BILLING_EXPORT_TABLE"
+  --set-env-vars "^;^GOOGLE_GENAI_USE_VERTEXAI=false;STORE=firestore;MEDIA_BUCKET=$BUCKET;KMS_KEY_NAME=$KMS_KEY_NAME;MODEL_KEYS_KMS_KEY_NAME=$MODEL_KEYS_KMS_KEY_NAME;RELEASE_WAIT_SECONDS=60;AUTH_REQUIRED=true;FIREBASE_PROJECT_ID=$PROJECT_ID;ALLOWED_EMAILS=$ALLOWED_EMAILS;BILLING_EXPORT_TABLE=$BILLING_EXPORT_TABLE"
 
 echo "== Build and deploy the web app to Firebase Hosting"
 # Firebase Hosting cannot proxy WebSockets, so live calls go straight to Cloud Run.
