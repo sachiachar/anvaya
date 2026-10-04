@@ -16,6 +16,7 @@ from .fraud_guides import Guide, signs_for_check
 from .gemini import generate_json
 from .schemas import (
     CaptureResult,
+    ConversationSummary,
     ConversationTurn,
     DocumentCheck,
     Extraction,
@@ -214,6 +215,26 @@ async def extract_from_exchange(owner: dict, heard: str, said: str, known: dict)
         ),
         prompt=json.dumps({"owner": owner["name"], "owner_said": heard, "assistant_said": said,
                            "already_saved": known}, ensure_ascii=False),
+    )
+
+
+async def summarize_conversation(owner: dict, turns: list[dict]) -> ConversationSummary:
+    """The end of a conversation: two or three sentences the owner reads before deciding what to
+    keep. It only restates what was said; it decides nothing and is never stored."""
+    lines = [{"who": owner["name"] if t["role"] == "owner" else "Saathi", "said": t["text"]}
+             for t in turns if t.get("text")]
+    return await generate_json(
+        agent="saathi.summary",
+        model=settings.flash_model,
+        schema=ConversationSummary,
+        system=(
+            "Sum up this conversation for the person who had it, in two or three short, warm "
+            "sentences addressed to them as 'you'. Say what they talked about and shared: stories, "
+            "accounts, people, wishes. Only what was actually said; add nothing, give no advice, "
+            "and don't say anything was saved or kept. Write in the language the owner spoke "
+            "most. " + PRIVACY_RULES
+        ),
+        prompt=json.dumps({"owner": owner["name"], "conversation": lines}, ensure_ascii=False),
     )
 
 
