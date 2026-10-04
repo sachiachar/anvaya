@@ -402,3 +402,13 @@ a { color: inherit; text-decoration-color: var(--gold); text-underline-offset: 3
   .v2-talk.is-live .v2-ring.r3 { width: 100px; height: 100px; }
   .v2-talk.is-live .v2-mic { width: 80px; height: 80px; }
 }
+
+/* The top of a call never changes height: one line each for the status, the hint and the clock,
+   always in the same place, so the microphone and the transcript never move up or down as the
+   status changes. */
+.v2-talk.is-live .v2-talk-head { height: 80px; flex: none; display: grid; grid-template-rows: 32px 22px 20px; gap: 3px; overflow: hidden; }
+.v2-talk.is-live .v2-talk-head > * { width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; }
+.v2-talk.is-live .v2-talk-head h1 { line-height: 32px; }
+.v2-talk.is-live .v2-talk-head p { line-height: 22px; }
+.v2-talk.is-live .v2-clock { line-height: 20px; }
+@media (max-height: 640px) { .v2-talk.is-live .v2-talk-head { height: 56px; grid-template-rows: 32px 20px; } }

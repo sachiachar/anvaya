@@ -18,6 +18,9 @@ type Phase = "talk" | "gathering" | "review" | "saved";
 
 const MEASURE: Record<string, string> = { tokens: "conversation", voice_minutes: "voice minutes", spoken_replies: "spoken replies" };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const GATHER_MS = 12000;
+const withTimeout = <T,>(p: Promise<T>, ms: number) =>
+  Promise.race([p, new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timed out")), ms))]);
 const pending = (turns: Turn[]) => turns.flatMap((t) => t.proposals ?? []).filter((p) => p.status === "pending");
 
 export default function Talk() {
@@ -59,6 +62,9 @@ export default function Talk() {
   const [callMinutes, setCallMinutes] = useState<number | null>(null);
   const [reviewEarlier, setReviewEarlier] = useState(false); // items left from before: no summary, no Discard
   const [retryReview, setRetryReview] = useState(false); // the conversation didn't load after a call
+  const reviewNow = useRef(false); // the owner chose not to wait any longer
+  const [canReviewNow, setCanReviewNow] = useState(false);
+  const [stillSaving, setStillSaving] = useState(false); // part of the call is still being finished
 
   function refreshAllowance() {
     api.allowance().then((a) => {
@@ -248,14 +254,22 @@ export default function Talk() {
     if (!baseline) { setPhase("talk"); return; }
     setCallMinutes(Math.max(1, Math.round((Date.now() - callStarted.current) / 60000)));
     setPhase("gathering");
+    // Never more than about 12 seconds, and "Review now" after 4: the owner is never stuck here.
+    reviewNow.current = false;
+    setCanReviewNow(false);
+    const offer = setTimeout(() => setCanReviewNow(true), 4000);
+    const started = Date.now();
     let latest: Turn[] | null = null;
-    for (let i = 0; i < 20; i++) {
-      await sleep(1500);
+    while (Date.now() - started < GATHER_MS && !reviewNow.current) {
+      for (let waited = 0; waited < 1200 && !reviewNow.current; waited += 200) await sleep(200);
       try {
-        latest = (await api.conversation()).turns;
+        latest = (await withTimeout(api.conversation(), 5000)).turns;
         if (!latest.some((t) => !baseline.has(t.id) && t.saving)) break;
       } catch { /* try again */ }
     }
+    clearTimeout(offer);
+    setCanReviewNow(false);
+    if (!latest) latest = await api.conversation().then((r) => r.turns).catch(() => null);
     if (!latest) {
       // Nothing loaded at all: the call is saved on the server, so offer to try again rather than
       // saying nothing was heard.
@@ -266,14 +280,21 @@ export default function Talk() {
     }
     setRetryReview(false);
     setTurns(latest);
-    const ids = latest.filter((t) => !baseline.has(t.id)).map((t) => t.id);
+    // Review what's ready; an exchange Saathi is still finishing waits for the owner as "from earlier".
+    const fromCall = latest.filter((t) => !baseline.has(t.id));
+    const ids = fromCall.filter((t) => !t.saving).map((t) => t.id);
+    setStillSaving(fromCall.some((t) => t.saving));
     if (!ids.length) {
       setPhase("talk");
-      setNotice("Saathi didn't catch anything in that call. Try again whenever you're ready.");
+      setNotice(fromCall.length
+        ? "Saathi is still finishing what you said. It will wait for you here to review."
+        : "Saathi didn't catch anything in that call. Try again whenever you're ready.");
+      if (fromCall.length) await closeConversation();
       return;
     }
     openReview(ids, true);
   }
+
 
   // ---- Review: save the rest, or discard ------------------------------------------------------------
   function openReview(ids: string[], summarize: boolean) {
@@ -382,7 +403,7 @@ export default function Talk() {
     : `Namaste${name ? `, ${name} ji` : ""}.`;
   const sub = callState === "connecting" ? "Getting Saathi on the line."
     : callState === "speaking" ? "Just talk to interrupt, like a phone call."
-    : callState === "listening" ? (muted ? "Tap Unmute to talk again." : "Talk whenever you're ready. Your words appear below.")
+    : callState === "listening" ? (muted ? "Tap Unmute to talk again." : "Talk whenever you're ready.")
     : phase === "gathering" ? "Saathi is finishing the last thing you said. This takes a few seconds."
     : topic ? "Shall we talk about this today?" : "Whenever you're ready, just talk. Saathi is listening.";
 
@@ -391,6 +412,7 @@ export default function Talk() {
     return (
       <div className="v2-talk">
         <Review items={reviewItems} summary={summary} summaryState={summaryState} meta={meta}
+          note={stillSaving && !reviewEarlier ? "Saathi is still finishing the very end of the call. Anything from it will wait for you here." : null}
           busy={reviewBusy} error={reviewError} onSave={save} onLater={later} onDiscard={reviewEarlier ? null : discard} />
         <details className="v2-earlier">
           <summary><b>The whole conversation</b><span>What you and Saathi said</span></summary>
@@ -420,7 +442,7 @@ export default function Talk() {
       <header className="v2-talk-head" aria-live="polite">
         <h1>{heading}</h1>
         <p>{sub}</p>
-        {live && callState !== "connecting" && <p className="v2-clock" aria-hidden="true">{clock}</p>}
+        {live && <p className="v2-clock" aria-hidden="true">{callState === "connecting" ? "" : clock}</p>}
       </header>
 
       {!live && phase === "talk" && topic && (
@@ -444,6 +466,9 @@ export default function Talk() {
             {!live && phase === "talk" && <span>Talk to Saathi</span>}
           </button>
         </div>
+        {phase === "gathering" && canReviewNow && (
+          <button className="v2-btn quiet" onClick={() => { reviewNow.current = true; }}>Review now</button>
+        )}
         {live && (
           <div className="v2-call-controls">
             <button className="v2-pill" onClick={toggleMute} aria-pressed={muted}><Mic />{muted ? "Unmute" : "Mute"}</button>
