@@ -19,10 +19,10 @@ const MEASURE: Record<string, string> = {
   spoken_replies: "spoken replies",
 };
 
-export default function Chat({ turns, thinking, error, speak, allowance, calling, onBack, onSend, onCall, onToggleSpeak, onDecide, onKeepAll }: {
+export default function Chat({ turns, thinking, error, speak, allowance, calling, onBack, onSend, onCall, onToggleSpeak, onDecide, onKeepAll, deciding }: {
   turns: Turn[]; thinking: boolean; error: string | null; speak: boolean; allowance: Allowance | null; calling: boolean;
   onBack: () => void; onSend: (text: string | null, file?: Blob, name?: string) => void; onCall: () => void;
-  onToggleSpeak: () => void; onDecide: Decide; onKeepAll: (cards: Proposal[]) => void;
+  onToggleSpeak: () => void; onDecide: Decide; onKeepAll: (cards: Proposal[]) => void; deciding: ReadonlySet<string>;
 }) {
   const [text, setText] = useState("");
   const bottom = useRef<HTMLDivElement | null>(null);
@@ -53,9 +53,9 @@ export default function Chat({ turns, thinking, error, speak, allowance, calling
             <li key={t.id} className={`v2-turn ${t.role}`}>
               {t.attachment && <span className="v2-attach">{ATTACHMENT[t.attachment.kind]}{t.attachment.name ? ` · ${t.attachment.name}` : ""}</span>}
               {t.text && <p>{t.text}</p>}
-              {cards.map((p) => <KeepCard key={p.id} p={p} onDecide={onDecide} />)}
+              {cards.map((p) => <KeepCard key={p.id} p={p} onDecide={onDecide} busy={deciding.has(p.id)} />)}
               {plain.length > 1 && (
-                <button className="v2-link v2-keep-all" onClick={() => onKeepAll(plain)}>Keep all {plain.length}</button>
+                <button className="v2-link v2-keep-all" disabled={deciding.size > 0} onClick={() => onKeepAll(plain)}>Keep all {plain.length}</button>
               )}
             </li>
           );

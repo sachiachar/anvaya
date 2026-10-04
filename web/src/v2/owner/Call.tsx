@@ -15,9 +15,9 @@ const STATUS: Record<Exclude<CallState, "off">, string> = {
   speaking: "Saathi is speaking · just talk to interrupt",
 };
 
-export default function Call({ state, caption, muted, waiting, onMute, onEnd, onDecide, onKeepAll }: {
+export default function Call({ state, caption, muted, waiting, onMute, onEnd, onDecide, onKeepAll, deciding }: {
   state: Exclude<CallState, "off">; caption: Caption; muted: boolean; waiting: Proposal[];
-  onMute: () => void; onEnd: () => void; onDecide: Decide; onKeepAll: (cards: Proposal[]) => void;
+  onMute: () => void; onEnd: () => void; onDecide: Decide; onKeepAll: (cards: Proposal[]) => void; deciding: ReadonlySet<string>;
 }) {
   const end = useRef<HTMLButtonElement | null>(null);
   const [seconds, setSeconds] = useState(0);
@@ -53,11 +53,11 @@ export default function Call({ state, caption, muted, waiting, onMute, onEnd, on
       {showSheet && (
         <section className="v2-call-sheet" aria-label="Waiting for your Keep">
           <p className="v2-call-sheet-note">Saathi added this to your list to review. Nothing is kept until you say so.</p>
-          <KeepCard p={waiting[0]} onDecide={onDecide} />
+          <KeepCard p={waiting[0]} onDecide={onDecide} busy={deciding.has(waiting[0].id)} />
           {waiting.length > 1 && (
             <div className="v2-row">
               <span className="v2-muted v2-small">{waiting.length - 1} more waiting</span>
-              {plain.length > 1 && <button className="v2-link" onClick={() => onKeepAll(plain)}>Keep all {plain.length}</button>}
+              {plain.length > 1 && <button className="v2-link" disabled={deciding.size > 0} onClick={() => onKeepAll(plain)}>Keep all {plain.length}</button>}
             </div>
           )}
         </section>

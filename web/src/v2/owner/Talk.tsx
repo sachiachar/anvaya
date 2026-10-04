@@ -23,6 +23,9 @@ export default function Talk() {
   const [topic, setTopic] = useState<string | null>(null);
   const [allowance, setAllowance] = useState<Allowance | null>(null);
   const player = useRef<HTMLAudioElement | null>(null);
+  const speakRef = useRef(true);
+  const speech = useRef(0); // bumped by stopSpeaking, so a reply still loading never plays after it
+  const [deciding, setDeciding] = useState<ReadonlySet<string>>(new Set()); // cards whose Keep is saving
   const spokenNoticeShown = useRef(false);
 
   const call = useRef<LiveCall | null>(null);
@@ -39,6 +42,7 @@ export default function Talk() {
       const spoken = a.pools.owner?.spoken_replies;
       if (spoken && spoken.state !== "ok" && !spokenNoticeShown.current) {
         spokenNoticeShown.current = true;
+        speakRef.current = false;
         setSpeak(false);
       }
     }).catch(() => { /* the notice is a nicety; never block the conversation */ });
@@ -57,25 +61,32 @@ export default function Talk() {
     refreshAllowance();
   }, []);
   // Leaving Talk ends any call, even one still connecting (startCall closes it once it opens).
-  useEffect(() => () => { const c = call.current; call.current = null; c?.end(); }, []);
+  useEffect(() => () => { const c = call.current; call.current = null; c?.end(); stopSpeaking(); }, []);
 
   function stopSpeaking() {
+    speech.current += 1;
     player.current?.pause();
+    player.current = null;
     window.speechSynthesis?.cancel();
   }
 
   /** Spoken reply to a typed message or shared file (live calls speak for themselves). */
   async function sayAloud(turn: Turn) {
-    if (!speak) return;
+    if (!speakRef.current) return;
     stopSpeaking();
+    const mine = speech.current;
+    // Play only if nothing stopped speech while it loaded: a call, the speaker switch, or leaving Talk.
+    const stillWanted = () => mine === speech.current && speakRef.current && !call.current;
     try {
-      const url = URL.createObjectURL(await api.speech(turn.id));
+      const blob = await api.speech(turn.id);
+      if (!stillWanted()) return;
+      const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audio.onended = () => URL.revokeObjectURL(url);
       player.current = audio;
       await audio.play();
     } catch {
-      if (!("speechSynthesis" in window)) return;
+      if (!("speechSynthesis" in window) || !stillWanted()) return;
       const u = new SpeechSynthesisUtterance(turn.text);
       if (turn.language) u.lang = turn.language;
       window.speechSynthesis.speak(u);
@@ -189,6 +200,9 @@ export default function Talk() {
 
   /** Resolves true when the decision was saved, false when the card was out of date. */
   function decide(p: Proposal, decision: "approve" | "reject", replace = false): Promise<boolean> {
+    if (deciding.has(p.id)) return Promise.resolve(true); // a second tap while the first is saving
+    setDeciding((d) => new Set(d).add(p.id));
+    const done = () => setDeciding((d) => { const next = new Set(d); next.delete(p.id); return next; });
     return api.decide(p.id, p.collection, decision, replace).then(() => {
       setTurns((all) => (all ?? []).map((t) => ({
         ...t,
@@ -202,7 +216,7 @@ export default function Talk() {
       api.conversation().then((r) => setTurns(r.turns)).catch(() => {});
       setError("That card is no longer available, so the conversation has been refreshed.");
       return false;
-    });
+    }).finally(done);
   }
 
   /** One at a time: family cards all update the same family list. Cards that look like a kept
@@ -270,12 +284,13 @@ export default function Talk() {
       ) : (
         <Chat turns={all} thinking={thinking} error={error} speak={speak} allowance={allowance}
           onBack={() => setView("home")} onSend={send} onCall={startCall} calling={callState !== "off"}
-          onToggleSpeak={() => { setSpeak(!speak); stopSpeaking(); }} onDecide={decide} onKeepAll={keepAll} />
+          onToggleSpeak={() => { speakRef.current = !speak; setSpeak(!speak); stopSpeaking(); }}
+          onDecide={decide} onKeepAll={keepAll} deciding={deciding} />
       )}
 
       {callState !== "off" && (
         <Call state={callState} caption={caption} muted={muted} waiting={fromCall}
-          onMute={toggleMute} onEnd={endCall} onDecide={decide} onKeepAll={keepAll} />
+          onMute={toggleMute} onEnd={endCall} onDecide={decide} onKeepAll={keepAll} deciding={deciding} />
       )}
     </>
   );
