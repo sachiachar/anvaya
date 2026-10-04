@@ -91,6 +91,8 @@
 - Each person has a daily allowance, so one person can't use up capacity meant for everyone. Owners get 300,000 tokens, 30 voice minutes and 50 spoken replies a day; family members get 200,000 tokens. Use is counted on the server for each signed-in account.
 - Certificate checks and the guardian never count against anyone's allowance, so checking a certificate always works.
 - An approved request in the admin portal raises a person's allowance until it expires. Allowances reset each day.
+- Near or at today's limit, "Ask for more" in the app sends a request with a reason (up to 300,000 more tokens, 60 voice minutes or 100 spoken replies, for up to 72 hours). The app shows when it's waiting and when it's approved.
+- Each judge is the platform admin of their own demo copy in the admin portal: they can approve or reject their own copy's requests, and see only their own copy and decisions. Everything else in the portal is read-only for them, and the kill switch and settings stay with the Anvaya team.
 - A live call ends when the person's voice minutes for the day run out. Two calls at the same time can't each use the full allowance.
 - Live calls show their tokens in the admin portal, as well as their minutes. Before, every call showed 0 tokens.
 
@@ -105,12 +107,12 @@
 - Live calls end after about 15 minutes (Gemini Live limit), and spoken replies can't be rule-checked like typed ones.
 - Free-tier Gemini keys run out quickly; turn on billing for demos.
 - Spend, use and refused calls in the admin portal are always real. Spend appears only once Google Cloud billing has data; until then the portal says it isn't available yet.
-- The admin portal shows only real data. Budget requests and guardian interventions stay empty until "ask for more" and the guardian core are built, and quota headroom until it's read from Cloud Monitoring.
+- The admin portal shows only real data. Guardian interventions stay empty until the guardian core is built, and quota headroom until it's read from Cloud Monitoring.
 - Fraud research and the checks behind "Dream now" need an Exa key (`EXA_API_KEY`); without it, a run says web search isn't set up yet. Imagined scenarios no source confirms can only be discarded, and fade after three runs.
 - Spend can't yet be split by agent or tenant on the bill; those show use instead.
 
 ### Next
-Opening the demo to every judge, with a guided tour · "ask for more" in the app · judges acting as the platform admin in the portal · guardian checks at every step · fraud research that starts from common gaps in kept knowledge (counted, never read) · a claim file and bank view · accounts checked at the source · measured AI quality.
+Opening the demo to every judge, with a guided tour · guardian checks at every step · a claim file and bank view · accounts checked at the source · measured AI quality.
 
 ## Prototype 0.1 · 28 September 2026 (AI Builder Cup 2026)
 

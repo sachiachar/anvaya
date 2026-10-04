@@ -38,7 +38,7 @@ def _by(days: list[dict], key: str) -> dict[str, dict]:
     return dict(sorted(out.items(), key=lambda kv: (-kv[1]["tokens"], -kv[1]["minutes"], kv[0])))
 
 
-def overview(*, fresh: bool = False) -> dict:
+def overview(*, fresh: bool = False, who: Actor | None = None) -> dict:
     """Actual spend from Google Cloud billing; usage (not dollars) per agent, model and tenant."""
     days = _days()
     # Tenants with real use. Every call is "direct" until bank tenants arrive, so today's
@@ -57,7 +57,8 @@ def overview(*, fresh: bool = False) -> dict:
         },
         "kill_switch": s.get("kill_switch", "off"),
         "quota": s.get("quota"),
-        "pending_approvals": len(store.list("budget_requests", status="pending")),
+        "pending_approvals": len([r for r in store.list("budget_requests", status="pending")
+                                  if who is None or who.role != "demo_admin" or r.get("copy_id") == who.key]),
         "open_interventions": len(store.list("guardian_events", status="open")),
         "blocked_30d": len([b for b in store.list("gateway_blocked") if b["at"] > time.time() - 30 * 86400]),
     }
@@ -92,10 +93,10 @@ def me(who: Actor = Depends(actor)) -> Actor:
 
 
 @router.get("/overview")
-def get_overview(fresh: bool = False, _: Actor = Depends(actor)) -> dict:
+def get_overview(fresh: bool = False, who: Actor = Depends(actor)) -> dict:
     """fresh=true (the portal's Refresh button) reads billing again, at most once a minute."""
     ensure_current()
-    return overview(fresh=fresh)
+    return overview(fresh=fresh, who=who)
 
 
 @router.get("/agents")
@@ -106,9 +107,11 @@ def get_agents(_: Actor = Depends(actor)) -> dict:
 
 
 @router.get("/approvals")
-def get_approvals(_: Actor = Depends(actor)) -> dict:
+def get_approvals(who: Actor = Depends(actor)) -> dict:
     ensure_current()
     reqs = sorted(store.list("budget_requests"), key=lambda r: -r["at"])
+    if who.role == "demo_admin":  # only their own demo copy's requests
+        reqs = [r for r in reqs if r.get("copy_id") == who.key]
     now = time.time()
     return {"pending": [r for r in reqs if r["status"] == "pending"],
             "active": [r for r in reqs if r["status"] == "approved" and r.get("expires_at", 0) > now],
@@ -124,17 +127,21 @@ class Decision(BaseModel):
 @router.post("/approvals/{request_id}/decision")
 def decide_approval(request_id: str, body: Decision, who: Actor = Depends(need("approve_budget"))) -> dict:
     req = store.get("budget_requests", request_id)
-    if not req:
+    if not req or (who.role == "demo_admin" and req.get("copy_id") != who.key):
         raise HTTPException(404, "request not found")
     if req["status"] != "pending":
         raise HTTPException(409, "This request has already been decided.")
-    if req["user_key"] == who.key:
+    # Nobody approves their own request. A demo admin deciding a request from their own copy acts
+    # as that copy's platform admin, a different person in the demo from the one who asked
+    # (PR-12.9); for real roles the rule always holds.
+    if req["user_key"] == who.key and who.role != "demo_admin":
         raise HTTPException(403, "You can't approve your own request.")
     now = time.time()
     fields = {"status": "approved" if body.decision == "approve" else "rejected", "decided_at": now,
               "decided_by": who.email or "local", "decision_reason": body.reason}
     if body.decision == "approve":
-        fields["expires_at"] = now + (body.hours or req["hours"]) * 3600
+        # An approver can shorten a grant, never lengthen it past what was asked (at most 72 hours).
+        fields["expires_at"] = now + min(body.hours or req["hours"], req["hours"]) * 3600
     audit(who, f"budget.{body.decision}", request_id, body.reason, amount=req["amount"], kind=req["kind"])
     return store.update("budget_requests", request_id, fields)
 
@@ -293,7 +300,10 @@ def get_demos(who: Actor = Depends(actor)) -> dict:
     platform admins; the viewer's own copy is marked."""
     ensure_current()
     copies = []
-    for d in sorted(store.list("demo_copies"), key=lambda d: -d.get("last_used_at", 0)):
+    copies_seen = store.list("demo_copies")
+    if who.role == "demo_admin":  # only their own copy
+        copies_seen = [d for d in copies_seen if d["id"] == who.key]
+    for d in sorted(copies_seen, key=lambda d: -d.get("last_used_at", 0)):
         row = {k: d.get(k) for k in ("id", "user_key", "created_at", "last_used_at", "status", "reset_at")}
         row |= {"allowance_used": _allowance_used(d["id"]), "is_you": d["id"] == who.key}
         if who.role == "platform_admin":
@@ -356,7 +366,9 @@ def set_kill_switch(body: KillSwitch, who: Actor = Depends(need("kill_switch")))
 
 
 @router.get("/audit")
-def get_audit(_: Actor = Depends(actor)) -> dict:
+def get_audit(who: Actor = Depends(actor)) -> dict:
     entries = sorted(store.list("platform_audit"), key=lambda e: -e["at"])
+    if who.role == "demo_admin":  # only their own decisions
+        entries = [e for e in entries if e.get("actor_key") == who.key]
     return {"entries": entries[:200]}
 

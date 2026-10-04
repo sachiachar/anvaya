@@ -347,6 +347,9 @@ export function ApprovalsPage({ me }: { me: Me }) {
   return (
     <>
       <p className="pa-lede">Extra allowance needs a person's approval. Grants are time-limited, and nobody can approve their own request.</p>
+      {me.role === "demo_admin" && (
+        <p className="pa-note">You're the platform admin of your own demo copy: you can approve or reject its requests. In the app, ask for more as Vikram, then decide here.</p>
+      )}
       <Section title={`Waiting for a decision (${data.pending.length})`}>
         {data.pending.length === 0 ? <p className="pa-muted">Nothing waiting.</p> : (
           <ul className="pa-list">

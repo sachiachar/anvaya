@@ -99,8 +99,8 @@ What's built is recorded as numbered requirements (P0-1 to P0-11) in the complet
 | Kept knowledge as an open-format (OKF) graph: Keep is the commit, items link to the people they name, Saathi asks gently about what's missing, and a live knowledge map (PR-7) | Fraud research that starts from common gaps in kept knowledge, counted but never read (fraud foresight, step 4) |
 | Certificate of passing checked sign by sign against a fraud reference guide; "Dream now" and "Research now" in the admin portal, checked against web sources (PR-2.3, 2.5, 2.6) | The guardian core: every step recorded, set responses, enforced where actions happen (PR-2.7) |
 | A private demo for each person who signs in, with switching between Vikram, Priya, two reviewers and the platform admin, checked on the server (PR-1) | AI quality measured on a synthetic test set (PR-8); live "inside the agents" panel (PR-9) |
-| Agent gateway, limits per request, daily allowances, costs from Google Cloud billing, kill switch (PR-10) | Backstops, "ask for more" in the app, Model Armor (PR-10.5, 10.6, 10.8) |
-| Platform admin portal with real data only, on desktop and phone (PR-12) | Judges acting as the platform admin in the portal (PR-12.9); the guardian core (PR-2.7) |
+| Agent gateway, limits per request, daily allowances, "ask for more" with approval, costs from Google Cloud billing, kill switch (PR-10) | Backstops and Model Armor (PR-10.5, 10.8) |
+| Platform admin portal with real data only, on desktop and phone; each judge is the platform admin of their own demo copy (PR-12) | The guardian core (PR-2.7) |
 
 ## Prototype release plan
 
@@ -116,9 +116,9 @@ Tracked in the [Prototype release milestone](https://github.com/sachiachar/anvay
 | PR-7 | **Built:** kept knowledge as an OKF graph; Keep is the commit; typed links; the family's assistant reads it; gaps drive the conversation; a live knowledge map | High-value | [#18](https://github.com/sachiachar/anvaya/issues/18) |
 | PR-8 | Measure AI quality on a synthetic test set and publish the numbers | High-value | [#22](https://github.com/sachiachar/anvaya/issues/22) |
 | PR-9 | Inside the agents: a live panel for judges | High-value | [#23](https://github.com/sachiachar/anvaya/issues/23) |
-| PR-12 | **Built:** platform admin portal: governance dashboard, approvals, guardian and fraud operations, demo management. Still to come: judges acting as the platform admin | High-value | [#42](https://github.com/sachiachar/anvaya/issues/42) |
+| PR-12 | **Built:** platform admin portal: governance dashboard, approvals, guardian and fraud operations, demo management; judges approve their own copy's requests | High-value | [#42](https://github.com/sachiachar/anvaya/issues/42) |
 | PR-11 | Connect to financial institutions (Account Aggregator, statements) and check each account's readiness for handover | High-value | [#41](https://github.com/sachiachar/anvaya/issues/41) |
-| PR-10 | **Mostly built:** agent governance: gateway, registry, limits, allowances, costs from billing ([proposal](docs/proposals/agent-governance.md)). Still to come: backstops, "ask for more", Model Armor | High-value | [#24](https://github.com/sachiachar/anvaya/issues/24) |
+| PR-10 | **Mostly built:** agent governance: gateway, registry, limits, allowances, costs from billing ([proposal](docs/proposals/agent-governance.md)). Still to come: backstops, Model Armor | High-value | [#24](https://github.com/sachiachar/anvaya/issues/24) |
 
 Moved to the [Grand finale milestone](https://github.com/sachiachar/anvaya/milestone/2) (4 December): real recordings (#11), signs of pressure (#14, #20), insider collusion (#16, #19), voice letters (#21), cloned-voice signals (#25), cooling-off delay (#26), per-tenant buckets and keys (#27), OKF export and coverage map (#28), and governance for a bank pilot (#29).
 

@@ -2,7 +2,8 @@
 // the portal only hides buttons a role can't use.
 import { json, request } from "../api";
 
-export type Role = "viewer" | "budget_approver" | "risk_reviewer" | "platform_admin";
+/** demo_admin: a visitor with their own demo copy, who decides that copy's requests only (PR-12.9). */
+export type Role = "viewer" | "demo_admin" | "budget_approver" | "risk_reviewer" | "platform_admin";
 export type Permission = "approve_budget" | "review_guardian" | "review_fraud" | "manage_demos" | "kill_switch" | "manage_privacy";
 export type KillSwitchState = "off" | "optional_paused" | "all_paused";
 
