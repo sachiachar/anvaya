@@ -1,8 +1,8 @@
 // The typed side of Talk (v2): the whole conversation along the gold thread, with Saathi's words in
 // the serif, the owner's in plain type, and Keep cards where they came up. Kept cards become beads.
 import { useEffect, useRef, useState } from "react";
-import { type Allowance, api, type MoreKind, type Proposal, type Turn } from "../../api";
-import { MORE, requestText } from "../../allowance";
+import { MORE, requestText, useAskForMore } from "../../allowance";
+import type { Allowance, MoreKind, Proposal, Turn } from "../../api";
 import { Camera, Chevron, Doc, Mic, Send, Speaker, SpeakerOff } from "../icons";
 import { type Decide, KeepCard, plainKeep } from "./KeepCard";
 
@@ -95,29 +95,11 @@ export default function Chat({ turns, thinking, error, speak, allowance, onAsked
 
 /** A gentle note near or at today's allowance (PR-10.4), with "Ask for more" (PR-10.6). It never blocks the screen. */
 function AllowanceNotice({ allowance, speak, onAsked }: { allowance: Allowance; speak: boolean; onAsked: () => void }) {
-  const owner = allowance.pools.owner ?? {};
-  const reachedKeys = Object.entries(owner).filter(([, m]) => m.state === "reached").map(([k]) => k);
-  const nearKeys = Object.entries(owner).filter(([, m]) => m.state === "warning").map(([k]) => k);
-  const reached = reachedKeys.map((k) => MEASURE[k] ?? k);
-  const near = nearKeys.map((k) => MEASURE[k] ?? k);
-  const requests = allowance.requests ?? [];
-  const first = MORE[reachedKeys[0] ?? nearKeys[0] ?? "tokens"] ?? MORE.tokens;
-  const [asking, setAsking] = useState(false);
-  const [kind, setKind] = useState<MoreKind>(first.kind);
-  const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const f = useAskForMore(allowance, onAsked);
+  const { owner, requests, asking, kind, reason, error, waiting } = f;
+  const reached = f.reachedKeys.map((k) => MEASURE[k] ?? k);
+  const near = f.nearKeys.map((k) => MEASURE[k] ?? k);
   if (!reached.length && !near.length && !requests.length) return null;
-  const amount = Object.values(MORE).find((m) => m.kind === kind)?.step ?? 100;
-  const waiting = requests.some((r) => r.kind === kind && r.status === "pending");
-  const ask = () => {
-    setBusy(true);
-    setError(null);
-    api.askForMore(kind, Math.min(amount, allowance.limits?.[kind] ?? amount), reason.trim())
-      .then(() => { setAsking(false); setReason(""); onAsked(); })
-      .catch((e) => setError(String(e.message ?? e)))
-      .finally(() => setBusy(false));
-  };
   return (
     <div className="v2-notice v2-stack" role="status">
       {(reached.length > 0 || near.length > 0) && (
@@ -131,18 +113,18 @@ function AllowanceNotice({ allowance, speak, onAsked }: { allowance: Allowance; 
       )}
       {requests.map((r) => <p key={r.id}>{requestText(r)}</p>)}
       {(reached.length > 0 || near.length > 0) && !asking && (
-        <div><button className="v2-link" onClick={() => { setKind(first.kind); setAsking(true); }}>Ask for more</button></div>
+        <div><button className="v2-link" onClick={f.open}>Ask for more</button></div>
       )}
       {asking && (
         <div className="v2-stack">
-          <select className="v2-input" value={kind} onChange={(e) => setKind(e.target.value as MoreKind)} aria-label="What you need more of">
+          <select className="v2-input" value={kind} onChange={(e) => f.setKind(e.target.value as MoreKind)} aria-label="What you need more of">
             {Object.values(MORE).map((m) => <option key={m.kind} value={m.kind}>{m.step} more {m.unit}</option>)}
           </select>
-          <input className="v2-input" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300}
+          <input className="v2-input" value={reason} onChange={(e) => f.setReason(e.target.value)} maxLength={300}
             placeholder="Why? e.g. recording a long family story" aria-label="Why you need more" />
           <div className="v2-row">
-            <button className="v2-btn" disabled={busy || waiting || reason.trim().length < 3} onClick={ask}>{waiting ? "Already asked" : "Ask"}</button>
-            <button className="v2-btn quiet" onClick={() => setAsking(false)}>Cancel</button>
+            <button className="v2-btn" disabled={!f.canAsk} onClick={f.ask}>{waiting ? "Already asked" : "Ask"}</button>
+            <button className="v2-btn quiet" onClick={f.close}>Cancel</button>
           </div>
         </div>
       )}
