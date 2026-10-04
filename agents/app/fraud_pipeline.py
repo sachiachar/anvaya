@@ -19,6 +19,7 @@ Rules in code, each with a test:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import re
@@ -27,7 +28,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from . import fraud_guides
+from . import fraud_cues, fraud_guides
 from .config import settings
 from .fraud_guides import CHECKABLE, Guide
 from .gemini import ModelBusy, generate_json
@@ -113,6 +114,8 @@ class ImaginedScenario(BaseModel):
     variant: Literal["close", "far"] = Field(description="close: changes one or two steps of the known "
                                                          "sequence; far: deliberately unusual")
     claim: str = Field(description="One sentence a published source would have to report for this to be real")
+    cue: str | None = Field(default=None, description="If it exploits one of the common gaps listed, that gap's "
+                                                      "pattern name exactly (e.g. policy.nominee_missing); else null")
     document_sign: DocumentSign | None = Field(default=None, description="Only if it would leave a mark on the "
                                                                           "certificate itself")
 
@@ -323,16 +326,19 @@ def _pick(scenarios: list[ImaginedScenario], existing: list[str]) -> list[Imagin
     return picked
 
 
-async def _imagine(guide: Guide, tactic, events: list[dict], ruled_out: list[str]) -> list[ImaginedScenario]:
+async def _imagine(guide: Guide, tactic, events: list[dict], ruled_out: list[str],
+                   cues: list[dict] | None = None) -> list[ImaginedScenario]:
     sequence = "\n".join(f"{i}. {s.text} (caught by: {s.caught_by})" for i, s in enumerate(tactic.steps, 1))
     safeguards = "\n".join(f"- {name}: {how}" for name, how in SAFEGUARDS.items())
     prompt = (
         f"Document: {guide.title}.\nKnown fraud sequence: {tactic.name}\n{sequence}\n\n"
         f"Our safeguards:\n{safeguards}\n\n"
         f"Recent guardian events: {events or 'none'}\n"
+        f"Common gaps in what owners have recorded (counts only, across all owners):\n{fraud_cues.describe(cues or [])}\n"
         f"Already ruled out (don't repeat): {ruled_out or 'none'}\n\n"
         "Imagine new variants of this sequence designed to get past the safeguards and avoid the known warning "
-        "signs: two close variants that change one or two steps, and one deliberately far-fetched variant."
+        "signs: two close variants that change one or two steps, and one deliberately far-fetched variant. "
+        "Where it fits, aim a variant at one of the common gaps, and name its pattern in `cue`."
     )
     imagined = await generate_json(
         agent=DREAMER, model=settings.research_model, schema=Imagined, prompt=prompt,
@@ -381,13 +387,21 @@ async def dream(run: dict) -> dict:
             return _finish(run, counts, "guide not found")
         counts["faded"] = _fade(guide.key)
         events, ruled_out = _recent_events(), _ruled_out(guide.key)
+        # Starting points from kept knowledge: anonymous counts only (fraud_cues.py). The dreamer
+        # never reads a bundle.
+        # Reading every owner's catalog blocks, so it runs off the event loop.
+        await asyncio.to_thread(fraud_cues.ensure_synthetic_owners)
+        cues = await asyncio.to_thread(fraud_cues.cues)
+        by_pattern = {c["pattern"]: c for c in cues}
         existing = [s["scenario"] for s in store.list("fraud_scenarios", guide_key=guide.key)]
         guard = Guard(run)
+        guard.say("imagine", f"Starting points from kept knowledge: {len(cues)} common gap(s) across owners "
+                          "(counted, never read)" + "".join(f"; {c['owners']} owners: {c['means']}" for c in cues[:3]))
         for tactic in _seeds(guide):
             counts["sequences"] += 1
             guard.call(DREAMER)
             guard.say("imagine", f"Imagining new ways around the safeguards, starting from “{tactic.name}”")
-            imagined = await _imagine(guide, tactic, events, ruled_out)
+            imagined = await _imagine(guide, tactic, events, ruled_out, cues)
             counts["imagined"] += len(imagined)
             guard.progress(counts)
             picked = _pick(imagined, existing)
@@ -411,6 +425,8 @@ async def dream(run: dict) -> dict:
                     "label": "simulated", "status": "verified" if evidence.confirmed else "dreamt",
                     "sources": evidence.sources, "evidence": len(evidence.sources), "source_note": evidence.summary,
                     "review": "pending" if evidence.confirmed else "unconfirmed", "runs_seen": 0,
+                    # Only a pattern from the closed list, and only one this run's cues had (no free text).
+                    "cue": by_pattern[scenario.cue] if scenario.cue in by_pattern else None,
                 })
                 existing.append(scenario.title)
                 counts["kept"] += 1

@@ -143,7 +143,20 @@ def _description(collection: str, item: dict) -> str:
 
 LINK_LABELS = {"nominee": "Nominee", "holder": "Holder", "intended_for": "Meant for", "people": "Mentions"}
 # Fields whose presence (never their value) the graph records, for the gap check (PR-7.10).
-HAS_FIELDS = ("nominee_or_beneficiary", "holder_name", "intended_for", "papers_at")
+HAS_FIELDS = ("nominee_or_beneficiary", "holder_name", "intended_for", "papers_at", "relationship")
+# Answers that mean "not known": the same as the gap check's (gaps.UNKNOWN; a test keeps them equal).
+UNKNOWN = {"", "unknown", "not sure", "none", "n/a"}
+
+
+def _present(value: Any) -> bool:
+    if isinstance(value, list):
+        return any(_present(v) for v in value)
+    return isinstance(value, str) and " ".join(re.sub(r"[^a-z0-9']+", " ", value.lower()).split()) not in UNKNOWN
+
+
+def _has(record: dict) -> list[str]:
+    """Which key fields a record really answers (presence only, never values)."""
+    return [f for f in HAS_FIELDS if _present(record.get(f))]
 _SPLIT = re.compile(r"\s*(?:,|;|&|\band\b)\s*", re.IGNORECASE)
 
 
@@ -275,7 +288,7 @@ def _entry(front: dict, path: str) -> dict:
         # The graph part: what a fixed-code reader may use (gap check, fraud cues). Types, status,
         # links between kept items, and which key fields are present; never names, text or sources.
         "graph": {"type": front["type"], "status": front.get("status", "stable"), "links": front.get("links", {}),
-                  "has": [f for f in HAS_FIELDS if (front.get("record") or {}).get(f)]},
+                  "has": _has(front.get("record") or {})},
         "collection": front["collection"],
         "title": front.get("title", ""),
         "description": front.get("description", ""),
@@ -627,6 +640,22 @@ def for_reading(owner_id: str) -> list[dict]:
                     "confirmed": entry.get("verified", False),
                     "text": _body(entry["collection"], entry["record"], entry["title"], entry["description"],
                                   entry["graph"]["links"], cat)})
+    return out
+
+
+def graph_parts(owner_id: str) -> list[dict]:
+    """The graph part of every current kept item: type, status, typed links (bundle paths) and which
+    key fields are present. Nothing else: no names, text, sources or record. This is all a
+    fixed-code reader such as the fraud cues (fraud_cues.py) may see of an owner's knowledge.
+    Links and presence are worked out now from the current record, so items kept before either
+    existed are counted correctly."""
+    cat = catalog(owner_id)
+    out = []
+    for entry in cat["concepts"].values():
+        if entry["graph"]["status"] != "stable":
+            continue
+        out.append({"path": f"/{entry['path']}", "type": entry["graph"]["type"], "status": "stable",
+                    "links": links_for(entry["collection"], entry["record"], cat), "has": _has(entry["record"])})
     return out
 
 

@@ -31,6 +31,7 @@
 
 **Finding fraud before it happens (admin portal)**
 - "Dream now" on the Fraud page imagines new ways a fraudster could get around our safeguards, starting from known fraud tactics and what the guardian has seen. Each idea is checked against web pages found with Exa search, and a page counts only if the sentence it's quoted for is really there. It's then matched to the safeguard that would catch it, or shown as a gap.
+- "Dream now" also starts from gaps common in what owners have kept, such as a policy with no nominee: only counts of five or more owners, never who or what. A scenario shows the gap it starts from. Owners see one line about it under "Missing pieces": "We count common gaps, never the details, to protect everyone." The demo includes twelve clearly labelled synthetic owners so the counts are there.
 - Live mode shows the run as it happens: which stage it's in, each step, and new scenarios as they're added. A reviewer can press Stop at any time, and every run has a fixed limit on model calls to keep costs down.
 - "Research now" looks for new fraud tactics for a guide. Only tactics and scenarios a cited source confirms can be approved, and nothing joins a guide until a risk reviewer approves it. Ideas no source confirms fade after three runs.
 
