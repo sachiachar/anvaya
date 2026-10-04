@@ -4,7 +4,8 @@
 // to save, and the owner removes what they don't want, saves the rest in one tap, or discards the
 // whole conversation. Typing and photos use the same screen and the same review.
 import { useEffect, useRef, useState } from "react";
-import { type Allowance, api, type Turn } from "../../api";
+import { MORE, requestText, useAskForMore } from "../../allowance";
+import { type Allowance, api, type MoreKind, type Turn } from "../../api";
 import { LiveCall, type CallEvent } from "../../liveCall";
 import { friendlyError } from "../copy";
 import { Camera, Check, Doc, Mic, Send, Speaker, SpeakerOff } from "../icons";
@@ -491,7 +492,7 @@ export default function Talk() {
         </details>
       )}
 
-      {allowance && <AllowanceNotice allowance={allowance} speak={speak} />}
+      {allowance && <AllowanceNotice allowance={allowance} speak={speak} onAsked={refreshAllowance} />}
 
       {!live && phase === "talk" && baseline && (
         <div className="v2-dock">
@@ -520,19 +521,42 @@ export default function Talk() {
   );
 }
 
-/** A gentle note near or at today's allowance (PR-10.4). It never blocks the screen. */
-function AllowanceNotice({ allowance, speak }: { allowance: Allowance; speak: boolean }) {
-  const owner = allowance.pools.owner ?? {};
-  const reached = Object.entries(owner).filter(([, m]) => m.state === "reached").map(([k]) => MEASURE[k] ?? k);
-  const near = Object.entries(owner).filter(([, m]) => m.state === "warning").map(([k]) => MEASURE[k] ?? k);
-  if (!reached.length && !near.length) return null;
+/** A gentle note near or at today's allowance (PR-10.4), with "Ask for more" (PR-10.6). It never blocks the screen. */
+function AllowanceNotice({ allowance, speak, onAsked }: { allowance: Allowance; speak: boolean; onAsked: () => void }) {
+  const f = useAskForMore(allowance, onAsked);
+  const { owner, requests, asking, kind, reason, error, waiting } = f;
+  const reached = f.reachedKeys.map((k) => MEASURE[k] ?? k);
+  const near = f.nearKeys.map((k) => MEASURE[k] ?? k);
+  if (!reached.length && !near.length && !requests.length) return null;
   return (
-    <p className="v2-notice" role="status">
-      {reached.length > 0
-        ? `You've used today's ${reached.join(" and ")}. It resets tomorrow, or you can ask for more.`
-        : `You've talked a lot with Saathi today: you're close to today's ${near.join(" and ")}.`}
-      {!speak && owner.spoken_replies && owner.spoken_replies.state !== "ok" &&
-        " Replies aren't read aloud automatically now; tap the speaker to turn it back on."}
-    </p>
+    <div className="v2-notice v2-stack" role="status">
+      {(reached.length > 0 || near.length > 0) && (
+        <p>
+          {reached.length > 0
+            ? `You've used today's ${reached.join(" and ")}. It resets tomorrow, or you can ask for more.`
+            : `You've talked a lot with Saathi today: you're close to today's ${near.join(" and ")}.`}
+          {!speak && owner.spoken_replies && owner.spoken_replies.state !== "ok" &&
+            " Replies aren't read aloud automatically now; tap the speaker to turn it back on."}
+        </p>
+      )}
+      {requests.map((r) => <p key={r.id}>{requestText(r)}</p>)}
+      {(reached.length > 0 || near.length > 0) && !asking && (
+        <div><button className="v2-link" onClick={f.open}>Ask for more</button></div>
+      )}
+      {asking && (
+        <div className="v2-stack">
+          <select className="v2-input" value={kind} onChange={(e) => f.setKind(e.target.value as MoreKind)} aria-label="What you need more of">
+            {Object.values(MORE).map((m) => <option key={m.kind} value={m.kind}>{m.step} more {m.unit}</option>)}
+          </select>
+          <input className="v2-input" value={reason} onChange={(e) => f.setReason(e.target.value)} maxLength={300}
+            placeholder="Why? e.g. recording a long family story" aria-label="Why you need more" />
+          <div className="v2-row">
+            <button className="v2-btn" disabled={!f.canAsk} onClick={f.ask}>{waiting ? "Already asked" : "Ask"}</button>
+            <button className="v2-btn quiet" onClick={f.close}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {error && <p className="v2-error">{error}</p>}
+    </div>
   );
 }
