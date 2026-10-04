@@ -106,10 +106,6 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
         except Exception:
             pass
     finally:
-        # Finish saving the last exchanges before the request ends. On Cloud Run a finished request
-        # may get no more CPU, which would leave them marked "saving" and the review waiting.
-        if saves:
-            await asyncio.wait(saves, timeout=SAVE_GRACE_SECONDS)
         if reserved:  # give back the held minutes; the actual minutes are counted below
             governance.release(AGENT, reserved)
         if started is not None:  # record the call's minutes and tokens in the usage ledger
@@ -121,6 +117,11 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
             await ws.close()
         except Exception:
             pass
+        # Last, after the minutes are counted and the held ones given back: finish saving the last
+        # exchanges before the request ends. On Cloud Run a finished request may get no more CPU,
+        # which would leave them marked "saving" and the review waiting.
+        if saves:
+            await asyncio.wait(saves, timeout=SAVE_GRACE_SECONDS)
 
 
 def _instructions(owner: dict) -> str:

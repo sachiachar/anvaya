@@ -65,6 +65,7 @@ export default function Talk() {
   const reviewNow = useRef(false); // the owner chose not to wait any longer
   const [canReviewNow, setCanReviewNow] = useState(false);
   const [stillSaving, setStillSaving] = useState(false); // part of the call is still being finished
+  const [callTurns, setCallTurns] = useState<string[]>([]); // every turn of the call just ended
 
   function refreshAllowance() {
     api.allowance().then((a) => {
@@ -258,18 +259,20 @@ export default function Talk() {
     reviewNow.current = false;
     setCanReviewNow(false);
     const offer = setTimeout(() => setCanReviewNow(true), 4000);
-    const started = Date.now();
+    const deadline = Date.now() + GATHER_MS;
+    const left = () => deadline - Date.now();
     let latest: Turn[] | null = null;
-    while (Date.now() - started < GATHER_MS && !reviewNow.current) {
-      for (let waited = 0; waited < 1200 && !reviewNow.current; waited += 200) await sleep(200);
+    // A hard limit: every wait and every request fits inside the deadline.
+    while (left() > 0 && !reviewNow.current) {
+      for (let waited = 0; waited < 1200 && left() > 0 && !reviewNow.current; waited += 200) await sleep(200);
+      if (left() <= 0 && latest) break;
       try {
-        latest = (await withTimeout(api.conversation(), 5000)).turns;
+        latest = (await withTimeout(api.conversation(), Math.max(1500, Math.min(5000, left())))).turns;
         if (!latest.some((t) => !baseline.has(t.id) && t.saving)) break;
       } catch { /* try again */ }
     }
     clearTimeout(offer);
     setCanReviewNow(false);
-    if (!latest) latest = await api.conversation().then((r) => r.turns).catch(() => null);
     if (!latest) {
       // Nothing loaded at all: the call is saved on the server, so offer to try again rather than
       // saying nothing was heard.
@@ -284,6 +287,7 @@ export default function Talk() {
     const fromCall = latest.filter((t) => !baseline.has(t.id));
     const ids = fromCall.filter((t) => !t.saving).map((t) => t.id);
     setStillSaving(fromCall.some((t) => t.saving));
+    setCallTurns(fromCall.map((t) => t.id)); // Discard covers the whole call, even what's still saving
     if (!ids.length) {
       setPhase("talk");
       setNotice(fromCall.length
@@ -292,12 +296,13 @@ export default function Talk() {
       if (fromCall.length) await closeConversation();
       return;
     }
-    openReview(ids, true);
+    openReview(ids, true, true);
   }
 
 
   // ---- Review: save the rest, or discard ------------------------------------------------------------
-  function openReview(ids: string[], summarize: boolean) {
+  function openReview(ids: string[], summarize: boolean, fromCall = false) {
+    if (!fromCall) setCallTurns([]);
     setReviewEarlier(!summarize);
     setReviewTurns(ids);
     setReviewError(null);
@@ -356,7 +361,8 @@ export default function Talk() {
     setReviewBusy(true);
     setReviewError(null);
     try {
-      await api.forgetConversation(reviewTurns);
+      // The whole call: an exchange still being saved is deleted too, and then gets no cards.
+      await api.forgetConversation(reviewEarlier ? reviewTurns : [...new Set([...reviewTurns, ...callTurns])]);
       await closeConversation();
       setPhase("talk");
       setNotice("The conversation is deleted. Nothing from it was kept.");
