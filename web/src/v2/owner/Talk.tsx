@@ -57,6 +57,7 @@ export default function Talk() {
   const [savedCount, setSavedCount] = useState(0);
   const [callMinutes, setCallMinutes] = useState<number | null>(null);
   const [reviewEarlier, setReviewEarlier] = useState(false); // items left from before: no summary, no Discard
+  const [retryReview, setRetryReview] = useState(false); // the conversation didn't load after a call
 
   function refreshAllowance() {
     api.allowance().then((a) => {
@@ -254,8 +255,17 @@ export default function Talk() {
         if (!latest.some((t) => !baseline.has(t.id) && t.saving)) break;
       } catch { /* try again */ }
     }
-    if (latest) setTurns(latest);
-    const ids = (latest ?? []).filter((t) => !baseline.has(t.id)).map((t) => t.id);
+    if (!latest) {
+      // Nothing loaded at all: the call is saved on the server, so offer to try again rather than
+      // saying nothing was heard.
+      setPhase("talk");
+      setError("Saathi couldn't load your conversation just now. What you said is saved.");
+      setRetryReview(true);
+      return;
+    }
+    setRetryReview(false);
+    setTurns(latest);
+    const ids = latest.filter((t) => !baseline.has(t.id)).map((t) => t.id);
     if (!ids.length) {
       setPhase("talk");
       setNotice("Saathi didn't catch anything in that call. Try again whenever you're ready.");
@@ -444,6 +454,7 @@ export default function Talk() {
       {notice && !live && <p className="v2-notice-card" role="status">{notice}</p>}
       {error && <p className="v2-error" role="alert">{error}</p>}
       {!baseline && error && <button className="v2-btn quiet" onClick={loadConversation}>Try again</button>}
+      {retryReview && !live && <button className="v2-btn quiet" onClick={() => { setError(null); void afterCall(); }}>Review the call</button>}
 
       {!live && phase === "talk" && baseline && session.length === 0 && (
         <div className="v2-alts">

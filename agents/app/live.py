@@ -193,11 +193,25 @@ async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expa
     moment_docs = [d for m in moments if (d := proposals.save_moment(owner_id, m.model_dump(), source))]
     item_docs = [proposals.save_inventory(owner_id, i.model_dump(), source) for i in inventory]
     people_docs = [d for p in people if (d := proposals.save_person(owner_id, p.model_dump()))]
-    owner_turn = store.update("turns", owner_turn["id"], {"saving": False})
-    ai_turn = store.update("turns", ai_turn["id"], {"saving": False,
-                                                    "proposals": {"moments": [m["id"] for m in moment_docs],
-                                                                  "inventory": [i["id"] for i in item_docs],
-                                                                  "people": [p["id"] for p in people_docs]}})
+    try:
+        owner_turn = store.update("turns", owner_turn["id"], {"saving": False})
+        ai_turn = store.update("turns", ai_turn["id"], {"saving": False,
+                                                        "proposals": {"moments": [m["id"] for m in moment_docs],
+                                                                      "inventory": [i["id"] for i in item_docs],
+                                                                      "people": [p["id"] for p in people_docs]}})
+        if not store.get("turns", ai_turn["id"]) or not store.get("turns", owner_turn["id"]):
+            raise LookupError("discarded")
+    except Exception:
+        # Discarded just now, between the check above and here: take back the new waiting cards,
+        # unless another turn still mentions them.
+        mentioned = {i for t in store.list("turns", owner_id=owner_id)
+                     for ids in (t.get("proposals") or {}).values() for i in ids}
+        for collection, docs in (("moments", moment_docs), ("inventory", item_docs), ("people", people_docs)):
+            for doc in docs:
+                current = store.get(collection, doc["id"])
+                if current and current.get("status") == "pending" and doc["id"] not in mentioned:
+                    store.delete(collection, doc["id"])
+        return
     try:
         await ws.send_json({"type": "turn", "owner_turn": owner_turn, "assistant_turn": expand(ai_turn)})
     except Exception:

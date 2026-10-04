@@ -169,3 +169,29 @@ def test_discard_keeps_a_waiting_card_another_conversation_also_mentions(client)
     r = client.post(f"/api/owners/{OWNER}/conversation/forget", json={"turn_ids": [t["id"] for t in later]})
     assert r.json()["deleted_items"] == 0
     assert store.get("inventory", card["id"]) and store.get("turns", earlier["id"])
+
+
+def test_a_discard_landing_mid_save_leaves_no_waiting_cards_behind(client, monkeypatch):
+    import asyncio
+
+    from app import live
+    from app.schemas import Extraction, Moment
+    real_update = store.update
+
+    async def extract(owner, heard, said, known):
+        return Extraction(moments=[Moment(**STORY)])
+
+    def update_after_discard(collection, doc_id, fields):
+        if collection == "turns" and fields.get("saving") is False:
+            for t in store.list("turns", owner_id=OWNER):
+                if t.get("saving"):
+                    store.delete("turns", t["id"])  # Discard lands between the check and the update
+        return real_update(collection, doc_id, fields)
+
+    monkeypatch.setattr(live.loops, "extract_from_exchange", extract)
+    monkeypatch.setattr(live.store, "update", update_after_discard)
+    try:
+        asyncio.run(live._save_exchange(_WS(), {"id": OWNER, "name": "Vikram Rao"}, "Late.", "Okay.", main._expand))
+    except Exception as e:  # pragma: no cover - the saver must not raise
+        raise AssertionError("the exchange saver raised") from e
+    assert not [m for m in store.list("moments", owner_id=OWNER) if m.get("title") == STORY["title"]]
