@@ -137,7 +137,6 @@ export default function App() {
         </div>
         <div className="top-links">
           <a href="/v2.html">Try the new design</a>
-          <a href="/v2.html#model-key" title="Optional: use your own Gemini key for everything you do in this demo">Your own model key</a>
           <button className="link" onClick={toggleAi} aria-pressed={showAi}>{showAi ? "Hide AI labels" : "Show how the AI works"}</button>
           <button className="link" onClick={() => api.seed().then(() => location.reload())}
             title="Restores your own copy of the demo to the start. Nobody else's is affected.">Reset my demo</button>

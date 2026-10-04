@@ -18,7 +18,7 @@
 - The fonts are served from Anvaya's own site, so no visitor's address goes to a font service. Hindi and other Devanagari text has its own matching typeface.
 
 **Your own model key (optional)**
-- Anyone can add their own Gemini key in the Demo menu ("Your own model key"): a Google AI Studio key, free or paid, or a Vertex AI express-mode key. Everything they do in the demo then runs on their key first, and on Anvaya's only if theirs fails, so the demo keeps working when Anvaya's free quota runs out. Without a key, nothing changes.
+- Anyone can add their own Gemini key in the new design's Demo menu ("Your own model key"): a Google AI Studio key, free or paid, or a Vertex AI express-mode key. Everything they do in the demo then runs on their key first, and on Anvaya's only if theirs fails, so the demo keeps working when Anvaya's free quota runs out. Without a key, nothing changes.
 - **Test** shows what works with the key (typing, the family's questions, voice calls, spoken replies, fraud research) before **Save**. Saving tests it again.
 - The key is stored encrypted and is never shown again, to its owner or anyone else: only its last 4 characters. Nobody else's calls ever use it.
 - Calls on your own key don't count against today's allowance.
