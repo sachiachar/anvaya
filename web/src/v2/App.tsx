@@ -28,8 +28,7 @@ export default function App() {
   const person = people.find((p) => p.id === acting);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // /v2.html#model-key (linked from the classic design) opens the Demo sheet at "Your own model key".
-  const [drawer, setDrawer] = useState(() => location.hash === "#model-key");
+  const [drawer, setDrawer] = useState(false);
   const [tab, setTab] = useState<OwnerTab>("talk");
   const [showHow, setShowHow] = useState(() => {
     try { return localStorage.getItem(SHOW_HOW_KEY) === "1"; } catch { return false; }
