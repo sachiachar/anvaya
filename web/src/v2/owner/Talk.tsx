@@ -26,6 +26,7 @@ export default function Talk() {
   const speakRef = useRef(true);
   const speech = useRef(0); // bumped by stopSpeaking, so a reply still loading never plays after it
   const [deciding, setDeciding] = useState<ReadonlySet<string>>(new Set()); // cards whose Keep is saving
+  const handled = useRef(new Set<string>()); // cards decided (or being decided) on this screen
   const spokenNoticeShown = useRef(false);
 
   const call = useRef<LiveCall | null>(null);
@@ -200,7 +201,10 @@ export default function Talk() {
 
   /** Resolves true when the decision was saved, false when the card was out of date. */
   function decide(p: Proposal, decision: "approve" | "reject", replace = false): Promise<boolean> {
-    if (deciding.has(p.id)) return Promise.resolve(true); // a second tap while the first is saving
+    // Once per card: a second tap, or Keep all reaching a card the owner already decided. A ref, so
+    // a Keep all loop that started earlier still sees decisions made since.
+    if (handled.current.has(p.id)) return Promise.resolve(true);
+    handled.current.add(p.id);
     setDeciding((d) => new Set(d).add(p.id));
     const done = () => setDeciding((d) => { const next = new Set(d); next.delete(p.id); return next; });
     return api.decide(p.id, p.collection, decision, replace).then(() => {
@@ -214,6 +218,7 @@ export default function Talk() {
     }).catch(() => {
       // The card is out of date (e.g. the demo was reset): reload the real state.
       api.conversation().then((r) => setTurns(r.turns)).catch(() => {});
+      handled.current.delete(p.id);
       setError("That card is no longer available, so the conversation has been refreshed.");
       return false;
     }).finally(done);
