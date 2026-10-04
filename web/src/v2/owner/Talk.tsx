@@ -480,7 +480,7 @@ export default function Talk() {
         </button>
       )}
 
-      <Transcript turns={session} caption={caption} live={live} thinking={thinking} />
+      <Transcript turns={session} caption={caption} live={live} thinking={thinking} follow />
 
       {!live && phase === "talk" && session.length === 0 && lastSaid && (
         <details className="v2-earlier">
