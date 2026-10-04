@@ -102,7 +102,8 @@ def test_live_call_ends_at_its_time_limit(monkeypatch):
     async def connect(**_):
         yield FakeSession()
 
-    monkeypatch.setattr(live, "client", lambda: SimpleNamespace(aio=SimpleNamespace(live=SimpleNamespace(connect=connect))))
+    monkeypatch.setattr(live, "client_for",
+                        lambda kind, key: SimpleNamespace(aio=SimpleNamespace(live=SimpleNamespace(connect=connect))))
     original = core.limit
     monkeypatch.setattr(core, "limit", lambda a, k, d=None: 0.001 if k == "max_call_minutes" else original(a, k, d))
     monkeypatch.setattr(live.loops, "live_instructions", lambda *a, **k: "")
@@ -143,7 +144,8 @@ def test_live_call_records_its_tokens_once_per_reply(monkeypatch):
         day = store.get("usage_days", core._today()) or {}
         return day.get("agents", {}).get("saathi.voice", {"tokens_in": 0, "tokens_out": 0, "calls": 0})
 
-    monkeypatch.setattr(live, "client", lambda: SimpleNamespace(aio=SimpleNamespace(live=SimpleNamespace(connect=connect))))
+    monkeypatch.setattr(live, "client_for",
+                        lambda kind, key: SimpleNamespace(aio=SimpleNamespace(live=SimpleNamespace(connect=connect))))
     monkeypatch.setattr(live.loops, "live_instructions", lambda *a, **k: "")
     before = voice()
     asyncio.run(live.call(FakeWS(), {"id": "o1", "name": "Vikram"}, lambda t: t))

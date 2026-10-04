@@ -19,13 +19,17 @@ from google.auth.exceptions import DefaultCredentialsError
 from google.genai import errors as genai_errors
 from pydantic import BaseModel, Field, ValidationError
 
-from . import (auth, demo, escrow, fraud_guides, gaps, knowledge, knowledge_map, live, loops, media, proposals,
-               release, speech, tasks)
+from . import (auth, demo, escrow, fraud_guides, gaps, knowledge, knowledge_map, live, loops, media, model_access,
+               proposals, release, speech, tasks)
 from .config import settings
 from .executor_agent import UnknownSession, ask
 from .governance import core as governance_core
+from .governance import keys as model_keys
 from .governance import portal
 from .store import new_id, store
+
+# Keys people add themselves never reach a log line, from any library (PR-10.10).
+model_keys.install_log_redaction()
 
 app = FastAPI(title="Anvaya agents", version="0.1.0")
 app.add_middleware(
@@ -53,7 +57,7 @@ async def no_credentials(_: Request, exc: DefaultCredentialsError) -> JSONRespon
 
 @app.exception_handler(genai_errors.APIError)
 async def gemini_error(_: Request, exc: genai_errors.APIError) -> JSONResponse:
-    return JSONResponse(status_code=502, content={"detail": f"Gemini error {exc.code}: {exc.message}"})
+    return JSONResponse(status_code=502, content={"detail": f"Gemini error {exc.code}: {model_keys.redact(exc.message)}"})
 
 
 @app.exception_handler(governance_core.Refused)
@@ -989,4 +993,5 @@ def set_nickname(body: Nickname) -> dict:
 
 
 api.include_router(portal.router)
+api.include_router(model_access.router)
 app.include_router(api)

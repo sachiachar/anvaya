@@ -16,15 +16,18 @@ from google.adk.agents.run_config import RunConfig
 from google.adk.models.llm_request import LlmRequest
 from google.adk.models.llm_response import LlmResponse
 from google.adk.models import FallbackModel, Gemini
+from google.adk.models._fallback_model import _RequestSnapshot  # ADK's own; its FallbackModel uses it the same way
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.tools import ToolContext
-from google.genai import types
+from google.adk.utils.context_utils import Aclosing
+from google.genai import errors, types
 
 from . import knowledge
 from .config import settings
-from .gemini import retry_for
+from .gemini import client_for, no_429, retry_for
 from .governance import core as governance
+from .governance import keys
 
 APP_NAME = "life-after"
 
@@ -111,8 +114,9 @@ def gateway_record(callback_context, llm_response: LlmResponse) -> LlmResponse |
     model = callback_context.state.get("temp:model") or settings.flash_model
     t_in = (usage.prompt_token_count or 0) if usage else 0
     t_out = ((usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)) if usage else 0
+    source = (getattr(llm_response, "custom_metadata", None) or {}).get("key_source", keys.PLATFORM)
     governance.record_usage(AGENT, model, "direct", tokens_in=t_in, tokens_out=t_out,
-                            error=bool(llm_response.error_code))
+                            error=bool(llm_response.error_code), key_source=source)
     return None
 
 
@@ -162,13 +166,52 @@ def instruction(ctx) -> str:
             f"you need with read_concept, and use list_accounts for accounts.\n\n" + _index_text(owner_id, name))
 
 
+class KeyedGemini(Gemini):
+    """A Gemini model that uses the asking person's own key first, and ours only as failover
+    (PR-10.10). The client is chosen on each call, never fixed when the Runner is built, so one
+    shared Runner serves everyone with their own key."""
+
+    async def generate_content_async(self, llm_request: LlmRequest, stream: bool = False):
+        links = keys.chain()
+        for i, (source, kind, key) in enumerate(links):
+            last = i == len(links) - 1
+            if source == keys.PLATFORM and i > 0:
+                governance.check_allowance_now(AGENT)  # their key failed: our key counts again
+            # Models edit the request in place; a failed attempt mustn't hand its edits to the next key.
+            pristine = None if last else _RequestSnapshot.of(llm_request)
+            retry = self.retry_options
+            if retry is not None and not last:
+                retry = no_429(retry)  # another key is left: move on instead of waiting out a 429
+            if llm_request.config is not None:
+                # A given client ignores the model's retry_options, so they go on the request.
+                llm_request.config.http_options = (llm_request.config.http_options or types.HttpOptions()).model_copy(
+                    update={"retry_options": retry})
+            model = Gemini(model=self.model, retry_options=retry, client=client_for(kind, key))
+            yielded = False
+            try:
+                async with Aclosing(model.generate_content_async(llm_request, stream)) as responses:
+                    async for response in responses:
+                        yielded = True
+                        response.custom_metadata = {**(response.custom_metadata or {}), "key_source": source}
+                        yield response
+            except errors.APIError as e:
+                # Once part of a reply has gone out, it's this key's turn: never splice two keys.
+                if yielded or last or not keys.fails_over(e):
+                    raise
+                keys.failed(AGENT, source, e.code)
+                pristine.restore(llm_request)
+                continue
+            keys.worked(source)
+            return
+
+
 def build_agent() -> LlmAgent:
     return LlmAgent(
         name="handover_assistant",
         # Retries on overload, then falls back to a second model.
         model=FallbackModel(models=[
-            Gemini(model=settings.flash_model, retry_options=retry_for(AGENT)),
-            Gemini(model=settings.fallback_model, retry_options=retry_for(AGENT, 1)),
+            KeyedGemini(model=settings.flash_model, retry_options=retry_for(AGENT)),
+            KeyedGemini(model=settings.fallback_model, retry_options=retry_for(AGENT, 1)),
         ]),
         description="Answers the family's questions from the owner's own words and records.",
         instruction=instruction,

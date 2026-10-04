@@ -46,6 +46,10 @@ class Settings:
     # projects/P/locations/asia-southeast1/keyRings/life-after/cryptoKeys/vault-escrow
     # Empty means dev mode (see escrow.py).
     kms_key_name: str = os.getenv("KMS_KEY_NAME", "")
+    # Cloud KMS key that encrypts the model keys demo users add themselves (PR-10.10), separate
+    # from the vault's, e.g. projects/P/locations/asia-southeast1/keyRings/life-after/cryptoKeys/model-keys
+    # Empty: dev mode locally; with STORE=firestore, saving a key is refused ("isn't set up yet").
+    model_keys_kms_key_name: str = os.getenv("MODEL_KEYS_KMS_KEY_NAME", "")
 
     # Cloud Storage bucket for recordings and documents. Empty keeps media local.
     media_bucket: str = os.getenv("MEDIA_BUCKET", "")

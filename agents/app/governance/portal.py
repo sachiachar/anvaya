@@ -13,9 +13,9 @@ from typing import Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import demo, fraud_cues, fraud_guides, fraud_pipeline
+from .. import demo, fraud_cues, fraud_guides, fraud_pipeline, model_access
 from ..store import store
-from . import billing, core
+from . import billing, core, keys
 from .core import Actor, actor, audit, need, platform_settings, registry, small
 from .seed import ensure_current
 
@@ -372,3 +372,101 @@ def get_audit(who: Actor = Depends(actor)) -> dict:
         entries = [e for e in entries if e.get("actor_key") == who.key]
     return {"entries": entries[:200]}
 
+
+# ---- Model keys (PR-10.10): each person's own key, with ours as failover -------------------
+#
+# A report of whose key answered, and each person's key status, with a platform admin's controls.
+# Never a key: only its kind, last 4 characters and status. People appear as hashed keys (with the
+# nickname they chose, for platform admins only); a demo admin sees only their own row.
+
+KEY_REPORT_DAYS = 30
+
+
+def _key_use(rows: list[dict]) -> dict[str, dict]:
+    """Calls, tokens, minutes, errors and failovers per key source, over these rows."""
+    out: dict[str, dict] = {}
+    for row in rows:
+        for source, use in row.items():
+            if source in ("id", "day", "user_key") or not isinstance(use, dict):
+                continue
+            total = out.setdefault(source, {"calls": 0, "tokens": 0, "minutes": 0.0, "errors": 0, "failovers": 0})
+            for k in total:
+                total[k] += use.get(k, 0)
+    for total in out.values():
+        total["minutes"] = round(total["minutes"], 1)
+    return out
+
+
+@router.get("/model-keys")
+def get_model_keys(who: Actor = Depends(actor)) -> dict:
+    """The Model keys report: usage by whose key answered, and each person's key and settings."""
+    since = time.strftime("%Y-%m-%d", time.gmtime(time.time() - KEY_REPORT_DAYS * 86400))
+    usage = [u for u in store.list("key_usage") if u.get("day", "") >= since]
+    if who.role == "demo_admin":  # only their own
+        usage = [u for u in usage if u.get("user_key") == who.key]
+    people_keys = {u["user_key"] for u in usage}
+    people_keys |= {d["id"] for d in store.list(keys.ACCESS)} | {d["id"] for d in store.list(keys.POLICY)}
+    if who.role == "demo_admin":
+        people_keys = {who.key}
+    elif who.role != "platform_admin":
+        people_keys = set()  # other roles see the totals only
+    people = []
+    for key in sorted(people_keys):
+        copy = store.get("demo_copies", key) or {}
+        row = {"user_key": key, "is_you": key == who.key, "policy": keys.policy(key), "access": keys.access(key),
+               "usage_30d": _key_use([u for u in usage if u.get("user_key") == key])}
+        if who.role == "platform_admin":
+            row["nickname"] = copy.get("nickname")
+        people.append(row)
+    people.sort(key=lambda r: -sum(v["calls"] for v in r["usage_30d"].values()))
+    # Totals by key source: everyone's for portal roles, a demo admin's own (usage is filtered above).
+    return {"days": KEY_REPORT_DAYS, "totals": _key_use(usage), "people": people,
+            "default": keys.default_policy(), "platform_key": keys.platform_status(), "ready": keys.ready(),
+            "kinds": list(keys.KINDS), "can_manage": "manage_model_access" in who.permissions}
+
+
+class KeyPolicy(BaseModel):
+    enabled: bool
+    kinds: list[Literal["studio", "vertex_express"]]
+    reason: str = Field(min_length=3, max_length=500)
+
+
+@router.post("/model-keys/default")
+def set_model_keys_default(body: KeyPolicy, who: Actor = Depends(need("manage_model_access"))) -> dict:
+    """The policy for everyone without a setting of their own."""
+    audit(who, "model_keys.default", "default", body.reason, enabled=body.enabled, kinds=body.kinds)
+    return keys.set_default_policy(body.enabled, list(body.kinds))
+
+
+@router.post("/model-keys/{user_key}/policy")
+def set_model_keys_policy(user_key: str, body: KeyPolicy, who: Actor = Depends(need("manage_model_access"))) -> dict:
+    """Turn a person's own key on or off, or limit its kinds. Turning it off stops it being used
+    (ours answers instead); the key stays stored until it's removed."""
+    audit(who, "model_keys.policy", user_key, body.reason, enabled=body.enabled, kinds=body.kinds)
+    return keys.set_policy(user_key, body.enabled, list(body.kinds))
+
+
+@router.post("/model-keys/{user_key}/test")
+async def test_model_key(user_key: str, body: Reason, who: Actor = Depends(need("manage_model_access"))) -> dict:
+    """Test a person's saved key again. The admin sees the result, never the key."""
+    saved = keys.saved_key(user_key)
+    if not saved:
+        raise HTTPException(404, "This person hasn't added a key.")
+    kind, key = saved
+    token = core._current_user.set(user_key)  # the test's use is the key owner's, not the admin's
+    try:
+        with keys.held(key):
+            found, usable = await model_access.test_key(kind, key)
+    finally:
+        core._current_user.reset(token)
+    audit(who, "model_keys.test", user_key, body.reason, usable=usable)
+    return {"access": keys.record_test(user_key, found, usable), "features": found, "usable": usable}
+
+
+@router.post("/model-keys/{user_key}/remove")
+def remove_model_key(user_key: str, body: Reason, who: Actor = Depends(need("manage_model_access"))) -> dict:
+    if not keys.access(user_key):
+        raise HTTPException(404, "This person hasn't added a key.")
+    audit(who, "model_keys.remove", user_key, body.reason)
+    keys.remove(user_key)
+    return {"access": None}

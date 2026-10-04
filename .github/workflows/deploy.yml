@@ -114,12 +114,15 @@ jobs:
           # Exa web search for the fraud research agent (agents/app/web_search.py). A secret in
           # environment "production". Empty: fraud research says web search isn't set up yet.
           EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+          # The KMS key that encrypts model keys people add themselves (PR-10.10; agents/app/governance/keys.py).
+          # A repository variable, not a secret. Empty: people can't save their own key; everything else works.
+          MODEL_KEYS_KMS_KEY_NAME: ${{ vars.MODEL_KEYS_KMS_KEY_NAME }}
         # --cpu-boost: extra CPU while an instance starts and for 10 seconds after, so cold starts are
         # shorter. The extra CPU is billed only for those seconds.
         run: |
           gcloud run deploy life-after-agents --source agents \
             --project "${{ vars.GCP_PROJECT_ID }}" --region "${{ vars.GCP_REGION }}" --quiet --cpu-boost \
-            --update-env-vars "^;^ALLOWED_EMAILS=${ALLOWED_EMAILS};PLATFORM_ROLES=${PLATFORM_ROLES};BILLING_EXPORT_TABLE=${BILLING_EXPORT_TABLE};EXA_API_KEY=${EXA_API_KEY}"
+            --update-env-vars "^;^ALLOWED_EMAILS=${ALLOWED_EMAILS};PLATFORM_ROLES=${PLATFORM_ROLES};BILLING_EXPORT_TABLE=${BILLING_EXPORT_TABLE};EXA_API_KEY=${EXA_API_KEY};MODEL_KEYS_KMS_KEY_NAME=${MODEL_KEYS_KMS_KEY_NAME}"
 
   allowlist:
     # Manual only: apply the allowlist without rebuilding anything.

@@ -154,3 +154,15 @@ agents:
              max_model_calls_per_run: 8, max_retries: 1}
     budget_class: platform
     safety_critical: false
+
+  - id: access.tester
+    role: Tests a person's own model key before it's saved, with one tiny call per model (PR-10.10)
+    autonomy: assist
+    # Every model the person's key might be used for: chat and handover, fraud research, live
+    # voice and spoken replies. Each test call uses only the key being tested, never ours.
+    models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.8-flash, gemini-3.8-live, gemini-3.8-flash-lite-tts,
+                                                        gemini-3.8-flash-tts, gemini-3.1-flash-tts-preview]}
+    tools: []
+    limits: {max_input_tokens: 100, max_output_tokens: 16, max_retries: 0}
+    budget_class: platform
+    safety_critical: false

@@ -3,8 +3,9 @@ import {
   fmt, platform, type Agent, type AuditEntry, type Blocked, type BudgetRequest, type DemoCopy, type GuardianEvent,
   type CuePrivacy, type Draft, type Guide, type KillSwitchState, type Me, type Permission, type Run, type RunStage, type Scenario,
   type Source,
-  type Spend, type Use,
+  type Spend, type Use, type KeyPerson, type KeyPolicy, type KeySource, type KeyUse,
 } from "./api";
+import type { KeyFeature, KeyKind } from "../api";
 
 // ---- Shared pieces --------------------------------------------------------------
 
@@ -680,6 +681,138 @@ export function DemosPage({ me }: { me: Me }) {
             </tr>
           ))}</tbody>
         </table>}
+      </Section>
+    </>
+  );
+}
+
+// ---- Model keys (PR-10.10) -----------------------------------------------------------------
+
+const SOURCE_LABEL: Record<KeySource, string> = {
+  judge_studio: "Their own key: AI Studio", judge_vertex: "Their own key: Vertex AI", platform: "Ours (failover)",
+};
+const KIND_LABEL: Record<KeyKind, string> = { studio: "AI Studio", vertex_express: "Vertex AI express" };
+
+function sumUse(u: Partial<Record<KeySource, KeyUse>>, own: boolean) {
+  return Object.entries(u).filter(([s]) => (s === "platform") !== own).reduce((n, [, v]) => n + (v?.calls ?? 0), 0);
+}
+
+function KindChoice({ kinds, value, onChange }: { kinds: KeyKind[]; value: KeyKind[]; onChange: (k: KeyKind[]) => void }) {
+  return (
+    <span className="pa-row">
+      {kinds.map((k) => (
+        <label key={k} className="pa-check">
+          <input type="checkbox" checked={value.includes(k)}
+            onChange={(e) => onChange(e.target.checked ? [...value, k] : value.filter((x) => x !== k))} /> {KIND_LABEL[k]}
+        </label>
+      ))}
+    </span>
+  );
+}
+
+function PolicyForm({ kinds, policy, onSave }: { kinds: KeyKind[]; policy: KeyPolicy;
+  onSave: (enabled: boolean, kinds: KeyKind[], reason: string) => Promise<unknown> }) {
+  const [enabled, setEnabled] = useState(policy.enabled);
+  const [chosen, setChosen] = useState<KeyKind[]>(policy.kinds);
+  return (
+    <div className="pa-row">
+      <label className="pa-check"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Allowed</label>
+      <KindChoice kinds={kinds} value={chosen} onChange={setChosen} />
+      <DecisionForm actions={[{ value: "save", label: "Save" }]} onDecide={(_, reason) => onSave(enabled, chosen, reason)} />
+    </div>
+  );
+}
+
+function KeyFeatures({ features }: { features: KeyFeature[] }) {
+  return <span>{features.map((f) => <span key={f.id} className="pa-sub">{f.label}: {fmt.label(f.result)}</span>)}</span>;
+}
+
+function KeyRow({ person, kinds, manage, onChange }: { person: KeyPerson; kinds: KeyKind[]; manage: boolean; onChange: () => void }) {
+  const [open, setOpen] = useState<"policy" | "test" | "remove" | null>(null);
+  const [tested, setTested] = useState<KeyFeature[] | null>(null);
+  const a = person.access;
+  return (
+    <tr>
+      <td>
+        {person.nickname ? <strong>{person.nickname}</strong> : <span className="pa-mono">{person.user_key}</span>}
+        {person.is_you && <span className="pa-tag">You</span>}
+        {person.nickname && <div className="pa-sub pa-mono">{person.user_key}</div>}
+      </td>
+      <td>
+        {a ? <>{KIND_LABEL[a.kind]} <span className="pa-mono">{a.last4}</span> <Status value={a.status} />
+          {a.failed_at && <div className="pa-sub">Last failed {fmt.when(a.failed_at)} ({a.failure})</div>}
+          {(tested ?? a.features)?.length > 0 && <KeyFeatures features={tested ?? a.features} />}</>
+          : <span className="pa-muted">None: uses ours</span>}
+      </td>
+      <td>{person.policy.enabled ? person.policy.kinds.map((k) => KIND_LABEL[k]).join(", ") || "No kinds" : "Turned off"}
+        {person.policy.set_by_admin && <div className="pa-sub">Set for this person</div>}</td>
+      <td className="num">{fmt.num(sumUse(person.usage_30d, true))}</td>
+      <td className="num">{fmt.num(sumUse(person.usage_30d, false))}</td>
+      <td className="num">{fmt.num(Object.values(person.usage_30d).reduce((n, v) => n + (v?.failovers ?? 0), 0))}</td>
+      <td>{manage && (open === null ? (
+        <span className="pa-row">
+          <button className="pa-small" onClick={() => setOpen("policy")}>Settings…</button>
+          {a && <button className="pa-small" onClick={() => setOpen("test")}>Test…</button>}
+          {a && <button className="pa-small" onClick={() => setOpen("remove")}>Remove…</button>}
+        </span>
+      ) : (
+        <div>
+          {open === "policy" && <PolicyForm kinds={kinds} policy={person.policy}
+            onSave={(enabled, k, reason) => platform.setKeyPolicy(person.user_key, enabled, k, reason).then(() => { setOpen(null); onChange(); })} />}
+          {open === "test" && <DecisionForm actions={[{ value: "test", label: "Test their key" }]}
+            onDecide={(_, reason) => platform.testKey(person.user_key, reason).then((r) => { setTested(r.features); setOpen(null); onChange(); })} />}
+          {open === "remove" && <DecisionForm actions={[{ value: "remove", label: "Remove their key", tone: "danger" }]}
+            onDecide={(_, reason) => platform.removeKey(person.user_key, reason).then(() => { setOpen(null); onChange(); })} />}
+          <button className="pa-small" onClick={() => setOpen(null)}>Cancel</button>
+        </div>
+      ))}</td>
+    </tr>
+  );
+}
+
+export function ModelKeysPage({ me }: { me: Me }) {
+  const load = useCallback(() => platform.modelKeys(), []);
+  const { data, error, reload } = useLoad(load);
+  if (!data) return <Loading error={error} />;
+  const manage = data.can_manage && can(me, "manage_model_access");
+  const sources = Object.keys(SOURCE_LABEL) as KeySource[];
+  return (
+    <>
+      <p className="pa-lede">Anyone can add their own Gemini key, optionally. Everything they do then runs on their key first,
+        and on ours only if theirs fails. Keys are never shown here: only their kind, last 4 characters and status.</p>
+      {!data.ready && <p className="pa-error" role="alert">Keys can't be saved yet: MODEL_KEYS_KMS_KEY_NAME isn't set on the API service.</p>}
+      <Section title={`Whose key answered (last ${data.days} days)`}>
+        <table>
+          <thead><tr><th>Key</th><th className="num">Calls</th><th className="num">Tokens</th><th className="num">Voice minutes</th>
+            <th className="num">Errors</th><th className="num">Failovers</th></tr></thead>
+          <tbody>{sources.map((s) => {
+            const u = data.totals[s];
+            return (
+              <tr key={s}><td>{SOURCE_LABEL[s]}</td><td className="num">{fmt.num(u?.calls ?? 0)}</td>
+                <td className="num">{fmt.num(u?.tokens ?? 0)}</td><td className="num">{(u?.minutes ?? 0).toFixed(1)}</td>
+                <td className="num">{fmt.num(u?.errors ?? 0)}</td><td className="num">{fmt.num(u?.failovers ?? 0)}</td></tr>
+            );
+          })}</tbody>
+        </table>
+        <p className="pa-muted">{data.platform_key.failed_at
+          ? `Our key last failed ${fmt.when(data.platform_key.failed_at)} (${data.platform_key.code}).`
+          : "Our key hasn't failed."} Spend on people's own keys is billed to them, so it isn't in our Cloud Billing figures.</p>
+      </Section>
+      <Section title={`People (${data.people.length})`}>
+        {data.people.length === 0 ? <Empty>Nobody has added a key or used one yet.</Empty> : <table>
+          <thead><tr><th>Person</th><th>Their key</th><th>Allowed</th><th className="num">Calls on their key</th>
+            <th className="num">Calls on ours</th><th className="num">Failovers</th><th></th></tr></thead>
+          <tbody>{data.people.map((person) => (
+            <KeyRow key={person.user_key} person={person} kinds={data.kinds} manage={manage} onChange={reload} />
+          ))}</tbody>
+        </table>}
+      </Section>
+      <Section title="Default for everyone">
+        <p>{data.default.enabled ? `Allowed: ${data.default.kinds.map((k) => KIND_LABEL[k]).join(", ") || "no kinds"}.` : "Turned off."}
+          {" "}A setting for one person, above, takes its place for them.</p>
+        {manage ? <PolicyForm kinds={data.kinds} policy={data.default}
+          onSave={(enabled, k, reason) => platform.setKeyDefault(enabled, k, reason).then(reload)} />
+          : <p className="pa-muted">Only a platform admin can change this.</p>}
       </Section>
     </>
   );

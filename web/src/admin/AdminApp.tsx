@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AuthError } from "../api";
 import { authEnabled, signInWithGoogle, signOutUser, watchUser } from "../auth";
 import { fmt, platform, type Me } from "./api";
-import { AgentsPage, ApprovalsPage, AuditPage, DemosPage, FraudPage, GuardianPage, OverviewPage } from "./pages";
+import { AgentsPage, ApprovalsPage, AuditPage, DemosPage, FraudPage, GuardianPage, ModelKeysPage, OverviewPage } from "./pages";
 
 const PAGES = {
   overview: { label: "Overview", render: (me: Me, fresh: boolean) => <OverviewPage me={me} fresh={fresh} /> },
@@ -11,6 +11,7 @@ const PAGES = {
   guardian: { label: "Guardian", render: (me: Me) => <GuardianPage me={me} /> },
   fraud: { label: "Fraud", render: (me: Me) => <FraudPage me={me} /> },
   demos: { label: "Demos", render: (me: Me) => <DemosPage me={me} /> },
+  keys: { label: "Model keys", render: (me: Me) => <ModelKeysPage me={me} /> },
   audit: { label: "Audit log", render: () => <AuditPage /> },
 } as const;
 

@@ -5,6 +5,7 @@ import { useAction } from "../ui";
 import { ROLE_TEXT, friendlyError } from "./copy";
 import { ShowHow } from "./demo";
 import { Book, Close, Lock, Mic, People, ThreadMark } from "./icons";
+import { ModelKey } from "./ModelKey";
 import Talk from "./owner/Talk";
 
 // The platform admin opens the separate admin portal (PR-12.9).
@@ -27,7 +28,8 @@ export default function App() {
   const person = people.find((p) => p.id === acting);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [drawer, setDrawer] = useState(false);
+  // /v2.html#model-key (linked from the classic design) opens the Demo sheet at "Your own model key".
+  const [drawer, setDrawer] = useState(() => location.hash === "#model-key");
   const [tab, setTab] = useState<OwnerTab>("talk");
   const [showHow, setShowHow] = useState(() => {
     try { return localStorage.getItem(SHOW_HOW_KEY) === "1"; } catch { return false; }
@@ -260,6 +262,8 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
             <input type="checkbox" checked={showHow} onChange={onToggleShowHow} />
           </label>
         </section>
+
+        <ModelKey />
 
         {askNickname && (
           <section aria-labelledby="demo-nickname">

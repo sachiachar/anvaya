@@ -96,6 +96,8 @@ flowchart LR
 | Spoken replies (TTS) | `gemini-3.8-flash-lite-tts`, then `gemini-3.8-flash-tts`, then `gemini-3.1-flash-tts-preview` | Each has its own quota; tried in order |
 | Voice | `Sulafat` | A warm voice, used for both TTS and live calls |
 
+**Your own model key (PR-10.10, `governance/keys.py`).** Anyone who signs in may add their own Gemini key, optionally: a Google AI Studio key (free or paid) or a Vertex AI express-mode key. Every model call that person causes, whatever the agent (Saathi, the live call, spoken replies, handover, safety checks, fraud runs they start), goes down a chain of keys: their own first, then the platform key (`GOOGLE_API_KEY`) only as failover. A call moves to the next key on 401, 403, 404, 429 or "API key not valid"; other errors don't move on. Someone without a key uses the platform key, as before. A fraud run stores who started it, so every step uses their key even after the request has finished. The handover assistant's ADK models (`KeyedGemini`) choose the client on each call, so the one shared Runner serves everyone with their own key. A key is tested before it's saved (`access.tester`: one tiny call per model, on that key alone, at most 10 tests a minute per person). The ledger records which key answered (`key_sources`, and per person in `key_usage`); calls on a person's own key don't count against their daily allowance, while the registry, limits and kill switch still apply. The portal's **Model keys** page reports whose key answered and each person's key status, and a platform admin can turn the feature off or limit the kinds of key, for everyone or one person, test a saved key again, or remove it.
+
 ## 4. AI-first loops
 
 | Loop | Code | Input → output | Autonomy | Human checkpoint |
@@ -302,6 +304,7 @@ On `released`, KMS removes the outer layer and the recipient's phone decrypts th
 | One judge reaching another judge's demo | Each Google account gets its own copy, chosen from the verified sign-in, never from the browser (`demo.py`). Every route checks that the owner or document belongs to the caller's copy and answers **404** otherwise; team lists show only the caller's copy; the live call closes for another copy's owner. Resetting touches only the caller's copy, including its recordings |
 | Someone acting outside their part | The switcher sends who is acting (`X-Acting-As`; `acting_as` on the live call). The server accepts only the people in the copy and checks each action's person (`demo.only`): only Vikram changes his vault, keeps cards or answers alerts; only Priya registers as recipient, reports, sends proof and opens the vault; only a reviewer confirms. The reviewer is the person acting, never a typed name, so one reviewer can't confirm both steps |
 | Identifying demo visitors | The portal lists demo copies by hashed key. A visitor may give their copy an optional nickname once, after sign-in; it's cleaned to one short line, shown only to platform admins, never written to logs or the audit log (`demo.set_nickname`, `portal.get_demos`) |
+| Someone seeing or using another person's model key | A key is found only from the verified sign-in (`governance.current_user`), never from an ID the browser sends, and is used only for calls that person causes. It's encrypted with its own Cloud KMS key (`MODEL_KEYS_KMS_KEY_NAME`, separate from the vault's), with the person's user key bound in as additional authenticated data, so a record copied to someone else won't decrypt. It's never sent back to anyone, its owner included: the app and the portal see only its kind, last 4 characters and status. A platform admin sees everyone's usage and can test or remove a key, but never sees it. Key-shaped text is removed from every log record and from Gemini error messages; a request with a malformed key never repeats it. Without a KMS key on Firestore, saving is refused, and an unencrypted record there is never used |
 | Uninvited people using the demo | Google sign-in (Firebase Auth); the server verifies the ID token on every request (`auth.py`) and checks `ALLOWED_EMAILS` (addresses or `@domains`); the live call passes the token as `?token=` |
 
 **Known gaps before real users**
@@ -321,6 +324,7 @@ On `released`, KMS removes the outer layer and the recipient's phone decrypts th
 | `STORE` | `file` (`agents/data/store.json`, survives restarts) | `firestore` |
 | Gemini auth | `GOOGLE_API_KEY` (AI Studio) in `agents/.env` | Same AI Studio key, stored in Secret Manager (`gemini-api-key`) and injected as `GOOGLE_API_KEY`; `GOOGLE_GENAI_USE_VERTEXAI=false` |
 | `KMS_KEY_NAME` | empty (dev mode) | vault escrow key |
+| `MODEL_KEYS_KMS_KEY_NAME` | empty (dev mode: keys stored unencrypted, local only) | the `model-keys` KMS key; empty means people can't save their own key |
 | `MEDIA_BUCKET` | empty (local folder) | private bucket |
 | `GEMINI_*_MODEL(S)`, `GEMINI_TTS_VOICE`, `GEMINI_LIVE_MODEL` | see section 3.3 | same; confirm they are served in your region |
 | `AUTH_REQUIRED`, `FIREBASE_PROJECT_ID`, `ALLOWED_EMAILS` | `true`, the project, your email | same (from `agents/.env` or `ALLOWED_EMAILS=… ./infra/deploy.sh`) |
@@ -351,6 +355,7 @@ Automated tests (`agents/tests/`), with Gemini stubbed so they run without crede
 - the gateway: every file that calls Gemini goes through it, every agent named in code is registered, and every call is recorded in the ledger;
 - limits per request: output caps, retries, input size, call length and reply length.
 - responsiveness: Google's sign-in certificates are fetched once until they expire, a slow store doesn't hold up a live call, and two exchanges saved at once make one card.
+- people's own model keys: two people at once each use only their own key; ours is only the failover, never tried first, and a server error doesn't move on; safety checks, the handover assistant, the live call and fraud runs fail over too; a key is tested before it's saved and a test stores nothing; a stored key never decrypts for anyone else; and a key never reaches a response, log record, the ledger, the store in plain text or the audit log. Platform admins see everyone's usage but no key; a demo user sees only their own.
 - dependencies: every direct dependency is in the inventory, every installed package has an allowed licence, every font folder carries its OFL licence and is in the inventory, and the Python and Node versions agree everywhere.
 
 Every pull request runs the linters (ruff for `agents/`, Biome for `web/`), these tests and the web build ([.github/workflows/ci.yml](../.github/workflows/ci.yml)).

@@ -137,6 +137,13 @@ a { color: inherit; text-decoration-color: var(--gold); text-underline-offset: 3
 .v2-stack { display: grid; gap: 14px; }
 .v2-error { color: var(--danger); font-size: var(--step--1); }
 
+/* Your own model key (PR-10.10): what each feature does with the key. */
+.v2-key-results { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: var(--step--1); }
+.v2-key-results li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+.v2-key-results li[data-ok="false"] span:last-child { color: var(--danger); }
+.v2-key-kinds { border: 0; padding: 0; margin: 0; }
+.v2-key-kinds legend { padding: 0; margin-bottom: 6px; color: var(--ink-2); font-weight: 600; }
+
 /* ---- App shell -------------------------------------------------------------------------------- */
 .v2-app { min-height: 100dvh; display: flex; flex-direction: column; max-width: 600px; margin: 0 auto; }
 .v2-top {
