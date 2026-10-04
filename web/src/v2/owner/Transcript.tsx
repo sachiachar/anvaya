@@ -1,0 +1,43 @@
+// The conversation as it happens, under the microphone: Saathi's words in the serif, the owner's in
+// plain type, along the gold thread. Things Saathi picked up show as small notes; the owner decides
+// on them all at once at the end, never one by one mid-conversation.
+import { useEffect, useRef } from "react";
+import type { Turn } from "../../api";
+import { describe } from "./items";
+import type { Caption } from "./Talk";
+
+const ATTACHMENT = { photo: "Photo", document: "Document" } as const;
+
+export default function Transcript({ turns, caption, live, thinking }: {
+  turns: Turn[]; caption: Caption; live: boolean; thinking: boolean;
+}) {
+  const end = useRef<HTMLDivElement | null>(null);
+  // Braces matter: newer browsers return a Promise from scrollIntoView, and an effect must return
+  // nothing (or a cleanup function).
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [turns.length, caption.heard, caption.said, thinking]);
+
+  if (!turns.length && !live && !thinking) return null;
+  return (
+    <section className="v2-transcript" aria-label="This conversation">
+      <ol className="v2-thread" aria-live="polite">
+        {turns.map((t) => (
+          <li key={t.id} className={`v2-turn ${t.role}`}>
+            {t.attachment && t.attachment.kind !== "voice" && (
+              <span className="v2-attach">{ATTACHMENT[t.attachment.kind]}{t.attachment.name ? ` · ${t.attachment.name}` : ""}</span>
+            )}
+            {t.text && t.text !== "…" && <p>{t.text}</p>}
+            {(t.proposals ?? []).filter((p) => p.status === "pending").map((p) => (
+              <div key={p.id} className="v2-picked"><span className="v2-dot" aria-hidden="true" />For your review · {describe(p).title}</div>
+            ))}
+          </li>
+        ))}
+        {live && caption.heard && <li className="v2-turn owner is-live"><p>{caption.heard}</p></li>}
+        {live && caption.said && <li className="v2-turn assistant is-live"><p>{caption.said}</p></li>}
+        {thinking && <li className="v2-turn assistant is-live"><p>Saathi is thinking…</p></li>}
+      </ol>
+      <div ref={end} className="v2-transcript-end" />
+    </section>
+  );
+}

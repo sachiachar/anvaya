@@ -102,6 +102,12 @@ class Extraction(BaseModel):
     people: list[Person] = []
 
 
+class ConversationSummary(BaseModel):
+    """A few sentences that sum up one conversation, shown to the owner when it ends."""
+
+    summary: str = Field(description="Two or three short sentences, addressed to the owner as 'you'.")
+
+
 # ---- Readiness loop -------------------------------------------------------
 
 

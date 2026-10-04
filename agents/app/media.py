@@ -127,6 +127,15 @@ def delete(owner_id: str, name: str) -> None:
     _local(path).unlink(missing_ok=True)
 
 
+def delete_path(owner_id: str, path: str) -> None:
+    """Delete a file by the path save() returned, only if it is one of this owner's files."""
+    marker = f"/{owner_id}/"
+    name = path.split(marker, 1)[1] if marker in path else ""
+    if not name or ".." in name.split("/"):
+        return
+    delete(owner_id, name)
+
+
 def delete_all(owner_id: str) -> None:
     """Remove every file saved for one owner (resetting a demo copy)."""
     if not owner_id or "/" in owner_id or owner_id.startswith("."):

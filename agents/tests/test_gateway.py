@@ -49,7 +49,7 @@ def test_configured_models_are_allowed_by_the_registry():
         e = core.agent_entry(agent)
         return {e["models"]["primary"], *e["models"]["fallback"]}
 
-    for agent in ("saathi.chat", "capture.extractor", "documents.reader", "readiness.planner", "legal.needs",
+    for agent in ("saathi.chat", "saathi.summary", "capture.extractor", "documents.reader", "readiness.planner", "legal.needs",
                   "activation.checker", "settlement.planner", "handover.assistant"):
         assert {settings.flash_model, settings.pro_model, settings.fallback_model} <= allowed(agent), agent
     assert settings.live_model in allowed("saathi.voice")

@@ -23,8 +23,10 @@ export class LiveCall {
   private stream: MediaStream | null = null;
   private playing = new Set<AudioBufferSourceNode>();
   private nextStart = 0;
+  private levelTimers = new Set<ReturnType<typeof setTimeout>>();
 
-  constructor(private onEvent: (e: CallEvent) => void) {}
+  /** onLevel (optional): how loud each side is, 0 to 1, about ten times a second, for an animation. */
+  constructor(private onEvent: (e: CallEvent) => void, private onLevel?: (who: "you" | "saathi", level: number) => void) {}
 
   async start() {
     this.stream = await navigator.mediaDevices.getUserMedia({
@@ -55,7 +57,10 @@ export class LiveCall {
 
     const source = this.micCtx.createMediaStreamSource(this.stream);
     const recorder = new AudioWorkletNode(this.micCtx, "pcm-recorder");
-    recorder.port.onmessage = (e) => { if (ws.readyState === WebSocket.OPEN) ws.send(e.data); };
+    recorder.port.onmessage = (e) => {
+      if (this.onLevel) this.onLevel("you", loudness(new Int16Array(e.data)));
+      if (ws.readyState === WebSocket.OPEN) ws.send(e.data);
+    };
     source.connect(recorder);
   }
 
@@ -76,6 +81,12 @@ export class LiveCall {
     node.buffer = buffer;
     node.connect(ctx.destination);
     this.nextStart = Math.max(this.nextStart, ctx.currentTime);
+    if (this.onLevel) {  // reported when this piece plays, not when it arrives
+      const level = loudness(pcm);
+      const timer = setTimeout(() => { this.levelTimers.delete(timer); this.onLevel?.("saathi", level); },
+        (this.nextStart - ctx.currentTime) * 1000);
+      this.levelTimers.add(timer);
+    }
     node.start(this.nextStart);
     this.nextStart += buffer.duration;
     this.playing.add(node);
@@ -95,6 +106,8 @@ export class LiveCall {
   private stopPlayback() {
     this.playing.forEach((n) => { try { n.stop(); } catch { /* already stopped */ } });
     this.playing.clear();
+    this.levelTimers.forEach((t) => { clearTimeout(t); });
+    this.levelTimers.clear();
     this.nextStart = 0;
     this.onEvent({ type: "speaking", speaking: false });
   }
@@ -108,4 +121,11 @@ export class LiveCall {
     this.micCtx = null;
     this.speakerCtx = null;
   }
+}
+
+/** Root-mean-square loudness of 16-bit PCM, scaled to 0..1 (speech sits around 0.2 to 0.6). */
+function loudness(pcm: Int16Array): number {
+  let sum = 0;
+  for (let i = 0; i < pcm.length; i++) sum += (pcm[i] / 0x8000) ** 2;
+  return Math.min(1, Math.sqrt(sum / Math.max(1, pcm.length)) * 4);
 }

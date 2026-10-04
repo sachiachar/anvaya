@@ -112,6 +112,8 @@ export type Turn = {
   attachment?: { kind: "voice" | "photo" | "document"; name: string | null } | null;
   language?: string;
   proposals?: Proposal[];
+  /** A live-call exchange whose cards Saathi is still working out (the end-of-call review waits). */
+  saving?: boolean;
 };
 
 export type Task = {
@@ -253,6 +255,12 @@ export const api = {
   tasks: () => request<{ score: number | null; tasks: Task[] }>(o("/tasks")),
   updateTask: (id: string, status: "done" | "dismissed") => request<Task>(`/tasks/${id}`, json({ status })),
   companionAsks: (text: string) => request<Turn>(o("/conversation/prompt"), json({ text })),
+  /** A few sentences that sum up these turns of the conversation (shown, never stored). */
+  summarizeConversation: (turn_ids: string[]) =>
+    request<{ summary: string }>(o("/conversation/summary"), json({ turn_ids })),
+  /** Discard: deletes these turns and every card from them still waiting for Keep. Kept items stay. */
+  forgetConversation: (turn_ids: string[]) =>
+    request<{ deleted_turns: number; deleted_items: number }>(o("/conversation/forget"), json({ turn_ids })),
   legalNeeds: () =>
     request<{ autonomy: Autonomy; needs: { wish_excerpt: string; document_needed: string; reason_plain: string; urgency: string }[] }>(
       o("/legal-needs"), { method: "POST" }),
