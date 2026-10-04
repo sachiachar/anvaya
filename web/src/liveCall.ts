@@ -73,7 +73,6 @@ export class LiveCall {
     const ctx = this.speakerCtx;
     if (!ctx) return;
     const pcm = new Int16Array(data);
-    if (this.onLevel) this.onLevel("saathi", loudness(pcm));
     const buffer = ctx.createBuffer(1, pcm.length, 24000);
     const samples = buffer.getChannelData(0);
     for (let i = 0; i < pcm.length; i++) samples[i] = pcm[i] / 0x8000;
@@ -81,6 +80,10 @@ export class LiveCall {
     node.buffer = buffer;
     node.connect(ctx.destination);
     this.nextStart = Math.max(this.nextStart, ctx.currentTime);
+    if (this.onLevel) {  // reported when this piece plays, not when it arrives
+      const level = loudness(pcm);
+      setTimeout(() => this.onLevel?.("saathi", level), (this.nextStart - ctx.currentTime) * 1000);
+    }
     node.start(this.nextStart);
     this.nextStart += buffer.duration;
     this.playing.add(node);

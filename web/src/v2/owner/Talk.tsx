@@ -55,6 +55,7 @@ export default function Talk() {
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [savedCount, setSavedCount] = useState(0);
   const [callMinutes, setCallMinutes] = useState<number | null>(null);
+  const [reviewEarlier, setReviewEarlier] = useState(false); // items left from before: no summary, no Discard
 
   function refreshAllowance() {
     api.allowance().then((a) => {
@@ -68,10 +69,17 @@ export default function Talk() {
     }).catch(() => { /* the notice is a nicety; never block the conversation */ });
   }
 
-  useEffect(() => {
+  // Until the conversation has loaded, nobody can start one: the review (and Discard) covers only
+  // what's new since then, so without it Discard could reach the whole history.
+  function loadConversation() {
+    setError(null);
     api.conversation()
       .then((r) => { setTurns(r.turns); setBaseline(new Set(r.turns.map((t) => t.id))); })
-      .catch((e) => { setTurns([]); setBaseline(new Set()); setError(friendlyError(e)); });
+      .catch((e) => setError(`${friendlyError(e)} Your conversation hasn't loaded yet.`));
+  }
+
+  useEffect(() => {
+    loadConversation();
     api.owner().then((o) => setName(String(o.name ?? "").split(" ")[0])).catch(() => {});
     // Today's topic: the first open step Saathi can talk about, else the most harmful gap. Both are
     // already worked out; this never starts a new readiness check.
@@ -138,6 +146,7 @@ export default function Talk() {
   }
 
   async function send(message: string | null, file?: Blob, fileName?: string) {
+    if (!baseline) return;
     setError(null);
     setNotice(null);
     setThinking(true);
@@ -157,7 +166,10 @@ export default function Talk() {
   function onCallEvent(e: CallEvent) {
     switch (e.type) {
       case "ready": setCallState("listening"); callStarted.current = Date.now(); break;
-      case "speaking": setCallState((s) => (s === "off" ? s : e.speaking ? "speaking" : "listening")); break;
+      case "speaking":
+        saathiSpeaking.current = e.speaking;
+        setCallState((s) => (s === "off" ? s : e.speaking ? "speaking" : "listening"));
+        break;
       case "heard": setCaption((c) => ({ heard: c.said ? e.text : c.heard + e.text, said: c.said ? "" : c.said })); break;
       case "said": setCaption((c) => ({ ...c, said: c.said + e.text })); break;
       case "turn":
@@ -171,16 +183,18 @@ export default function Talk() {
     }
   }
 
-  /** Moves the rings with whoever is speaking, without re-rendering ten times a second. */
+  /** Moves the rings with whoever is speaking, without re-rendering ten times a second. While Saathi
+   *  speaks, the microphone mostly hears Saathi's own voice back, so its level is ignored. */
+  const saathiSpeaking = useRef(false);
   function onLevel(who: "you" | "saathi", level: number) {
     const el = orb.current;
-    if (!el) return;
+    if (!el || (who === "you" && saathiSpeaking.current)) return;
     el.style.setProperty("--level", (who === "you" && mutedRef.current ? 0 : level).toFixed(2));
     el.dataset.who = who;
   }
 
   async function startCall() {
-    if (call.current) return; // one call at a time
+    if (call.current || !baseline) return; // one call at a time, and only once the conversation has loaded
     setError(null);
     setNotice(null);
     stopSpeaking();
@@ -226,6 +240,7 @@ export default function Talk() {
    *  changing (at most about 12 seconds), then review everything from this conversation. */
   async function afterCall() {
     setCaption({ heard: "", said: "" });
+    if (!baseline) { setPhase("talk"); return; }
     setCallMinutes(Math.max(1, Math.round((Date.now() - callStarted.current) / 60000)));
     setPhase("gathering");
     let latest: Turn[] | null = null;
@@ -239,7 +254,7 @@ export default function Talk() {
       } catch { steady += 1; }
     }
     if (latest) setTurns(latest);
-    const ids = (latest ?? []).filter((t) => !baseline?.has(t.id)).map((t) => t.id);
+    const ids = (latest ?? []).filter((t) => !baseline.has(t.id)).map((t) => t.id);
     if (!ids.length) {
       setPhase("talk");
       setNotice("Saathi didn't catch anything in that call. Try again whenever you're ready.");
@@ -250,6 +265,7 @@ export default function Talk() {
 
   // ---- Review: save the rest, or discard ------------------------------------------------------------
   function openReview(ids: string[], summarize: boolean) {
+    setReviewEarlier(!summarize);
     setReviewTurns(ids);
     setReviewError(null);
     setSummary(null);
@@ -322,7 +338,7 @@ export default function Talk() {
 
   /** "Talk about this": Saathi asks the question first, then the call carries on from it. */
   async function talkAbout(question: string) {
-    if (asking || call.current) return;
+    if (asking || call.current || !baseline) return;
     setError(null);
     setAsking(true);
     try {
@@ -355,11 +371,11 @@ export default function Talk() {
     : topic ? "Shall we talk about this today?" : "Whenever you're ready, just talk. Saathi is listening.";
 
   if (phase === "review") {
-    const meta = callMinutes ? `Your call · ${callMinutes} min` : "Your conversation";
+    const meta = reviewEarlier ? "From earlier" : callMinutes ? `Your call · ${callMinutes} min` : "Your conversation";
     return (
       <div className="v2-talk">
         <Review items={reviewItems} summary={summary} summaryState={summaryState} meta={meta}
-          busy={reviewBusy} error={reviewError} onSave={save} onLater={later} onDiscard={discard} />
+          busy={reviewBusy} error={reviewError} onSave={save} onLater={later} onDiscard={reviewEarlier ? null : discard} />
         <details className="v2-earlier">
           <summary><b>The whole conversation</b><span>What you and Saathi said</span></summary>
           <Transcript turns={all.filter((t) => reviewTurns.includes(t.id))} caption={{ heard: "", said: "" }} live={false} thinking={false} />
@@ -395,7 +411,7 @@ export default function Talk() {
         <div className="v2-topic">
           <p className="v2-eyebrow">Today, perhaps</p>
           <p className="v2-topic-q">{topic}</p>
-          <button className="v2-link" disabled={asking} onClick={() => talkAbout(topic)}>
+          <button className="v2-link" disabled={!baseline || asking} onClick={() => talkAbout(topic)}>
             {asking ? "Saathi is getting ready…" : "Talk about this"}
           </button>
         </div>
@@ -406,7 +422,7 @@ export default function Talk() {
           <span className="v2-ring r1" aria-hidden="true" />
           <span className="v2-ring r2" aria-hidden="true" />
           <span className="v2-ring r3" aria-hidden="true" />
-          <button className="v2-mic" onClick={startCall} disabled={live || asking || phase !== "talk"}
+          <button className="v2-mic" onClick={startCall} disabled={!baseline || live || asking || phase !== "talk"}
             aria-label={live ? "Call in progress" : "Talk to Saathi"}>
             <Mic />
             {!live && phase === "talk" && <span>Talk to Saathi</span>}
@@ -422,8 +438,9 @@ export default function Talk() {
 
       {notice && !live && <p className="v2-notice-card" role="status">{notice}</p>}
       {error && <p className="v2-error" role="alert">{error}</p>}
+      {!baseline && error && <button className="v2-btn quiet" onClick={loadConversation}>Try again</button>}
 
-      {!live && phase === "talk" && session.length === 0 && (
+      {!live && phase === "talk" && baseline && session.length === 0 && (
         <div className="v2-alts">
           <button className="v2-alt" onClick={() => input.current?.focus()}>Type instead</button>
           <label className="v2-alt">
@@ -460,7 +477,7 @@ export default function Talk() {
 
       {allowance && <AllowanceNotice allowance={allowance} speak={speak} />}
 
-      {!live && phase === "talk" && (
+      {!live && phase === "talk" && baseline && (
         <div className="v2-dock">
           {session.length > 0 && (
             <div className="v2-review-bar">

@@ -136,7 +136,9 @@ def _attachment_kind(mime: str) -> str:
 
 
 def _expand(turn: dict) -> dict:
-    """Replace proposal ids with the items and their current status (discarded ones drop out)."""
+    """Replace proposal ids with the items and their current status (discarded ones drop out).
+    The path of a file the owner shared stays on the server (it's only for Discard)."""
+    turn = {k: v for k, v in turn.items() if k != "media"}
     ids = turn.get("proposals")
     if not ids:
         return turn
@@ -165,7 +167,7 @@ async def converse(owner_id: str, text: str | None = Form(None), file: UploadFil
     if not (text and text.strip()) and not file:
         raise HTTPException(400, "say something, type something, or attach a file")
 
-    upload, attachment, source = None, None, {}
+    upload, attachment, source, path = None, None, {}, None
     if file:
         data = await file.read()
         mime = (file.content_type or "application/octet-stream").split(";")[0]
@@ -185,13 +187,13 @@ async def converse(owner_id: str, text: str | None = Form(None), file: UploadFil
     people = [d for p in result.people if (d := proposals.save_person(owner_id, p.model_dump()))]
     owner_turn = store.put("turns", {"id": new_id("turn"), "owner_id": owner_id, "at": now, "role": "owner",
                                      "text": (text or "").strip() or result.heard, "heard": result.heard,
-                                     "attachment": attachment})
+                                     "attachment": attachment, **({"media": path} if path else {})})
     ai_turn = store.put("turns", {"id": new_id("turn"), "owner_id": owner_id, "at": now + 0.001,
                                   "role": "assistant", "text": result.reply, "language": result.reply_language,
                                   "proposals": {"moments": [m["id"] for m in moments],
                                                 "inventory": [i["id"] for i in inventory],
                                                 "people": [p["id"] for p in people]}})
-    return {"autonomy": ACT, "owner_turn": owner_turn, "assistant_turn": _expand(ai_turn)}
+    return {"autonomy": ACT, "owner_turn": _expand(owner_turn), "assistant_turn": _expand(ai_turn)}
 
 
 @app.websocket("/api/owners/{owner_id}/live")
@@ -220,6 +222,11 @@ async def live_call(ws: WebSocket, owner_id: str, token: str | None = None, acti
     await live.call(ws, {**owner, "family": knowledge.family(owner_id)}, _expand)  # family from kept people
 
 
+def _speech_name(text: str) -> str:
+    """Where a spoken reply is cached: the same words in the same voice share one file."""
+    return f"speech/{hashlib.sha256(f'{settings.tts_voice}:{text}'.encode()).hexdigest()[:32]}.wav"
+
+
 class Speech(BaseModel):
     turn_id: str
 
@@ -235,8 +242,7 @@ async def speech_audio(body: Speech) -> Response:
     turn = demo.mine("turns", body.turn_id)
     if not turn or turn.get("role") != "assistant" or not (turn.get("text") or "").strip():
         raise HTTPException(404, "reply not found")
-    key = hashlib.sha256(f"{settings.tts_voice}:{turn['text']}".encode()).hexdigest()[:32]
-    name = f"speech/{key}.wav"
+    name = _speech_name(turn["text"])
     if cached := media.load(turn["owner_id"], name):
         return Response(content=cached, media_type="audio/wav")
     try:
@@ -490,7 +496,7 @@ def forget_conversation(owner_id: str, body: TurnIds) -> dict:
     (DELETE /kept). Saathi no longer carries on from what was deleted."""
     owner_or_404(owner_id)
     turns = _my_turns(owner_id, body.turn_ids)
-    items = 0
+    items, files = 0, {t["media"] for t in turns if t.get("media")}
     for turn in turns:
         for collection, ids in (turn.get("proposals") or {}).items():
             if collection not in ("moments", "inventory", "people"):
@@ -498,9 +504,21 @@ def forget_conversation(owner_id: str, body: TurnIds) -> dict:
             for doc_id in ids:
                 doc = demo.mine(collection, doc_id)
                 if doc and doc.get("status") == "pending":
+                    files |= {doc[k] for k in ("recording", "document") if isinstance(doc.get(k), str)}
                     store.delete(collection, doc_id)
                     items += 1
         store.delete("turns", turn["id"])
+    # The shared photos and documents, and Saathi's cached spoken replies, go too, unless
+    # something still uses them: a kept item, another waiting card, or a reply with the same words.
+    in_use = json.dumps([store.list(c, owner_id=owner_id) for c in ("moments", "inventory", "turns")]
+                        + [knowledge.items(owner_id, c) for c in ("moments", "inventory")], ensure_ascii=False, default=str)
+    for path in files:
+        if json.dumps(path)[1:-1] not in in_use:
+            media.delete_path(owner_id, path)
+    spoken = {t["text"] for t in store.list("turns", owner_id=owner_id) if t.get("role") == "assistant"}
+    for turn in turns:
+        if turn.get("role") == "assistant" and turn.get("text") and turn["text"] not in spoken:
+            media.delete(owner_id, _speech_name(turn["text"]))
     return {"deleted_turns": len(turns), "deleted_items": items}
 
 

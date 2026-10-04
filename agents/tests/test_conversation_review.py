@@ -87,3 +87,26 @@ def test_summary_is_from_the_registered_agent_and_masks_numbers_in_code(client, 
     assert "My LIC policy" in seen["prompt"] and "Who is the nominee?" in seen["prompt"]
     assert not store.list("summaries")  # shown once, never stored
     assert knowledge.mask(summary) == summary
+
+
+def test_discard_deletes_the_conversations_files_unless_something_kept_uses_them(client):
+    from app import media
+    shared = media.save(OWNER, "doc_sim_shared.jpg", b"photo of a policy", "image/jpeg")
+    alone = media.save(OWNER, "doc_sim_alone.jpg", b"photo nobody kept", "image/jpeg")
+    kept = proposals.save_inventory(OWNER, {"category": "insurance", "institution": "LIC", "product": "Jeevan Anand",
+                                            "account_hint": "••4492", "nominee_or_beneficiary": "Ajay",
+                                            "approximate_value": None, "missing_fields": []}, {"document": shared})
+    proposals.approve("inventory", kept)
+    waiting = proposals.save_moment(OWNER, STORY, {"document": alone})
+    owner_turn, ai_turn = _exchange("Here are two photos.", "Thank you, I can see the policy.", [waiting["id"]])
+    store.update("turns", owner_turn["id"], {"media": shared})
+    reply = main._speech_name(ai_turn["text"])
+    media.save(OWNER, reply, b"RIFF", "audio/wav")
+
+    turns = client.get(f"/api/owners/{OWNER}/conversation").json()["turns"]
+    assert all("media" not in t for t in turns)  # the stored path never reaches the app
+
+    client.post(f"/api/owners/{OWNER}/conversation/forget", json={"turn_ids": [owner_turn["id"], ai_turn["id"]]})
+    assert media.load(OWNER, "doc_sim_alone.jpg") is None  # only the discarded card used it
+    assert media.load(OWNER, "doc_sim_shared.jpg") == b"photo of a policy"  # a kept item still uses it
+    assert media.load(OWNER, reply) is None  # Saathi's spoken reply from the conversation

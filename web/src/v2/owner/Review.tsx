@@ -12,7 +12,7 @@ export type ReviewChoice = { p: Proposal; save: boolean; replace: boolean };
 export default function Review({ items, summary, summaryState, meta, busy, error, onSave, onLater, onDiscard }: {
   items: Proposal[]; summary: string | null; summaryState: "loading" | "ready" | "failed"; meta: string;
   busy: boolean; error: string | null;
-  onSave: (choices: ReviewChoice[]) => void; onLater: () => void; onDiscard: () => void;
+  onSave: (choices: ReviewChoice[]) => void; onLater: () => void; onDiscard: (() => void) | null;
 }) {
   const [removed, setRemoved] = useState<ReadonlySet<string>>(new Set());
   const [asNew, setAsNew] = useState<ReadonlySet<string>>(new Set()); // look-alikes saved as new, not as an update
@@ -30,7 +30,7 @@ export default function Review({ items, summary, summaryState, meta, busy, error
     <section className="v2-review" aria-labelledby="review-title">
       <div className="v2-review-head">
         <p className="v2-eyebrow">{meta}</p>
-        <h2 id="review-title">Here's what you told Saathi</h2>
+        <h2 id="review-title">{onDiscard ? "Here's what you told Saathi" : "Waiting from earlier"}</h2>
         {summaryState === "loading" && <p className="v2-summary is-loading">Saathi is summing up the conversation…</p>}
         {summaryState === "ready" && summary && <p className="v2-summary">{summary}</p>}
       </div>
@@ -84,7 +84,7 @@ export default function Review({ items, summary, summaryState, meta, busy, error
 
       {error && <p className="v2-error" role="alert">{error}</p>}
 
-      {confirmDiscard ? (
+      {confirmDiscard && onDiscard ? (
         <div className="v2-confirm" role="alert">
           <p><strong>Delete this conversation?</strong> What you said, and everything above, is deleted. Saathi won't carry on from it. Things you kept before stay.</p>
           <div className="v2-row">
@@ -100,7 +100,7 @@ export default function Review({ items, summary, summaryState, meta, busy, error
           </button>
           <div className="v2-row v2-review-minor">
             {items.length > 0 && <button className="v2-link" disabled={busy} onClick={onLater}>Decide later</button>}
-            <button className="v2-link danger" disabled={busy} onClick={() => setConfirmDiscard(true)}>Discard this conversation</button>
+            {onDiscard && <button className="v2-link danger" disabled={busy} onClick={() => setConfirmDiscard(true)}>Discard this conversation</button>}
           </div>
         </div>
       )}
