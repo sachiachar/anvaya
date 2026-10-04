@@ -189,7 +189,7 @@ def _history_and_known(owner_id: str) -> tuple[list[dict], dict]:
 
 
 def _save_turn(owner_id: str, text: str | None, result, attachment: dict | None, path: str | None, source: dict) -> dict:
-    with proposals.saving:  # cards from a call exchange may be saving at the same moment
+    with proposals.saving(owner_id):  # cards from a call exchange may be saving at the same moment
         store.update("owners", owner_id, {"language": result.owner_language})
 
         now = time.time()
@@ -231,7 +231,7 @@ async def live_call(ws: WebSocket, owner_id: str, token: str | None = None, acti
         await ws.close(code=4404)
         return
     family = await asyncio.to_thread(knowledge.family, owner_id)
-    await live.call(ws, {**owner, "family": family}, _expand)  # family from kept people  # family from kept people
+    await live.call(ws, {**owner, "family": family}, _expand)  # family from kept people
 
 
 def _speech_name(text: str) -> str:

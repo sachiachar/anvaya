@@ -83,7 +83,7 @@ flowchart LR
 | `gemini.py` | Shared Gemini client with retries and backoff; `generate_json` with Pydantic schemas, falling back to the agent's own fallback model from the registry (an agent without one reports the model as busy) |
 | `web_search.py` | Web search for the fraud researcher with Exa (exa.ai): our code searches, Gemini answers only from the returned pages and must quote them word for word, and a source counts only if its quote is really in the page. Only agents the registry allows `web_search` may search; queries carry fraud research only, never owner data |
 | `schemas.py` | Pydantic models used as Gemini `response_schema` and as the API contract |
-| `store.py` | Document store: `memory` (tests), `file` (local demo, survives restarts), `firestore` (Google Cloud). Its calls block, so the live call, the Talk route and sign-in run them in worker threads (`asyncio.to_thread`), and saving cards holds `proposals.saving` so two saves at once can't make the same card |
+| `store.py` | Document store: `memory` (tests), `file` (local demo, survives restarts), `firestore` (Google Cloud). Its calls block, so the live call, the Talk route and sign-in run them in worker threads (`asyncio.to_thread`), and saving cards holds the owner's `proposals.saving` lock so two saves at once can't make the same card |
 | `media.py`, `config.py` | Original media (Cloud Storage or local folder); settings from the environment |
 
 ### 3.3 Models (all configurable in `.env`)

@@ -19,9 +19,16 @@ from typing import Any
 from . import gaps, knowledge
 from .store import new_id, store
 
-# Held while a Talk turn or a call exchange saves its cards. Saving runs in worker threads, off the
-# event loop, and without this two exchanges saved at once could each make the same card.
-saving = threading.Lock()
+_saving_locks: dict[str, threading.Lock] = {}
+_locks_guard = threading.Lock()
+
+
+def saving(owner_id: str) -> threading.Lock:
+    """Held while a Talk turn or a call exchange saves the owner's cards. Saving runs in worker threads,
+    off the event loop, and without this two exchanges saved at once could each make the same card.
+    One lock per owner, so one owner's save never waits for another's."""
+    with _locks_guard:
+        return _saving_locks.setdefault(owner_id, threading.Lock())
 
 
 def _norm(text: str | None) -> str:

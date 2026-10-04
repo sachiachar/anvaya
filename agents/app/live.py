@@ -208,7 +208,7 @@ def _start_exchange(owner_id: str, heard: str, said: str) -> tuple[dict, dict]:
 def _finish_exchange(owner_id: str, owner_turn: dict, ai_turn: dict, moments, inventory, people,
                      expand) -> tuple[dict, dict] | None:
     """Add the cards and clear the "saving" mark. None if the owner discarded the exchange."""
-    with proposals.saving:
+    with proposals.saving(owner_id):
         if not store.get("turns", ai_turn["id"]) or not store.get("turns", owner_turn["id"]):
             return None  # discarded while Saathi was still reading it
         source = {"source": "live call"}
