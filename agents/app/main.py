@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from google.auth.exceptions import DefaultCredentialsError
 from google.genai import errors as genai_errors
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from . import (auth, demo, escrow, fraud_guides, gaps, knowledge, knowledge_map, live, loops, media, proposals,
                release, speech, tasks)
@@ -459,6 +459,49 @@ def companion_asks(owner_id: str, body: Prompt) -> dict:
     owner_or_404(owner_id)
     return store.put("turns", {"id": new_id("turn"), "owner_id": owner_id, "at": time.time(),
                                "role": "assistant", "text": body.text, "language": None})
+
+
+class TurnIds(BaseModel):
+    turn_ids: list[str] = Field(min_length=1, max_length=400)
+
+
+def _my_turns(owner_id: str, turn_ids: list[str]) -> list[dict]:
+    """The given turns, only those in the caller's own conversation, oldest first."""
+    found = (demo.mine("turns", tid) for tid in dict.fromkeys(turn_ids))
+    return sorted((t for t in found if t and t["owner_id"] == owner_id), key=lambda t: t["at"])
+
+
+@api.post("/owners/{owner_id}/conversation/summary", dependencies=[Depends(demo.only("owner"))])
+async def summarize_conversation(owner_id: str, body: TurnIds) -> dict:
+    """A few sentences that sum up a conversation that just ended. Shown, never stored or logged;
+    numbers are masked in code, whatever the model wrote."""
+    owner = owner_or_404(owner_id)
+    turns = _my_turns(owner_id, body.turn_ids)
+    if not turns:
+        raise HTTPException(404, "There's nothing in this conversation to sum up.")
+    result = await loops.summarize_conversation(owner, turns)
+    return {"autonomy": "assist", "summary": knowledge.mask(result.summary.strip())}
+
+
+@api.post("/owners/{owner_id}/conversation/forget", dependencies=[Depends(demo.only("owner"))])
+def forget_conversation(owner_id: str, body: TurnIds) -> dict:
+    """The owner discards a conversation: its turns are deleted, with every card from it still
+    waiting for Keep. Anything already kept stays: removing that is a separate, deliberate step
+    (DELETE /kept). Saathi no longer carries on from what was deleted."""
+    owner_or_404(owner_id)
+    turns = _my_turns(owner_id, body.turn_ids)
+    items = 0
+    for turn in turns:
+        for collection, ids in (turn.get("proposals") or {}).items():
+            if collection not in ("moments", "inventory", "people"):
+                continue
+            for doc_id in ids:
+                doc = demo.mine(collection, doc_id)
+                if doc and doc.get("status") == "pending":
+                    store.delete(collection, doc_id)
+                    items += 1
+        store.delete("turns", turn["id"])
+    return {"deleted_turns": len(turns), "deleted_items": items}
 
 
 @api.post("/owners/{owner_id}/legal-needs", dependencies=[Depends(demo.only("owner"))])

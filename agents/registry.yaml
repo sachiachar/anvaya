@@ -63,6 +63,16 @@ agents:
     budget_class: owner
     safety_critical: false
 
+  - id: saathi.summary
+    role: Sums up one conversation in a few sentences when it ends
+    autonomy: assist
+    models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
+    tools: []
+    limits: {max_input_tokens: 12000, max_output_tokens: 600, max_retries: 2}
+    budget_class: owner
+    safety_critical: false
+    optional: true        # paused first by the kill switch
+
   - id: documents.reader
     role: Reads a policy or statement photo into an account card
     autonomy: propose

@@ -62,6 +62,7 @@ Each agent is declared once in a **registry** (`agents/registry.yaml`, reviewed 
 | `saathi.chat` | Typed or photo conversation with the owner | Act within limits | flash-lite | none | owner |
 | `saathi.voice` | Live voice conversation | Act within limits | live model | none | owner (minutes) |
 | `saathi.speech` | Speaks Saathi's own replies aloud | Act within limits | TTS models | none | owner |
+| `saathi.summary` | Sums up one conversation in a few sentences when it ends (shown, never stored) | Assist | flash-lite | none | owner |
 | `capture.extractor` | Turns each exchange into suggestion cards | Act within limits | flash-lite | none | owner |
 | `documents.reader` | Reads a policy or statement photo into an account card | Act within limits | flash-lite | none | owner |
 | `readiness.planner` | Next steps (later: gap questions from the knowledge graph, PR-7.10) | Act within limits | flash-lite | none | owner |
