@@ -3,7 +3,7 @@
 import { json, request } from "../api";
 
 export type Role = "viewer" | "budget_approver" | "risk_reviewer" | "platform_admin";
-export type Permission = "approve_budget" | "review_guardian" | "review_fraud" | "manage_demos" | "kill_switch";
+export type Permission = "approve_budget" | "review_guardian" | "review_fraud" | "manage_demos" | "kill_switch" | "manage_privacy";
 export type KillSwitchState = "off" | "optional_paused" | "all_paused";
 
 export type Me = { email: string | null; key: string; role: Role; permissions: Permission[] };
@@ -100,7 +100,10 @@ export type Run = { id: string; kind: "dream" | "research"; guide_key: string;
   calls?: Record<string, number>; limits?: Record<string, number | null>;
   stop_requested?: boolean; stopped_reason?: string | null };
 
-export type Fraud = { scenarios: Scenario[]; drafts: Draft[]; runs: Run[]; guides: Guide[];
+/** How many owners must share a gap before it's a cue for dreaming: a platform admin's setting, never below the floor. */
+export type CuePrivacy = { min_owners: number; floor: number; ceiling: number; changed_at: number | null; reason: string | null };
+
+export type Fraud = { scenarios: Scenario[]; drafts: Draft[]; runs: Run[]; guides: Guide[]; privacy?: CuePrivacy;
   coverage: { covered: number; partly: number; gaps: number; faded: number } };
 
 export type Guide = { id: string; title: string; version: number; trust_tier: string; sources: number;
@@ -127,6 +130,8 @@ export const platform = {
   decideGuardian: (id: string, decision: "confirm" | "reverse", reason: string) =>
     request<GuardianEvent>(p(`/guardian/${id}/decision`), json({ decision, reason })),
   fraud: () => request<Fraud>(p("/fraud")),
+  setCueMinOwners: (min_owners: number, reason: string) =>
+    request<CuePrivacy>(p("/privacy/cue-min-owners"), json({ min_owners, reason })),
   decideScenario: (id: string, decision: "approve" | "discard", reason: string) =>
     request<Scenario>(p(`/fraud/scenarios/${id}/decision`), json({ decision, reason })),
   decideDraft: (id: string, decision: "approve" | "discard", reason: string) =>

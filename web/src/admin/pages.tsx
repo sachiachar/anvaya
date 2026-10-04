@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   fmt, platform, type Agent, type AuditEntry, type Blocked, type BudgetRequest, type DemoCopy, type GuardianEvent,
-  type Draft, type Guide, type KillSwitchState, type Me, type Permission, type Run, type RunStage, type Scenario,
+  type CuePrivacy, type Draft, type Guide, type KillSwitchState, type Me, type Permission, type Run, type RunStage, type Scenario,
   type Source,
   type Spend, type Use,
 } from "./api";
@@ -513,6 +513,29 @@ function SignPreview({ sign }: { sign: { look_for: string; genuine: string } }) 
   );
 }
 
+/** The minimum number of owners a common gap needs before dreaming may start from it. */
+function CuePrivacySection({ privacy, canChange, onChange }: { privacy: CuePrivacy; canChange: boolean; onChange: () => void }) {
+  const [value, setValue] = useState(privacy.min_owners);
+  return (
+    <Section title="Privacy for common gaps">
+      <p>Dreaming may start from a gap only when at least <strong>{privacy.min_owners} owners</strong> share it; smaller counts are dropped, and real owners are counted in steps of that size, never one by one.</p>
+      {privacy.changed_at && <p className="pa-muted">Last changed {fmt.when(privacy.changed_at)}: {privacy.reason}</p>}
+      {canChange ? (
+        <div className="pa-row">
+          <label>
+            <span className="pa-muted">Minimum owners ({privacy.floor} to {privacy.ceiling})</span>
+            <input type="number" min={privacy.floor} max={privacy.ceiling} value={value}
+              onChange={(e) => setValue(Number(e.target.value))} />
+          </label>
+          <DecisionForm actions={[{ value: "set", label: "Save" }]}
+            onDecide={(_, reason) => platform.setCueMinOwners(value, reason).then(onChange)} />
+        </div>
+      ) : <p className="pa-muted">Only a platform admin can change this.</p>}
+      <p className="pa-muted">It can't go below {privacy.floor}: fewer owners could point at one person.</p>
+    </Section>
+  );
+}
+
 export function FraudPage({ me }: { me: Me }) {
   const load = useCallback(() => platform.fraud(), []);
   const { data, error, reload } = useLoad(load);
@@ -540,6 +563,7 @@ export function FraudPage({ me }: { me: Me }) {
         <div className="pa-kpi"><span>Faded</span><strong>{data.coverage.faded}</strong><em>No source after 3 runs</em></div>
       </div>
       {live && <LiveRun run={live} reviewer={reviewer} onStop={() => start(platform.stopRun(live.id))} />}
+      {data.privacy && <CuePrivacySection privacy={data.privacy} canChange={can(me, "manage_privacy")} onChange={reload} />}
       <Section title="Fraud reference guides">
         {note && <p className="pa-note" role="status">{note}</p>}
         {data.guides.length === 0 ? <Empty>No guides yet.</Empty> : <table>

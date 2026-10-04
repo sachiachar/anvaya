@@ -20,15 +20,16 @@ CLEARED = ("usage_days", "gateway_blocked", "budget_requests", "guardian_events"
 
 
 def clear_samples() -> None:
-    """Remove every seeded example. Never touches real data or the kill switch."""
+    """Remove every seeded example. Never touches real data or the settings people chose."""
     for collection in CLEARED:
         for doc in store.list(collection, seeded=True):
             store.delete(collection, doc["id"])
     current = platform_settings()
-    store.put("platform_settings", {
-        "id": "settings", "data_version": DATA_VERSION,
-        "kill_switch": current.get("kill_switch", "off"), "kill_switch_reason": current.get("kill_switch_reason"),
-    })
+    # Keep every setting people chose (the kill switch, privacy settings...); drop only the samples.
+    kept = {k: v for k, v in current.items() if k not in ("quota", "seeded_at")}
+    store.put("platform_settings", {**kept, "id": "settings", "data_version": DATA_VERSION,
+                                    "kill_switch": current.get("kill_switch", "off"),
+                                    "kill_switch_reason": current.get("kill_switch_reason")})
 
 
 def ensure_current() -> None:
