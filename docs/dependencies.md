@@ -41,6 +41,8 @@ Everything Anvaya is built on, with each item's version, licence and purpose. Ve
 
 **Held back by an upstream limit.** These indirect packages aren't at their latest release, because `google-adk` 2.11.0 (its latest release) caps them. They move when ADK raises its limits, and Dependabot opens that pull request.
 
+Dependabot skips FastAPI 0.142 and later (`ignore` in `.github/dependabot.yml`), because otherwise its weekly update fails on this conflict. When an ADK update lifts the OpenTelemetry cap, a test (`test_dependabot_ignores_only_what_is_still_held_back`) fails: remove the ignore rule in that pull request, so FastAPI updates again.
+
 | Package | Locked | Latest | Held back by |
 | --- | --- | --- | --- |
 | opentelemetry-api, opentelemetry-sdk | 1.42.1 | 1.45.0 | `google-adk` requires 1.42.1 or lower |
