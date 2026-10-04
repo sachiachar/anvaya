@@ -13,10 +13,22 @@ Cards are drafts in Firestore. Keeping one commits it to the owner's kept-knowle
 from __future__ import annotations
 
 import re
+import threading
 from typing import Any
 
 from . import gaps, knowledge
 from .store import new_id, store
+
+_saving_locks: dict[str, threading.Lock] = {}
+_locks_guard = threading.Lock()
+
+
+def saving(owner_id: str) -> threading.Lock:
+    """Held while a Talk turn or a call exchange saves the owner's cards. Saving runs in worker threads,
+    off the event loop, and without this two exchanges saved at once could each make the same card.
+    One lock per owner, so one owner's save never waits for another's."""
+    with _locks_guard:
+        return _saving_locks.setdefault(owner_id, threading.Lock())
 
 
 def _norm(text: str | None) -> str:

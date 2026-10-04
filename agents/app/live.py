@@ -56,10 +56,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
                 prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=settings.tts_voice)
             )
         ),
-        system_instruction=loops.live_instructions(
-            owner, proposals.known(owner["id"]),
-            sorted(store.list("turns", owner_id=owner["id"]), key=lambda t: t["at"]),
-        ),
+        system_instruction=await asyncio.to_thread(_instructions, owner),
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
     )
@@ -112,6 +109,11 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
             await ws.close()
         except Exception:
             pass
+
+
+def _instructions(owner: dict) -> str:
+    return loops.live_instructions(owner, proposals.known(owner["id"]),
+                                   sorted(store.list("turns", owner_id=owner["id"]), key=lambda t: t["at"]))
 
 
 async def _from_browser(ws: WebSocket, session) -> None:
@@ -171,8 +173,28 @@ async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expa
     """Save one exchange of a call. Its two turns are stored straight away, marked "saving", so the
     end-of-call review knows more is coming; the cards are added once the extractor has read the
     exchange, and then the mark is cleared. If the owner discarded the exchange meanwhile, no cards
-    are made for it."""
+    are made for it. The store calls run in a worker thread, so the call's audio never waits on them."""
     owner_id = owner["id"]
+    owner_turn, ai_turn = await asyncio.to_thread(_start_exchange, owner_id, heard, said)
+    try:
+        known = await asyncio.to_thread(proposals.known, owner_id)
+        found = await loops.extract_from_exchange(owner, heard, said, known)
+        moments, inventory, people = found.moments, found.inventory, found.people
+    except Exception:
+        log.exception("extraction failed; saving the exchange without proposals")
+        moments, inventory, people = [], [], []
+
+    turns = await asyncio.to_thread(_finish_exchange, owner_id, owner_turn, ai_turn, moments, inventory, people, expand)
+    if turns is None:
+        return
+    owner_turn, ai_turn = turns
+    try:
+        await ws.send_json({"type": "turn", "owner_turn": owner_turn, "assistant_turn": ai_turn})
+    except Exception:
+        pass  # the call may have ended; the turn is saved and shows on reload
+
+
+def _start_exchange(owner_id: str, heard: str, said: str) -> tuple[dict, dict]:
     now = time.time()
     owner_turn = store.put("turns", {"id": new_id("turn"), "owner_id": owner_id, "at": now, "role": "owner",
                                      "text": heard or "…", "heard": heard, "saving": True,
@@ -180,39 +202,36 @@ async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expa
     ai_turn = store.put("turns", {"id": new_id("turn"), "owner_id": owner_id, "at": now + 0.001,
                                   "role": "assistant", "text": said, "language": None, "saving": True,
                                   "proposals": {"moments": [], "inventory": [], "people": []}})
-    try:
-        found = await loops.extract_from_exchange(owner, heard, said, proposals.known(owner_id))
-        moments, inventory, people = found.moments, found.inventory, found.people
-    except Exception:
-        log.exception("extraction failed; saving the exchange without proposals")
-        moments, inventory, people = [], [], []
+    return owner_turn, ai_turn
 
-    if not store.get("turns", ai_turn["id"]) or not store.get("turns", owner_turn["id"]):
-        return  # discarded while Saathi was still reading it
-    source = {"source": "live call"}
-    moment_docs = [d for m in moments if (d := proposals.save_moment(owner_id, m.model_dump(), source))]
-    item_docs = [proposals.save_inventory(owner_id, i.model_dump(), source) for i in inventory]
-    people_docs = [d for p in people if (d := proposals.save_person(owner_id, p.model_dump()))]
-    try:
-        owner_turn = store.update("turns", owner_turn["id"], {"saving": False})
-        ai_turn = store.update("turns", ai_turn["id"], {"saving": False,
-                                                        "proposals": {"moments": [m["id"] for m in moment_docs],
-                                                                      "inventory": [i["id"] for i in item_docs],
-                                                                      "people": [p["id"] for p in people_docs]}})
+
+def _finish_exchange(owner_id: str, owner_turn: dict, ai_turn: dict, moments, inventory, people,
+                     expand) -> tuple[dict, dict] | None:
+    """Add the cards and clear the "saving" mark. None if the owner discarded the exchange."""
+    with proposals.saving(owner_id):
         if not store.get("turns", ai_turn["id"]) or not store.get("turns", owner_turn["id"]):
-            raise LookupError("discarded")
-    except Exception:
-        # Discarded just now, between the check above and here: take back the new waiting cards,
-        # unless another turn still mentions them.
-        mentioned = {i for t in store.list("turns", owner_id=owner_id)
-                     for ids in (t.get("proposals") or {}).values() for i in ids}
-        for collection, docs in (("moments", moment_docs), ("inventory", item_docs), ("people", people_docs)):
-            for doc in docs:
-                current = store.get(collection, doc["id"])
-                if current and current.get("status") == "pending" and doc["id"] not in mentioned:
-                    store.delete(collection, doc["id"])
-        return
-    try:
-        await ws.send_json({"type": "turn", "owner_turn": owner_turn, "assistant_turn": expand(ai_turn)})
-    except Exception:
-        pass  # the call may have ended; the turn is saved and shows on reload
+            return None  # discarded while Saathi was still reading it
+        source = {"source": "live call"}
+        moment_docs = [d for m in moments if (d := proposals.save_moment(owner_id, m.model_dump(), source))]
+        item_docs = [proposals.save_inventory(owner_id, i.model_dump(), source) for i in inventory]
+        people_docs = [d for p in people if (d := proposals.save_person(owner_id, p.model_dump()))]
+        try:
+            owner_turn = store.update("turns", owner_turn["id"], {"saving": False})
+            ai_turn = store.update("turns", ai_turn["id"], {"saving": False,
+                                                            "proposals": {"moments": [m["id"] for m in moment_docs],
+                                                                          "inventory": [i["id"] for i in item_docs],
+                                                                          "people": [p["id"] for p in people_docs]}})
+            if not store.get("turns", ai_turn["id"]) or not store.get("turns", owner_turn["id"]):
+                raise LookupError("discarded")
+        except Exception:
+            # Discarded just now, between the check above and here: take back the new waiting cards,
+            # unless another turn still mentions them.
+            mentioned = {i for t in store.list("turns", owner_id=owner_id)
+                         for ids in (t.get("proposals") or {}).values() for i in ids}
+            for collection, docs in (("moments", moment_docs), ("inventory", item_docs), ("people", people_docs)):
+                for doc in docs:
+                    current = store.get(collection, doc["id"])
+                    if current and current.get("status") == "pending" and doc["id"] not in mentioned:
+                        store.delete(collection, doc["id"])
+            return None
+        return owner_turn, expand(ai_turn)

@@ -19,6 +19,7 @@
 **Talking to Saathi (owner)**
 - Spoken replies read out only what Saathi actually said, checked on the server. Playing a reply again, or a new reply with the same words, reuses the saved audio.
 - Spoken replies are limited to 1,000 characters.
+- Live calls keep flowing while Saathi saves what was said. Requests answer faster, because sign-in no longer waits on Google each time, and the server starts up faster.
 - A gentle notice when the owner is close to, or has reached, today's allowance. Near the limit for spoken replies, replies stop being read aloud automatically, and the owner can turn it back on.
 
 **Keeping what matters**

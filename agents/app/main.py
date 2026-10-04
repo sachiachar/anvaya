@@ -6,6 +6,7 @@ Autonomy level of each action is returned as `autonomy` so the UI can show it.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import time
@@ -162,8 +163,9 @@ def get_conversation(owner_id: str) -> dict:
 @api.post("/owners/{owner_id}/conversation", dependencies=[Depends(demo.only("owner"))])
 async def converse(owner_id: str, text: str | None = Form(None), file: UploadFile | None = File(None)) -> dict:
     """One turn: the owner talks, types, or shares a photo or document. The AI replies,
-    and anything worth keeping comes back as proposals the owner can keep or discard."""
-    owner = owner_or_404(owner_id)
+    and anything worth keeping comes back as proposals the owner can keep or discard.
+    Store and media calls run in worker threads, so one slow read doesn't hold up everyone else."""
+    owner = await asyncio.to_thread(owner_or_404, owner_id)
     if not (text and text.strip()) and not file:
         raise HTTPException(400, "say something, type something, or attach a file")
 
@@ -172,27 +174,36 @@ async def converse(owner_id: str, text: str | None = Form(None), file: UploadFil
         data = await file.read()
         mime = (file.content_type or "application/octet-stream").split(";")[0]
         kind = _attachment_kind(mime)
-        path = media.save(owner_id, f"{new_id(kind)}.{mime.split('/')[-1]}", data, mime)
+        path = await asyncio.to_thread(media.save, owner_id, f"{new_id(kind)}.{mime.split('/')[-1]}", data, mime)
         upload = (data, mime)
         attachment = {"kind": kind, "name": file.filename, "mime": mime}
         source = {"recording": path} if kind == "voice" else {"document": path}
 
-    history = sorted(store.list("turns", owner_id=owner_id), key=lambda t: t["at"])
-    result = await loops.converse(owner, history, text, upload, proposals.known(owner_id))
-    store.update("owners", owner_id, {"language": result.owner_language})
+    history, known = await asyncio.to_thread(_history_and_known, owner_id)
+    result = await loops.converse(owner, history, text, upload, known)
+    return await asyncio.to_thread(_save_turn, owner_id, text, result, attachment, path, source)
 
-    now = time.time()
-    moments = [d for m in result.moments if (d := proposals.save_moment(owner_id, m.model_dump(), source))]
-    inventory = [proposals.save_inventory(owner_id, i.model_dump(), source) for i in result.inventory]
-    people = [d for p in result.people if (d := proposals.save_person(owner_id, p.model_dump()))]
-    owner_turn = store.put("turns", {"id": new_id("turn"), "owner_id": owner_id, "at": now, "role": "owner",
-                                     "text": (text or "").strip() or result.heard, "heard": result.heard,
-                                     "attachment": attachment, **({"media": path} if path else {})})
-    ai_turn = store.put("turns", {"id": new_id("turn"), "owner_id": owner_id, "at": now + 0.001,
-                                  "role": "assistant", "text": result.reply, "language": result.reply_language,
-                                  "proposals": {"moments": [m["id"] for m in moments],
-                                                "inventory": [i["id"] for i in inventory],
-                                                "people": [p["id"] for p in people]}})
+
+def _history_and_known(owner_id: str) -> tuple[list[dict], dict]:
+    return sorted(store.list("turns", owner_id=owner_id), key=lambda t: t["at"]), proposals.known(owner_id)
+
+
+def _save_turn(owner_id: str, text: str | None, result, attachment: dict | None, path: str | None, source: dict) -> dict:
+    with proposals.saving(owner_id):  # cards from a call exchange may be saving at the same moment
+        store.update("owners", owner_id, {"language": result.owner_language})
+
+        now = time.time()
+        moments = [d for m in result.moments if (d := proposals.save_moment(owner_id, m.model_dump(), source))]
+        inventory = [proposals.save_inventory(owner_id, i.model_dump(), source) for i in result.inventory]
+        people = [d for p in result.people if (d := proposals.save_person(owner_id, p.model_dump()))]
+        owner_turn = store.put("turns", {"id": new_id("turn"), "owner_id": owner_id, "at": now, "role": "owner",
+                                         "text": (text or "").strip() or result.heard, "heard": result.heard,
+                                         "attachment": attachment, **({"media": path} if path else {})})
+        ai_turn = store.put("turns", {"id": new_id("turn"), "owner_id": owner_id, "at": now + 0.001,
+                                      "role": "assistant", "text": result.reply, "language": result.reply_language,
+                                      "proposals": {"moments": [m["id"] for m in moments],
+                                                    "inventory": [i["id"] for i in inventory],
+                                                    "people": [p["id"] for p in people]}})
     return {"autonomy": ACT, "owner_turn": _expand(owner_turn), "assistant_turn": _expand(ai_turn)}
 
 
@@ -202,7 +213,7 @@ async def live_call(ws: WebSocket, owner_id: str, token: str | None = None, acti
     Browsers can't send headers on a WebSocket, so the sign-in token comes as ?token=."""
     if settings.auth_required:
         try:
-            user = auth.verify(token)
+            user = await asyncio.to_thread(auth.verify, token)
         except HTTPException as e:
             await ws.close(code=4401 if e.status_code == 401 else 4403, reason=e.detail[:120])
             return
@@ -211,15 +222,16 @@ async def live_call(ws: WebSocket, owner_id: str, token: str | None = None, acti
     else:
         governance_core.set_current_user(governance_core.user_key(demo.LOCAL))
         demo.begin(demo.LOCAL)
-    demo.ensure()  # no catalog cache here: a call lasts minutes, and kept knowledge can change meanwhile
+    await asyncio.to_thread(demo.ensure)  # no catalog cache here: a call lasts minutes, and kept knowledge can change meanwhile
     if (acting_as or demo.DEFAULT_PERSON).strip().lower() != "vikram":  # only the owner talks with Saathi
         await ws.close(code=4403, reason="Only Vikram can call Saathi.")
         return
-    owner = store.get("owners", owner_id)
+    owner = await asyncio.to_thread(store.get, "owners", owner_id)
     if not owner or owner_id != demo.owner_id():  # only the caller's own copy
         await ws.close(code=4404)
         return
-    await live.call(ws, {**owner, "family": knowledge.family(owner_id)}, _expand)  # family from kept people
+    family = await asyncio.to_thread(knowledge.family, owner_id)
+    await live.call(ws, {**owner, "family": family}, _expand)  # family from kept people
 
 
 def _speech_name(text: str) -> str:
