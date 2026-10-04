@@ -9,8 +9,8 @@ import { canReplace, describe } from "./items";
 
 export type ReviewChoice = { p: Proposal; save: boolean; replace: boolean };
 
-export default function Review({ items, summary, summaryState, meta, busy, error, onSave, onLater, onDiscard }: {
-  items: Proposal[]; summary: string | null; summaryState: "loading" | "ready" | "failed"; meta: string;
+export default function Review({ items, summary, summaryState, meta, note = null, busy, error, onSave, onLater, onDiscard }: {
+  items: Proposal[]; summary: string | null; summaryState: "loading" | "ready" | "failed"; meta: string; note?: string | null;
   busy: boolean; error: string | null;
   onSave: (choices: ReviewChoice[]) => void; onLater: () => void; onDiscard: (() => void) | null;
 }) {
@@ -35,6 +35,7 @@ export default function Review({ items, summary, summaryState, meta, busy, error
         <h2 id="review-title">{onDiscard ? "Here's what you told Saathi" : "Waiting from earlier"}</h2>
         {summaryState === "loading" && <p className="v2-summary is-loading">Saathi is summing up the conversation…</p>}
         {summaryState === "ready" && summary && <p className="v2-summary">{summary}</p>}
+        {note && <p className="v2-notice-card">{note}</p>}
       </div>
 
       {items.length > 0 ? (
@@ -82,7 +83,7 @@ export default function Review({ items, summary, summaryState, meta, busy, error
           </ul>
         </>
       ) : (
-        <p className="v2-review-lede">Nothing in this conversation needs saving.</p>
+        <p className="v2-review-lede">{note ? "Saathi is still working out what to keep from this call." : "Nothing in this conversation needs saving."}</p>
       )}
 
       {error && <p className="v2-error" role="alert">{error}</p>}

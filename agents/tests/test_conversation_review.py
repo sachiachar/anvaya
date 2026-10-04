@@ -195,3 +195,14 @@ def test_a_discard_landing_mid_save_leaves_no_waiting_cards_behind(client, monke
     except Exception as e:  # pragma: no cover - the saver must not raise
         raise AssertionError("the exchange saver raised") from e
     assert not [m for m in store.list("moments", owner_id=OWNER) if m.get("title") == STORY["title"]]
+
+
+def test_a_save_that_never_finishes_stops_counting_as_saving(client):
+    from app import live
+    stale = store.put("turns", {"id": new_id("turn"), "owner_id": OWNER, "role": "owner", "text": "Lost?", "saving": True,
+                                "at": time.time() - live.SAVING_EXPIRES_SECONDS - 5})
+    fresh = store.put("turns", {"id": new_id("turn"), "owner_id": OWNER, "role": "owner", "text": "Coming.", "saving": True,
+                                "at": time.time()})
+    turns = {t["id"]: t for t in client.get(f"/api/owners/{OWNER}/conversation").json()["turns"]}
+    assert turns[stale["id"]]["saving"] is False  # nothing waits on it for ever
+    assert turns[fresh["id"]]["saving"] is True

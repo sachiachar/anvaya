@@ -37,6 +37,13 @@ log = logging.getLogger(__name__)
 AGENT = "saathi.voice"
 
 
+# How long a call's request waits, after the call ends, for its last exchanges to finish saving.
+SAVE_GRACE_SECONDS = 30
+# After this long, a turn still marked "saving" is treated as saved (its save was lost), so nothing
+# waits on it for ever.
+SAVING_EXPIRES_SECONDS = 120
+
+
 async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> None:
     await ws.accept()
     try:
@@ -49,6 +56,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
     started: float | None = None
     reserved = 0.0
     reply_tokens: dict[int, tuple[int, int]] = {}  # tokens in and out for each model reply
+    saves: set[asyncio.Task] = set()  # exchanges still being saved (their cards worked out)
     config = types.LiveConnectConfig(
         response_modalities=["AUDIO"],
         speech_config=types.SpeechConfig(
@@ -65,7 +73,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
             started = time.time()
             await ws.send_json({"type": "ready"})
             upstream = asyncio.create_task(_from_browser(ws, session))
-            downstream = asyncio.create_task(_to_browser(ws, session, owner, expand, reply_tokens))
+            downstream = asyncio.create_task(_to_browser(ws, session, owner, expand, reply_tokens, saves))
             cap = governance.limit(AGENT, "max_call_minutes", 20)
             left = governance.remaining(AGENT)  # the person's voice minutes left today (PR-10.4)
             by_allowance = left is not None and left < cap
@@ -109,6 +117,11 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
             await ws.close()
         except Exception:
             pass
+        # Last, after the minutes are counted and the held ones given back: finish saving the last
+        # exchanges before the request ends. On Cloud Run a finished request may get no more CPU,
+        # which would leave them marked "saving" and the review waiting.
+        if saves:
+            await asyncio.wait(saves, timeout=SAVE_GRACE_SECONDS)
 
 
 def _instructions(owner: dict) -> str:
@@ -131,7 +144,7 @@ async def _from_browser(ws: WebSocket, session) -> None:
 
 
 async def _to_browser(ws: WebSocket, session, owner: dict, expand,
-                      reply_tokens: dict[int, tuple[int, int]]) -> None:
+                      reply_tokens: dict[int, tuple[int, int]], saves: set[asyncio.Task] | None = None) -> None:
     heard, said = "", ""
     reply = 0  # numbers each model reply; an interrupted reply and the next one are counted apart
     while True:
@@ -162,7 +175,10 @@ async def _to_browser(ws: WebSocket, session, owner: dict, expand,
                         await ws.send_bytes(part.inline_data.data)
             if content.turn_complete and (heard.strip() or said.strip()):
                 # Save in the background so the conversation keeps flowing.
-                asyncio.create_task(_save_exchange(ws, owner, heard.strip(), said.strip(), expand))
+                task = asyncio.create_task(_save_exchange(ws, owner, heard.strip(), said.strip(), expand))
+                if saves is not None:
+                    saves.add(task)
+                    task.add_done_callback(saves.discard)
                 heard, said = "", ""
         if received == 0:  # the session has ended
             return

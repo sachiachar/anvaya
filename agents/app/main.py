@@ -138,8 +138,11 @@ def _attachment_kind(mime: str) -> str:
 
 def _expand(turn: dict) -> dict:
     """Replace proposal ids with the items and their current status (discarded ones drop out).
-    The path of a file the owner shared stays on the server (it's only for Discard)."""
+    The path of a file the owner shared stays on the server (it's only for Discard). A turn marked
+    "saving" for too long lost its save, so it no longer counts as saving."""
     turn = {k: v for k, v in turn.items() if k != "media"}
+    if turn.get("saving") and time.time() - turn.get("at", 0) > live.SAVING_EXPIRES_SECONDS:
+        turn["saving"] = False
     ids = turn.get("proposals")
     if not ids:
         return turn
