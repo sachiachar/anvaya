@@ -18,6 +18,11 @@ updates:
     groups:
       python-minor:
         update-types: [minor, patch]
+    ignore:
+      # FastAPI 0.142 needs OpenTelemetry 1.44, which google-adk 2.11 caps at 1.42.1, so every weekly
+      # update failed. Remove this once ADK lifts the cap: a test in test_dependencies.py fails then.
+      - dependency-name: fastapi
+        versions: [">=0.142.0"]
 
   - package-ecosystem: npm
     directory: /web

@@ -8,6 +8,8 @@ import pathlib
 import re
 import tomllib
 
+import yaml
+
 REPO = pathlib.Path(__file__).resolve().parents[2]
 AGENTS = REPO / "agents"
 WEB = REPO / "web"
@@ -104,6 +106,19 @@ def test_runtime_versions_agree_everywhere():
     assert json.loads((WEB / "package.json").read_text())["engines"]["node"] == f">={node}"
     for workflow in (REPO / ".github" / "workflows").glob("*.yml"):
         assert "node-version:" not in workflow.read_text(), f"{workflow.name}: use node-version-file: web/.nvmrc"
+
+
+def test_dependabot_ignores_only_what_is_still_held_back():
+    """.github/dependabot.yml skips FastAPI 0.142+ only while google-adk caps OpenTelemetry below 1.44.
+    When an ADK update lifts the cap, this fails: remove the ignore rule in that same pull request."""
+    config = yaml.safe_load((REPO / ".github" / "dependabot.yml").read_text())
+    ignored = {rule["dependency-name"] for update in config["updates"] for rule in update.get("ignore", [])}
+    if "fastapi" not in ignored:
+        return
+    caps = [re.search(r"<=?\s*([\d.]+)", r) for r in md.requires("google-adk") or [] if r.startswith("opentelemetry-api")]
+    cap = next((tuple(int(n) for n in c.group(1).split(".")) for c in caps if c), None)
+    assert cap is not None and cap < (1, 44), \
+        "google-adk no longer caps OpenTelemetry below 1.44: remove the fastapi ignore rule in .github/dependabot.yml"
 
 
 def test_container_images_are_pinned():
