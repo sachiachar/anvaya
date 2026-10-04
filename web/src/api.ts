@@ -112,6 +112,8 @@ export type Turn = {
   attachment?: { kind: "voice" | "photo" | "document"; name: string | null } | null;
   language?: string;
   proposals?: Proposal[];
+  /** A live-call exchange whose cards Saathi is still working out (the end-of-call review waits). */
+  saving?: boolean;
 };
 
 export type Task = {

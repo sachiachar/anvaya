@@ -23,6 +23,7 @@ export class LiveCall {
   private stream: MediaStream | null = null;
   private playing = new Set<AudioBufferSourceNode>();
   private nextStart = 0;
+  private levelTimers = new Set<ReturnType<typeof setTimeout>>();
 
   /** onLevel (optional): how loud each side is, 0 to 1, about ten times a second, for an animation. */
   constructor(private onEvent: (e: CallEvent) => void, private onLevel?: (who: "you" | "saathi", level: number) => void) {}
@@ -82,7 +83,9 @@ export class LiveCall {
     this.nextStart = Math.max(this.nextStart, ctx.currentTime);
     if (this.onLevel) {  // reported when this piece plays, not when it arrives
       const level = loudness(pcm);
-      setTimeout(() => this.onLevel?.("saathi", level), (this.nextStart - ctx.currentTime) * 1000);
+      const timer = setTimeout(() => { this.levelTimers.delete(timer); this.onLevel?.("saathi", level); },
+        (this.nextStart - ctx.currentTime) * 1000);
+      this.levelTimers.add(timer);
     }
     node.start(this.nextStart);
     this.nextStart += buffer.duration;
@@ -103,6 +106,8 @@ export class LiveCall {
   private stopPlayback() {
     this.playing.forEach((n) => { try { n.stop(); } catch { /* already stopped */ } });
     this.playing.clear();
+    this.levelTimers.forEach((t) => { clearTimeout(t); });
+    this.levelTimers.clear();
     this.nextStart = 0;
     this.onEvent({ type: "speaking", speaking: false });
   }

@@ -110,3 +110,62 @@ def test_discard_deletes_the_conversations_files_unless_something_kept_uses_them
     assert media.load(OWNER, "doc_sim_alone.jpg") is None  # only the discarded card used it
     assert media.load(OWNER, "doc_sim_shared.jpg") == b"photo of a policy"  # a kept item still uses it
     assert media.load(OWNER, reply) is None  # Saathi's spoken reply from the conversation
+
+
+class _WS:
+    def __init__(self):
+        self.sent = []
+
+    async def send_json(self, data):
+        self.sent.append(data)
+
+
+def test_a_call_exchange_is_marked_saving_until_its_cards_are_ready(client, monkeypatch):
+    import asyncio
+
+    from app import live
+    from app.schemas import Extraction, Moment
+    seen_while_reading = []
+
+    async def extract(owner, heard, said, known):
+        seen_while_reading.extend(t for t in store.list("turns", owner_id=OWNER) if t.get("saving"))
+        return Extraction(moments=[Moment(**STORY)])
+
+    monkeypatch.setattr(live.loops, "extract_from_exchange", extract)
+    ws = _WS()
+    asyncio.run(live._save_exchange(ws, {"id": OWNER, "name": "Vikram Rao"}, "My first job...", "How lovely.", main._expand))
+    assert {t["role"] for t in seen_while_reading} == {"owner", "assistant"}  # stored, and marked, before the cards
+    turns = [t for t in store.list("turns", owner_id=OWNER) if t.get("text") in ("My first job...", "How lovely.")]
+    assert len(turns) == 2 and not any(t["saving"] for t in turns)
+    assert ws.sent[-1]["type"] == "turn" and ws.sent[-1]["assistant_turn"]["proposals"][0]["title"] == STORY["title"]
+
+
+def test_an_exchange_discarded_while_saathi_reads_it_makes_no_cards(client, monkeypatch):
+    import asyncio
+
+    from app import live
+    from app.schemas import Extraction, Moment
+
+    async def extract(owner, heard, said, known):
+        for t in store.list("turns", owner_id=OWNER):
+            if t.get("saving"):
+                store.delete("turns", t["id"])  # the owner discarded it meanwhile
+        return Extraction(moments=[Moment(**STORY)])
+
+    monkeypatch.setattr(live.loops, "extract_from_exchange", extract)
+    asyncio.run(live._save_exchange(_WS(), {"id": OWNER, "name": "Vikram Rao"}, "Discard me.", "Okay.", main._expand))
+    assert not [m for m in store.list("moments", owner_id=OWNER) if m.get("title") == STORY["title"]]
+
+
+def test_discard_keeps_a_waiting_card_another_conversation_also_mentions(client):
+    card = proposals.save_inventory(OWNER, {"category": "insurance", "institution": "LIC", "product": "Jeevan Anand",
+                                            "account_hint": "••4492", "nominee_or_beneficiary": None,
+                                            "approximate_value": None, "missing_fields": ["nominee"]}, {})
+    _exchange("I have an LIC policy.", "Who is the nominee?", [])
+    earlier = store.put("turns", {"id": new_id("turn"), "owner_id": OWNER, "at": time.time(), "role": "assistant",
+                                  "text": "Noted the policy.", "proposals": {"inventory": [card["id"]]}})
+    later = _exchange("Ajay is the nominee.", "Thank you.")
+    store.update("turns", later[1]["id"], {"proposals": {"moments": [], "inventory": [card["id"]], "people": []}})
+    r = client.post(f"/api/owners/{OWNER}/conversation/forget", json={"turn_ids": [t["id"] for t in later]})
+    assert r.json()["deleted_items"] == 0
+    assert store.get("inventory", card["id"]) and store.get("turns", earlier["id"])

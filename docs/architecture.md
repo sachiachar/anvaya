@@ -210,7 +210,7 @@ All routes are under `/api`.
 
 | Area | Routes |
 | --- | --- |
-| Conversation | `GET/POST /owners/{id}/conversation`, `POST /owners/{id}/conversation/prompt` (the companion asks from a next step), `POST /owners/{id}/conversation/summary` (a few sentences summing up a conversation that just ended; shown, never stored; numbers masked in code), `POST /owners/{id}/conversation/forget` (Discard: deletes those turns and every card from them still waiting for Keep, never anything kept), `WS /owners/{id}/live`, `POST /speech` |
+| Conversation | `GET/POST /owners/{id}/conversation`, `POST /owners/{id}/conversation/prompt` (the companion asks from a next step), `POST /owners/{id}/conversation/summary` (a few sentences summing up a conversation that just ended; shown, never stored; numbers masked in code), `POST /owners/{id}/conversation/forget` (Discard: deletes those turns, every card from them still waiting for Keep that no other conversation mentions, and their shared files and cached spoken replies; never anything kept). A live-call exchange is stored as soon as it ends, marked `saving` until its cards are ready, so the end-of-call review can wait for it, `WS /owners/{id}/live`, `POST /speech` |
 | Cards | `POST /proposals/{id}/decision` (moments, inventory, people; approve or reject) |
 | Legacy capture (older routes) | `POST /owners/{id}/capture/audio`, `POST /owners/{id}/documents`, `POST /owners/{id}/wishes`, `GET /owners/{id}/review`, `GET /owners/{id}/archive` |
 | Next steps | `POST /owners/{id}/readiness`, `GET /owners/{id}/tasks`, `POST /tasks/{id}` |

@@ -15,7 +15,9 @@ export default function Review({ items, summary, summaryState, meta, busy, error
   onSave: (choices: ReviewChoice[]) => void; onLater: () => void; onDiscard: (() => void) | null;
 }) {
   const [removed, setRemoved] = useState<ReadonlySet<string>>(new Set());
-  const [asNew, setAsNew] = useState<ReadonlySet<string>>(new Set()); // look-alikes saved as new, not as an update
+  // A card that looks like something kept is saved as new unless the owner chooses to update the
+  // earlier one: nothing kept is replaced without the owner's own choice.
+  const [update, setUpdate] = useState<ReadonlySet<string>>(new Set());
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const toggle = (set: ReadonlySet<string>, id: string) => {
     const next = new Set(set);
@@ -24,7 +26,7 @@ export default function Review({ items, summary, summaryState, meta, busy, error
   };
   const saving = items.filter((p) => !removed.has(p.id)).length;
   const choices = (): ReviewChoice[] =>
-    items.map((p) => ({ p, save: !removed.has(p.id), replace: canReplace(p) && !asNew.has(p.id) }));
+    items.map((p) => ({ p, save: !removed.has(p.id), replace: canReplace(p) && update.has(p.id) }));
 
   return (
     <section className="v2-review" aria-labelledby="review-title">
@@ -55,15 +57,16 @@ export default function Review({ items, summary, summaryState, meta, busy, error
                     {!off && canReplace(p) && p.looks_like && (
                       <fieldset className="v2-choice">
                         <legend className="v2-visually-hidden">How to save “{d.title}”</legend>
+                        <span className="v2-choice-note">This looks like “{p.looks_like.title}”, which you kept before.</span>
                         <label>
-                          <input type="radio" name={`r-${p.id}`} checked={!asNew.has(p.id)}
-                            onChange={() => setAsNew((s) => { const n = new Set(s); n.delete(p.id); return n; })} />
-                          Update “{p.looks_like.title}”
+                          <input type="radio" name={`r-${p.id}`} checked={!update.has(p.id)}
+                            onChange={() => setUpdate((s) => { const n = new Set(s); n.delete(p.id); return n; })} />
+                          Save as new
                         </label>
                         <label>
-                          <input type="radio" name={`r-${p.id}`} checked={asNew.has(p.id)}
-                            onChange={() => setAsNew((s) => new Set(s).add(p.id))} />
-                          Save as new
+                          <input type="radio" name={`r-${p.id}`} checked={update.has(p.id)}
+                            onChange={() => setUpdate((s) => new Set(s).add(p.id))} />
+                          Update the earlier one
                         </label>
                       </fieldset>
                     )}

@@ -496,13 +496,17 @@ def forget_conversation(owner_id: str, body: TurnIds) -> dict:
     (DELETE /kept). Saathi no longer carries on from what was deleted."""
     owner_or_404(owner_id)
     turns = _my_turns(owner_id, body.turn_ids)
+    gone = {t["id"] for t in turns}
+    # A waiting card mentioned again in another conversation keeps the same id: it stays for that one.
+    elsewhere = {doc_id for t in store.list("turns", owner_id=owner_id) if t["id"] not in gone
+                 for ids in (t.get("proposals") or {}).values() for doc_id in ids}
     items, files = 0, {t["media"] for t in turns if t.get("media")}
     for turn in turns:
         for collection, ids in (turn.get("proposals") or {}).items():
             if collection not in ("moments", "inventory", "people"):
                 continue
             for doc_id in ids:
-                doc = demo.mine(collection, doc_id)
+                doc = demo.mine(collection, doc_id) if doc_id not in elsewhere else None
                 if doc and doc.get("status") == "pending":
                     files |= {doc[k] for k in ("recording", "document") if isinstance(doc.get(k), str)}
                     store.delete(collection, doc_id)

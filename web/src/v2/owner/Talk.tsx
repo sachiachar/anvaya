@@ -46,6 +46,7 @@ export default function Talk() {
   const [seconds, setSeconds] = useState(0);
   const callStarted = useRef(0);
   const orb = useRef<HTMLDivElement | null>(null);
+  const saathiSpeaking = useRef(false); // while Saathi talks, the microphone mostly hears Saathi
 
   // The review: which turns it covers, the summary, and saving.
   const [reviewTurns, setReviewTurns] = useState<string[]>([]);
@@ -185,7 +186,6 @@ export default function Talk() {
 
   /** Moves the rings with whoever is speaking, without re-rendering ten times a second. While Saathi
    *  speaks, the microphone mostly hears Saathi's own voice back, so its level is ignored. */
-  const saathiSpeaking = useRef(false);
   function onLevel(who: "you" | "saathi", level: number) {
     const el = orb.current;
     if (!el || (who === "you" && saathiSpeaking.current)) return;
@@ -202,6 +202,7 @@ export default function Talk() {
     mutedRef.current = false;
     setSeconds(0);
     callStarted.current = Date.now();
+    saathiSpeaking.current = false;
     setCaption({ heard: "", said: "" });
     setCallState("connecting");
     // Events from a call that has ended (or been replaced) are ignored, so a late "closed" from the
@@ -236,22 +237,22 @@ export default function Talk() {
     setMuted(next);
   }
 
-  /** After a call, the server is still saving the last exchange: wait until the conversation stops
-   *  changing (at most about 12 seconds), then review everything from this conversation. */
+  /** After a call, Saathi may still be reading the last exchange: the server stores each exchange
+   *  straight away, marked "saving" until its cards are ready. Wait until nothing from this
+   *  conversation is still saving (at most about 30 seconds), then review all of it. */
   async function afterCall() {
     setCaption({ heard: "", said: "" });
+    saathiSpeaking.current = false;
     if (!baseline) { setPhase("talk"); return; }
     setCallMinutes(Math.max(1, Math.round((Date.now() - callStarted.current) / 60000)));
     setPhase("gathering");
     let latest: Turn[] | null = null;
-    let steady = 0;
-    for (let i = 0; i < 8 && steady < 2; i++) {
+    for (let i = 0; i < 20; i++) {
       await sleep(1500);
       try {
-        const fresh = (await api.conversation()).turns;
-        steady = latest && fresh.length === latest.length ? steady + 1 : 0;
-        latest = fresh;
-      } catch { steady += 1; }
+        latest = (await api.conversation()).turns;
+        if (!latest.some((t) => !baseline.has(t.id) && t.saving)) break;
+      } catch { /* try again */ }
     }
     if (latest) setTurns(latest);
     const ids = (latest ?? []).filter((t) => !baseline.has(t.id)).map((t) => t.id);
@@ -294,12 +295,14 @@ export default function Talk() {
     setReviewError(null);
     let saved = 0;
     const failed: string[] = [];
+    let updateRefused = false;
     for (const { p, save: keep, replace } of choices) {
       try {
         await api.decide(p.id, p.collection, keep ? "approve" : "reject", keep && replace);
         if (keep) saved += 1;
       } catch {
         failed.push(p.id);
+        if (keep && replace) updateRefused = true;
       }
     }
     setReviewBusy(false);
@@ -307,7 +310,9 @@ export default function Talk() {
       // Show what's still waiting (some may have been decided elsewhere, e.g. after a demo reset).
       const r = await api.conversation().catch(() => null);
       if (r) setTurns(r.turns);
-      setReviewError(`${failed.length === 1 ? "One item" : `${failed.length} items`} couldn't be saved. The list shows what's still waiting; try again.`);
+      setReviewError(updateRefused
+        ? "An earlier item you chose to update isn't there any more, so it couldn't be updated. Choose Save as new for it, then save again."
+        : `${failed.length === 1 ? "One item" : `${failed.length} items`} couldn't be saved. The list shows what's still waiting; try again.`);
       return;
     }
     setSavedCount(saved);
