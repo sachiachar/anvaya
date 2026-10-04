@@ -29,6 +29,8 @@ export default function Talk() {
   const [callState, setCallState] = useState<CallState>("off");
   const [caption, setCaption] = useState<Caption>({ heard: "", said: "" });
   const [muted, setMuted] = useState(false);
+  const mutedRef = useRef(false); // read when the microphone opens, so Mute pressed while connecting holds
+  const [asking, setAsking] = useState(false); // "Talk about this" is fetching Saathi's question
   const [callTurns, setCallTurns] = useState<string[]>([]); // Saathi's turns from this call, for the Keep sheet
 
   function refreshAllowance() {
@@ -54,7 +56,8 @@ export default function Talk() {
       .catch(() => setTopic(null));
     refreshAllowance();
   }, []);
-  useEffect(() => () => call.current?.end(), []);
+  // Leaving Talk ends any call, even one still connecting (startCall closes it once it opens).
+  useEffect(() => () => { const c = call.current; call.current = null; c?.end(); }, []);
 
   function stopSpeaking() {
     player.current?.pause();
@@ -120,27 +123,35 @@ export default function Talk() {
   }
 
   async function startCall() {
+    if (call.current) return; // one call at a time
     setError(null);
     stopSpeaking();
     setMuted(false);
+    mutedRef.current = false;
     setCallTurns([]);
     setCaption({ heard: "", said: "" });
     setCallState("connecting");
-    const c = new LiveCall(onCallEvent);
+    // Events from a call that has ended (or been replaced) are ignored, so a late "closed" from the
+    // last call can't close this one.
+    const c: LiveCall = new LiveCall((e) => { if (call.current === c) onCallEvent(e); });
     call.current = c;
     try {
       await c.start();
+      if (call.current !== c) { c.end(); return; } // ended while connecting: close what just opened
+      c.setMuted(mutedRef.current);
     } catch {
-      setError("Saathi couldn't start the call. Please allow the microphone for this site, then try again.");
       c.end();
+      if (call.current !== c) return;
+      setError("Saathi couldn't start the call. Please allow the microphone for this site, then try again.");
       call.current = null;
       setCallState("off");
     }
   }
 
   function endCall() {
-    call.current?.end();
-    call.current = null;
+    const c = call.current;
+    call.current = null; // first, so startCall sees the call has ended if it's still connecting
+    c?.end();
     setCallState("off");
     setCaption({ heard: "", said: "" });
   }
@@ -154,22 +165,30 @@ export default function Talk() {
   }, [callState]);
 
   function toggleMute() {
-    setMuted((m) => { call.current?.setMuted(!m); return !m; });
+    const next = !mutedRef.current;
+    mutedRef.current = next;
+    call.current?.setMuted(next);
+    setMuted(next);
   }
 
   /** "Talk about this": Saathi asks the question first, then the call carries on from it. */
   async function talkAbout(question: string) {
+    if (asking || call.current) return;
     setError(null);
+    setAsking(true);
     try {
       appendTurns(await api.companionAsks(question));
     } catch (e) {
       setError(friendlyError(e));
       return;
+    } finally {
+      setAsking(false);
     }
     void startCall();
   }
 
-  function decide(p: Proposal, decision: "approve" | "reject", replace = false): Promise<void> {
+  /** Resolves true when the decision was saved, false when the card was out of date. */
+  function decide(p: Proposal, decision: "approve" | "reject", replace = false): Promise<boolean> {
     return api.decide(p.id, p.collection, decision, replace).then(() => {
       setTurns((all) => (all ?? []).map((t) => ({
         ...t,
@@ -177,17 +196,20 @@ export default function Talk() {
           ?.map((x) => (x.id === p.id ? { ...x, status: "approved" as const } : x))
           .filter((x) => !(x.id === p.id && decision === "reject")),
       })));
+      return true;
     }).catch(() => {
       // The card is out of date (e.g. the demo was reset): reload the real state.
       api.conversation().then((r) => setTurns(r.turns)).catch(() => {});
       setError("That card is no longer available, so the conversation has been refreshed.");
+      return false;
     });
   }
 
   /** One at a time: family cards all update the same family list. Cards that look like a kept
    *  item wait for the owner's own choice: Replace it or Keep both. */
   async function keepAll(cards: Proposal[]) {
-    for (const p of cards.filter(plainKeep)) await decide(p, "approve");
+    // Stop at the first card that's out of date: the conversation has been reloaded, so the rest are too.
+    for (const p of cards.filter(plainKeep)) if (!(await decide(p, "approve"))) return;
   }
 
   const all = turns ?? [];
@@ -207,11 +229,13 @@ export default function Talk() {
             <div className="v2-topic">
               <p className="v2-eyebrow">Today, perhaps</p>
               <p className="v2-topic-q">{topic}</p>
-              <button className="v2-link" disabled={callState !== "off"} onClick={() => talkAbout(topic)}>Talk about this</button>
+              <button className="v2-link" disabled={asking || callState !== "off"} onClick={() => talkAbout(topic)}>
+                {asking ? "Saathi is getting ready…" : "Talk about this"}
+              </button>
             </div>
           )}
           <div className="v2-callwrap">
-            <button className="v2-bigcall" onClick={startCall} disabled={callState !== "off"}>
+            <button className="v2-bigcall" onClick={startCall} disabled={asking || callState !== "off"}>
               <Mic />
               <span>Talk to Saathi</span>
             </button>

@@ -3,7 +3,7 @@
 import type { InventoryItem, Moment, Person, Proposal } from "../../api";
 import { Check } from "../icons";
 
-export type Decide = (p: Proposal, decision: "approve" | "reject", replace?: boolean) => void;
+export type Decide = (p: Proposal, decision: "approve" | "reject", replace?: boolean) => unknown;
 
 const MOMENT_KIND: Record<Moment["kind"], string> = {
   story: "A story", advice: "Advice", practical: "Something practical", wish: "A wish",
