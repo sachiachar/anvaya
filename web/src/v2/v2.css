@@ -224,3 +224,138 @@ a { color: inherit; text-decoration-color: var(--gold); text-underline-offset: 3
 .app .signin { min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 24px; text-align: center; }
 .app .signin .muted { color: var(--muted); }
 .app .signin button { min-height: var(--tap); padding: 10px 20px; border-radius: 12px; border: 0; background: var(--action); color: var(--action-ink); font: 600 var(--step-0) var(--sans); cursor: pointer; }
+
+/* ==== Talk ======================================================================================= */
+
+/* ---- Home: one sentence, one big button --------------------------------------------------------- */
+.v2-home { display: grid; gap: 22px; padding-top: 8px; }
+.v2-hello { display: grid; gap: 8px; }
+.v2-hello h1 { font-size: clamp(2rem, 9vw, 2.5rem); line-height: 1.08; font-weight: 500; }
+.v2-hello p { font-size: var(--step-1); color: var(--ink-2); line-height: 1.35; }
+.v2-topic { display: grid; gap: 6px; justify-items: start; padding: 14px 16px; border-left: 3px solid var(--gold); background: var(--surface); border-radius: 0 12px 12px 0; }
+.v2-topic-q { font: italic 400 var(--step-1)/1.35 var(--serif); color: var(--ink); }
+.v2-callwrap { display: grid; place-items: center; padding: 18px 0 8px; }
+.v2-bigcall {
+  width: 176px; height: 176px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-content: center; justify-items: center; gap: 8px;
+  background: #1c3263; color: #ffffff; font: 600 var(--step-1)/1.15 var(--sans);
+  box-shadow: 0 0 0 14px color-mix(in srgb, #1c3263 14%, var(--ground)), 0 0 0 28px color-mix(in srgb, #1c3263 7%, var(--ground));
+}
+.v2-bigcall svg { width: 40px; height: 40px; color: var(--gold); }
+.v2-bigcall:disabled { opacity: 0.6; cursor: default; }
+.v2-alts { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 10px; }
+.v2-alt {
+  min-height: 56px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px; text-align: center;
+  border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 500 0.95rem/1.2 var(--sans); cursor: pointer;
+}
+.v2-alt svg { width: 20px; height: 20px; flex: none; color: var(--muted); }
+.v2-alt:focus-within { outline: 2px solid var(--focus); outline-offset: 3px; }
+.v2-waiting, .v2-last {
+  display: grid; gap: 2px; text-align: left; padding: 14px 16px; border-radius: 14px; cursor: pointer; font: inherit; color: var(--ink);
+  border: 1px solid var(--line); background: var(--surface);
+}
+.v2-waiting { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 9%, var(--surface)); }
+.v2-waiting span, .v2-last span { color: var(--muted); font-size: var(--step--1); }
+.v2-last span { font-family: var(--serif); font-style: italic; font-size: var(--step-0); color: var(--ink-2); }
+
+/* ---- Chat: the conversation along the thread ----------------------------------------------------- */
+.v2-chat { display: grid; gap: 14px; padding-bottom: 84px; }
+.v2-chat-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.v2-back, .v2-speak {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 6px 12px 6px 6px; border: 0; border-radius: 10px;
+  background: none; color: var(--action); font: 600 var(--step--1) var(--sans); cursor: pointer;
+}
+.v2-speak { padding: 6px 10px; color: var(--ink-2); font-weight: 500; }
+.v2-back svg, .v2-speak svg { width: 20px; height: 20px; }
+.v2-flip { display: inline-flex; transform: rotate(180deg); }
+.v2-thread { list-style: none; margin: 0; padding: 0 0 0 28px; display: grid; gap: 16px; position: relative; }
+.v2-thread::before { content: ""; position: absolute; left: 9px; top: 6px; bottom: 6px; width: 1.5px; background: linear-gradient(var(--gold), color-mix(in srgb, var(--gold) 30%, transparent)); }
+.v2-turn { display: grid; gap: 10px; }
+.v2-turn p { white-space: pre-wrap; }
+.v2-turn.assistant > p { font: 400 1.125rem/1.5 var(--serif); color: var(--ink); }
+.v2-turn.owner { justify-items: end; }
+.v2-turn.owner > p { max-width: 88%; padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--sunk); color: var(--ink); }
+.v2-turn.typing { color: var(--muted); font-style: italic; }
+.v2-attach { font-size: 0.8rem; color: var(--muted); }
+.v2-chat-end { height: 1px; scroll-margin-bottom: 96px; }
+.v2-notice { font-size: var(--step--1); color: var(--muted); }
+
+/* ---- Keep card: the signature act ---------------------------------------------------------------- */
+.v2-keep { position: relative; display: grid; gap: 6px; padding: 14px 16px; border-radius: 14px; background: var(--surface); border: 1.5px solid color-mix(in srgb, var(--gold) 45%, var(--line)); color: var(--ink); }
+.v2-keep.is-kept { border-color: var(--line); }
+.v2-keep-title { font: 500 1.125rem/1.3 var(--serif); }
+.v2-keep-detail { font-size: var(--step--1); color: var(--ink-2); }
+.v2-keep-missing { font-size: var(--step--1); color: var(--step); font-weight: 500; }
+.v2-keep-done { display: flex; align-items: center; gap: 6px; font-size: var(--step--1); font-weight: 600; color: var(--ok); }
+.v2-keep-done svg { width: 18px; height: 18px; }
+.v2-keep-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.v2-keep-actions .v2-btn { flex: 1 1 auto; }
+.v2-keep-all { justify-self: start; }
+/* A kept card becomes a bead on the thread. */
+.v2-bead { position: absolute; left: -26px; top: 18px; width: 13px; height: 13px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 4px color-mix(in srgb, var(--gold) 22%, transparent); }
+@media (prefers-reduced-motion: no-preference) {
+  .v2-bead { animation: v2-bead-in 0.9s ease-out; }
+  @keyframes v2-bead-in { 0% { transform: scale(0.2); box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold) 60%, transparent); } 60% { transform: scale(1.25); box-shadow: 0 0 0 10px color-mix(in srgb, var(--gold) 0%, transparent); } 100% { transform: scale(1); } }
+}
+
+/* ---- Composer, above the bottom navigation -------------------------------------------------------- */
+.v2-composer {
+  position: fixed; left: 0; right: 0; bottom: calc(69px + env(safe-area-inset-bottom, 0px)); z-index: 9;
+  max-width: 600px; margin: 0 auto; display: flex; gap: 8px; align-items: center; padding: 10px 14px;
+  background: var(--ground); border-top: 1px solid var(--line);
+}
+.v2-icon-btn { width: var(--tap); height: var(--tap); flex: none; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); display: grid; place-items: center; cursor: pointer; }
+.v2-icon-btn svg { width: 22px; height: 22px; }
+.v2-icon-btn:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.v2-icon-btn.is-disabled { opacity: 0.5; cursor: not-allowed; }
+.v2-say { flex: 1; min-width: 0; min-height: var(--tap); padding: 10px 16px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; }
+.v2-say:focus { border-color: var(--action); outline: none; }
+.v2-round { width: 52px; height: 52px; flex: none; border-radius: 50%; border: 0; background: #1c3263; color: var(--gold); display: grid; place-items: center; cursor: pointer; }
+.v2-round svg { width: 24px; height: 24px; }
+.v2-round:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---- The call: always navy ----------------------------------------------------------------------- */
+.v2-call {
+  position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center;
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 20px calc(18px + env(safe-area-inset-bottom, 0px));
+  background: radial-gradient(120% 70% at 50% 30%, #16244d, var(--night) 70%); color: var(--night-ink); overflow-y: auto;
+}
+.v2-call-top { text-align: center; display: grid; gap: 4px; }
+.v2-call-who { font: 500 1.75rem/1.1 var(--serif); color: #f7f0da; }
+.v2-call-status { color: var(--night-muted); font-size: var(--step--1); }
+.v2-call-clock { color: var(--night-muted); font-size: var(--step--1); font-variant-numeric: tabular-nums; }
+.v2-orb {
+  width: 132px; height: 132px; margin: 26px 0 18px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 42%, #2d4a8a, #1c3263 70%);
+  box-shadow: 0 0 0 12px rgba(212, 175, 55, 0.1), 0 0 0 26px rgba(212, 175, 55, 0.05);
+}
+.v2-orb svg { width: 84px; height: 56px; }
+.v2-orb.is-connecting { opacity: 0.6; }
+@media (prefers-reduced-motion: no-preference) {
+  .v2-orb.is-listening { animation: v2-breathe 3s ease-in-out infinite; }
+  .v2-orb.is-speaking { animation: v2-breathe 1.1s ease-in-out infinite; }
+  @keyframes v2-breathe { 50% { box-shadow: 0 0 0 18px rgba(212, 175, 55, 0.16), 0 0 0 36px rgba(212, 175, 55, 0.06); } }
+}
+.v2-captions { flex: 1; width: 100%; max-width: 30rem; display: grid; align-content: start; gap: 12px; text-align: center; }
+.v2-said { font: 400 clamp(1.35rem, 5.5vw, 1.6rem)/1.35 var(--serif); color: #f7f0da; }
+.v2-heard { font-size: var(--step-0); color: var(--night-muted); }
+.v2-heard span { font-weight: 600; }
+/* The Keep sheet is a light card on the navy call, whatever the theme. */
+.v2-call-sheet {
+  --surface: #ffffff; --ink: #0b132b; --ink-2: #3a4560; --muted: #5d6884; --line: #d9dfea; --action: #1c3263; --action-ink: #ffffff;
+  --gold-ink: #8a6a12; --ok: #0f7b6c; --step: #b26a00; --sunk: #e9eef6;
+  width: 100%; max-width: 30rem; margin: 14px 0 6px; padding: 14px; border-radius: 20px; background: #f3f6fb; color: var(--ink);
+  display: grid; gap: 10px; box-shadow: 0 -10px 30px -12px rgba(0, 0, 0, 0.5);
+}
+@media (prefers-reduced-motion: no-preference) { .v2-call-sheet { animation: v2-rise 0.35s ease-out; } @keyframes v2-rise { from { transform: translateY(24px); opacity: 0; } } }
+.v2-call-sheet-note { font-size: var(--step--1); color: var(--muted); }
+.v2-call-controls { display: flex; justify-content: center; gap: 44px; padding-top: 14px; }
+.v2-ctl {
+  width: 76px; height: 76px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-content: center; justify-items: center; gap: 3px;
+  background: rgba(255, 255, 255, 0.12); color: #ffffff; font: 600 0.8rem var(--sans);
+}
+.v2-ctl svg { width: 22px; height: 22px; }
+.v2-ctl.is-on { background: #ffffff; color: var(--night); }
+.v2-ctl.end { background: #b23a2e; }
+.v2-end-glyph { width: 26px; height: 9px; border-radius: 6px; background: #ffffff; margin-bottom: 4px; }
+.v2-call :focus-visible { outline-color: var(--gold); }

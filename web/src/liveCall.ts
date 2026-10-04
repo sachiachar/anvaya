@@ -86,6 +86,11 @@ export class LiveCall {
     };
   }
 
+  /** Mute or unmute the microphone without ending the call (the new design's Mute button). */
+  setMuted(muted: boolean) {
+    this.stream?.getAudioTracks().forEach((t) => { t.enabled = !muted; });
+  }
+
   /** The owner started talking: stop the assistant mid-sentence, like a real call. */
   private stopPlayback() {
     this.playing.forEach((n) => { try { n.stop(); } catch { /* already stopped */ } });

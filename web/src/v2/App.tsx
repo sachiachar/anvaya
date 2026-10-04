@@ -5,6 +5,7 @@ import { useAction } from "../ui";
 import { ROLE_TEXT, friendlyError } from "./copy";
 import { ShowHow } from "./demo";
 import { Book, Close, Lock, Mic, People, ThreadMark } from "./icons";
+import Talk from "./owner/Talk";
 
 // The platform admin opens the separate admin portal (PR-12.9).
 const ADMIN_URL = import.meta.env.VITE_ADMIN_URL ?? (import.meta.env.DEV ? "/admin.html" : "https://anvaya-admin.web.app");
@@ -137,7 +138,7 @@ function screen(person: DemoPerson, tab: OwnerTab) {
 function OwnerTabPlaceholder({ tab }: { tab: OwnerTab }) {
   switch (tab) {
     case "talk":
-      return <Soon title="Talk to Saathi" text="The new Talk screen is coming in the next update. For now, talk to Saathi in the classic design." />;
+      return <Talk />;
     case "kept":
       return <Soon title="Your book" text="Everything you've kept, as chapters of a book, is coming soon. For now, see it under My plan in the classic design." />;
     case "family":
