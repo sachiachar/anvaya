@@ -13,6 +13,10 @@ ALLOWED_EMAILS is a comma-separated list of addresses and/or domains:
 
 from __future__ import annotations
 
+import asyncio
+import re
+import threading
+import time
 from dataclasses import dataclass
 
 from fastapi import HTTPException, Request
@@ -23,7 +27,32 @@ from . import demo
 from .config import settings
 from .governance import core as governance
 
-_request = google_requests.Request()
+
+
+class _CachedRequest:
+    """Google's sign-in certificates, kept until they expire. A plain Request fetches them on every
+    check, which put a round trip to Google in front of every API call."""
+
+    def __init__(self) -> None:
+        self._http = google_requests.Request()
+        self._lock = threading.Lock()
+        self._cache: dict[str, tuple[float, object]] = {}
+
+    def __call__(self, url, method="GET", body=None, headers=None, timeout=None, **kwargs):
+        if method != "GET" or body is not None:
+            return self._http(url, method=method, body=body, headers=headers, timeout=timeout, **kwargs)
+        with self._lock:
+            expires, response = self._cache.get(url, (0.0, None))
+            if response is not None and time.time() < expires:
+                return response
+            response = self._http(url, method=method, headers=headers, timeout=timeout, **kwargs)
+            if response.status == 200:
+                match = re.search(r"max-age=(\d+)", response.headers.get("cache-control", ""))
+                self._cache[url] = (time.time() + (int(match.group(1)) if match else 300), response)
+            return response
+
+
+_request = _CachedRequest()
 
 
 @dataclass
@@ -69,7 +98,7 @@ async def require_user(request: Request) -> User | None:
         return None
     header = request.headers.get("authorization", "")
     token = header[7:] if header.lower().startswith("bearer ") else None
-    user = verify(token)
+    user = await asyncio.to_thread(verify, token)  # off the event loop, so other requests keep moving
     request.state.user = user
     governance.set_current_user(governance.user_key(user.uid))
     demo.begin(user.uid)

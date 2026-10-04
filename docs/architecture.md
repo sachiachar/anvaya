@@ -83,7 +83,7 @@ flowchart LR
 | `gemini.py` | Shared Gemini client with retries and backoff; `generate_json` with Pydantic schemas, falling back to the agent's own fallback model from the registry (an agent without one reports the model as busy) |
 | `web_search.py` | Web search for the fraud researcher with Exa (exa.ai): our code searches, Gemini answers only from the returned pages and must quote them word for word, and a source counts only if its quote is really in the page. Only agents the registry allows `web_search` may search; queries carry fraud research only, never owner data |
 | `schemas.py` | Pydantic models used as Gemini `response_schema` and as the API contract |
-| `store.py` | Document store: `memory` (tests), `file` (local demo, survives restarts), `firestore` (Google Cloud) |
+| `store.py` | Document store: `memory` (tests), `file` (local demo, survives restarts), `firestore` (Google Cloud). Its calls block, so the live call, the Talk route and sign-in run them in worker threads (`asyncio.to_thread`), and saving cards holds `proposals.saving` so two saves at once can't make the same card |
 | `media.py`, `config.py` | Original media (Cloud Storage or local folder); settings from the environment |
 
 ### 3.3 Models (all configurable in `.env`)
@@ -350,6 +350,7 @@ Automated tests (`agents/tests/`), with Gemini stubbed so they run without crede
 - governance: server-side roles, approvals, the kill switch, and a portal that never returns conversation text or names;
 - the gateway: every file that calls Gemini goes through it, every agent named in code is registered, and every call is recorded in the ledger;
 - limits per request: output caps, retries, input size, call length and reply length.
+- responsiveness: Google's sign-in certificates are fetched once until they expire, a slow store doesn't hold up a live call, and two exchanges saved at once make one card.
 - dependencies: every direct dependency is in the inventory, every installed package has an allowed licence, every font folder carries its OFL licence and is in the inventory, and the Python and Node versions agree everywhere.
 
 Every pull request runs the linters (ruff for `agents/`, Biome for `web/`), these tests and the web build ([.github/workflows/ci.yml](../.github/workflows/ci.yml)).

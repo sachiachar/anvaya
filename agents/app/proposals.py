@@ -13,10 +13,15 @@ Cards are drafts in Firestore. Keeping one commits it to the owner's kept-knowle
 from __future__ import annotations
 
 import re
+import threading
 from typing import Any
 
 from . import gaps, knowledge
 from .store import new_id, store
+
+# Held while a Talk turn or a call exchange saves its cards. Saving runs in worker threads, off the
+# event loop, and without this two exchanges saved at once could each make the same card.
+saving = threading.Lock()
 
 
 def _norm(text: str | None) -> str:
