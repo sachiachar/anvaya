@@ -83,7 +83,7 @@ export default function Review({ items, summary, summaryState, meta, note = null
           </ul>
         </>
       ) : (
-        <p className="v2-review-lede">Nothing in this conversation needs saving.</p>
+        <p className="v2-review-lede">{note ? "Saathi is still working out what to keep from this call." : "Nothing in this conversation needs saving."}</p>
       )}
 
       {error && <p className="v2-error" role="alert">{error}</p>}

@@ -103,6 +103,17 @@ export default function Talk() {
     return () => { const c = call.current; call.current = null; c?.end(); stopSpeaking(); };
   }, []);
 
+  // While anything is still being saved (the end of a call), check back every few seconds so its
+  // items appear without a reload. The server stops counting a lost save after two minutes.
+  const anySaving = (turns ?? []).some((t) => t.saving);
+  useEffect(() => {
+    if (!anySaving || callState !== "off") return;
+    const t = setTimeout(() => {
+      api.conversation().then((r) => setTurns(r.turns)).catch(() => { /* next time */ });
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [anySaving, turns, callState]);
+
   // The call clock.
   useEffect(() => {
     if (callState === "off" || callState === "connecting") return;
@@ -285,18 +296,16 @@ export default function Talk() {
     setTurns(latest);
     // Review what's ready; an exchange Saathi is still finishing waits for the owner as "from earlier".
     const fromCall = latest.filter((t) => !baseline.has(t.id));
-    const ids = fromCall.filter((t) => !t.saving).map((t) => t.id);
     setStillSaving(fromCall.some((t) => t.saving));
     setCallTurns(fromCall.map((t) => t.id)); // Discard covers the whole call, even what's still saving
-    if (!ids.length) {
+    if (!fromCall.length) {
       setPhase("talk");
-      setNotice(fromCall.length
-        ? "Saathi is still finishing what you said. It will wait for you here to review."
-        : "Saathi didn't catch anything in that call. Try again whenever you're ready.");
-      if (fromCall.length) await closeConversation();
+      setNotice("Saathi didn't catch anything in that call. Try again whenever you're ready.");
       return;
     }
-    openReview(ids, true, true);
+    // Always the review, so the whole call can be saved or discarded; items still being saved
+    // aren't listed yet, and wait for the owner as "from earlier" when they arrive.
+    openReview(fromCall.map((t) => t.id), true, true);
   }
 
 
