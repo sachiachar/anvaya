@@ -10,6 +10,7 @@
 - **Talk, in the new design:** Vikram's home is one greeting, one suggested topic ("Today, perhaps") and a large Talk to Saathi button. "Talk about this" starts a call that opens on that topic.
 - The call fills the screen, like a phone call: large captions of what Saathi says and what it heard, a clock, Mute and End. Cards to keep rise from the bottom only while Saathi is quiet, so they never cut across it, and the call carries on while Vikram decides.
 - Typing, photos and documents are one tap away. The conversation runs along a gold thread, Saathi's words in the brand's serif, and each card Vikram keeps becomes a gold bead on the thread.
+- Near or at today's limit, "Ask for more" works in the new design too, with the same limits, and shows when a request is waiting and when it's approved.
 - Everything that's only for the demo now sits in one Demo drawer: whose screen to show, "Show how Saathi works", the optional nickname, the knowledge map and "Reset my demo", which now asks before it clears anything.
 - If someone reports that the owner has passed away, the alert with "I'm well, cancel this" shows in the new design too.
 - The fonts are served from Anvaya's own site, so no visitor's address goes to a font service. Hindi and other Devanagari text has its own matching typeface.

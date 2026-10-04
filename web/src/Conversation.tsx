@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { type Allowance, api, type InventoryItem, type Moment, type MoreKind, type Person, type Proposal, type Turn } from "./api";
+import { MORE, requestText } from "./allowance";
 import { LiveCall, type CallEvent } from "./liveCall";
 
 const GREETING: Turn = {
@@ -287,17 +288,7 @@ const MEASURE: Record<string, string> = {
   spoken_replies: "spoken replies",
 };
 
-/** A gentle note near or at today's allowance (PR-10.4). It never blocks the screen. */
-// What each measure's request asks for, and the unit shown (daily_allowance is in thousands of tokens).
-const MORE: Record<string, { kind: MoreKind; unit: string; step: number }> = {
-  tokens: { kind: "daily_allowance", unit: "thousand tokens", step: 100 },
-  voice_minutes: { kind: "voice_minutes", unit: "voice minutes", step: 30 },
-  spoken_replies: { kind: "spoken_replies", unit: "spoken replies", step: 50 },
-};
-const KIND_TEXT: Record<MoreKind, string> = {
-  daily_allowance: "thousand tokens", voice_minutes: "voice minutes", spoken_replies: "spoken replies",
-};
-
+/** A gentle note near or at today's allowance (PR-10.4), with "Ask for more" (PR-10.6). It never blocks the screen. */
 function AllowanceNotice({ allowance, muted, onAsked }: { allowance: Allowance; muted: boolean; onAsked: () => void }) {
   const owner = allowance.pools.owner ?? {};
   const reachedKeys = Object.entries(owner).filter(([, m]) => m.state === "reached").map(([k]) => k);
@@ -334,11 +325,7 @@ function AllowanceNotice({ allowance, muted, onAsked }: { allowance: Allowance; 
         </p>
       )}
       {requests.map((r) => (
-        <p key={r.id}>
-          {r.status === "pending"
-            ? `You asked for ${r.amount} more ${KIND_TEXT[r.kind]}: waiting for approval.`
-            : `Approved: ${r.amount} more ${KIND_TEXT[r.kind]} until ${new Date((r.expires_at ?? 0) * 1000).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" })}.`}
-        </p>
+        <p key={r.id}>{requestText(r)}</p>
       ))}
       {(reached.length > 0 || near.length > 0) && !asking && (
         <button className="link" onClick={() => { setKind(first.kind); setAsking(true); }}>Ask for more</button>

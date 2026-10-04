@@ -287,7 +287,7 @@ export default function Talk() {
           {error && <p className="v2-error" role="alert">{error}</p>}
         </section>
       ) : (
-        <Chat turns={all} thinking={thinking} error={error} speak={speak} allowance={allowance}
+        <Chat turns={all} thinking={thinking} error={error} speak={speak} allowance={allowance} onAsked={refreshAllowance}
           onBack={() => setView("home")} onSend={send} onCall={startCall} calling={callState !== "off"}
           onToggleSpeak={() => { speakRef.current = !speak; setSpeak(!speak); stopSpeaking(); }}
           onDecide={decide} onKeepAll={keepAll} deciding={deciding} />
