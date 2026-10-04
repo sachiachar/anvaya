@@ -23,7 +23,8 @@ const withTimeout = <T,>(p: Promise<T>, ms: number) =>
   Promise.race([p, new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timed out")), ms))]);
 const pending = (turns: Turn[]) => turns.flatMap((t) => t.proposals ?? []).filter((p) => p.status === "pending");
 
-export default function Talk() {
+/** topic: a page still to write that the owner chose in the book ("Talk about this"). */
+export default function Talk({ topic: chosen = null }: { topic?: string | null }) {
   const [turns, setTurns] = useState<Turn[] | null>(null);
   const [baseline, setBaseline] = useState<ReadonlySet<string> | null>(null); // turns from before this conversation
   const [phase, setPhase] = useState<Phase>("talk");
@@ -96,7 +97,7 @@ export default function Talk() {
     api.tasks()
       .then((r) => r.tasks.find((t) => (t.action === "talk" || t.action === "family") && t.question_for_owner)?.question_for_owner ?? null)
       .then(async (q) => q ?? (await api.gaps()).gaps[0]?.text ?? null)
-      .then(setTopic)
+      .then((q) => setTopic(chosen ?? q))
       .catch(() => setTopic(null));
     refreshAllowance();
     // Leaving Talk ends any call, even one still connecting, and any reply being read aloud.

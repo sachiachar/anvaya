@@ -224,7 +224,7 @@ a { color: inherit; text-decoration-color: var(--gold); text-underline-offset: 3
 .v2-switch input { width: 22px; height: 22px; accent-color: var(--action); flex: none; }
 .v2-sheet section > .v2-link { justify-self: start; }
 .v2-switch-hint { display: block; color: var(--muted); font-size: var(--step--1); }
-.v2-grow { flex: 1 1 180px; width: auto; }
+.v2-grow { flex: 1 1 180px; width: auto; min-width: 0; }
 .v2-confirm { display: grid; gap: 10px; padding: 14px; border-radius: 12px; background: var(--step-soft); }
 
 /* ---- The shared crash screen (../ErrorBoundary.tsx uses the classic class names) -------------- */
@@ -419,3 +419,94 @@ a { color: inherit; text-decoration-color: var(--gold); text-underline-offset: 3
 .v2-talk.is-live .v2-talk-head p { line-height: 22px; }
 .v2-talk.is-live .v2-clock { line-height: 20px; }
 @media (max-height: 640px) { .v2-talk.is-live .v2-talk-head { height: 56px; grid-template-rows: 32px 20px; } }
+/* ==== Kept, Family and Vault tabs ==================================================================== */
+.v2-tab-head { display: grid; gap: 6px; padding-top: 6px; }
+.v2-tab-head h1 { font-size: clamp(1.9rem, 8.5vw, 2.4rem); line-height: 1.1; font-weight: 500; }
+.v2-tab-head p { color: var(--ink-2); }
+.v2-ok { color: var(--ok); font-weight: 500; font-size: var(--step--1); }
+.v2-check { display: flex; gap: 10px; align-items: flex-start; font-size: var(--step--1); color: var(--ink-2); cursor: pointer; }
+.v2-check input { width: 20px; height: 20px; margin-top: 1px; flex: none; accent-color: var(--action); }
+.v2-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.v2-chip {
+  min-height: 44px; padding: 8px 16px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--surface);
+  color: var(--ink); font: 500 var(--step--1) var(--sans); cursor: pointer;
+}
+.v2-chip span { color: var(--muted); font-weight: 400; }
+.v2-chip[aria-pressed="true"] { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 14%, var(--surface)); }
+.v2-pages { list-style: none; margin: 0; padding: 0; display: grid; }
+.v2-pages > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px 0; border-top: 1px solid var(--line); }
+.v2-pages > li:first-child { border-top: 0; }
+.v2-page-title { font: 500 1.0625rem/1.35 var(--serif); }
+.v2-page-desc { font-size: var(--step--1); color: var(--ink-2); }
+
+/* ---- The book ------------------------------------------------------------------------------------- */
+.v2-book { display: grid; gap: 18px; }
+.v2-cover {
+  position: relative; display: grid; gap: 10px; padding: 26px 22px 22px 30px; border-radius: 6px 18px 18px 6px; overflow: hidden;
+  background: radial-gradient(120% 120% at 90% 0%, #1c2d5c, var(--night) 65%); color: var(--night-ink);
+  box-shadow: inset 8px 0 0 #070d1f, 0 18px 30px -18px rgba(11, 19, 43, 0.6);
+}
+.v2-cover::after { content: ""; position: absolute; inset: 10px 10px 10px 18px; border: 1px solid rgba(212, 175, 55, 0.35); border-radius: 4px 12px 12px 4px; pointer-events: none; }
+.v2-cover h1 { font-size: clamp(1.9rem, 8vw, 2.3rem); line-height: 1.1; color: #f6e7c1; font-weight: 500; }
+.v2-cover-for { font: 600 0.72rem/1 var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+.v2-cover-count { color: #e2c98f; font-size: var(--step--1); }
+.v2-cover-bar { height: 3px; border-radius: 2px; background: rgba(241, 223, 180, 0.18); }
+.v2-cover-bar i { display: block; height: 100%; border-radius: 2px; background: var(--gold); }
+.v2-cover-how { font-size: 0.8rem; color: var(--night-muted); }
+.v2-chapters { display: grid; border-top: 1px solid var(--line); }
+.v2-chapter { border-bottom: 1px solid var(--line); }
+.v2-chapter-head {
+  width: 100%; min-height: 60px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center;
+  padding: 12px 2px; background: none; border: 0; color: var(--ink); text-align: left; cursor: pointer; font: inherit;
+}
+.v2-chapter-title { font: 500 1.2rem/1.25 var(--serif); }
+.v2-chapter-count { font-size: var(--step--1); color: var(--muted); }
+.v2-chapter-chev { display: inline-flex; color: var(--muted); transition: transform 0.2s; }
+.v2-chapter-chev svg { width: 20px; height: 20px; }
+.v2-chapter.is-open .v2-chapter-chev { transform: rotate(90deg); }
+.v2-chapter-body { display: grid; gap: 12px; padding: 0 2px 18px; }
+.v2-wishtools { display: grid; gap: 12px; padding: 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.v2-towrite { display: grid; gap: 10px; }
+.v2-towrite h2 { font-size: var(--step-2); }
+.v2-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.v2-steps > li { display: grid; gap: 8px; padding: 14px 16px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--gold); }
+.v2-steps > li.sev-high { border-left-color: var(--step); }
+.v2-step-title { font: 500 1.0625rem/1.35 var(--serif); }
+.v2-step-why { font-size: var(--step--1); color: var(--ink-2); }
+.v2-step-list { margin: 0; padding-left: 20px; font-size: var(--step--1); color: var(--ink-2); }
+.v2-book-foot { text-align: center; padding-bottom: 8px; }
+
+/* ---- Family: the recipient handshake -------------------------------------------------------------- */
+.v2-handshake { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.v2-handshake li { display: grid; justify-items: center; gap: 4px; text-align: center; font-size: 0.78rem; color: var(--muted); }
+.v2-handshake li span {
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 600;
+  border: 1.5px solid var(--line); background: var(--surface); color: var(--muted);
+}
+.v2-handshake li span svg { width: 16px; height: 16px; }
+.v2-handshake li.is-done span { background: var(--ok); border-color: var(--ok); color: #fff; }
+.v2-handshake li.is-now { color: var(--ink); font-weight: 600; }
+.v2-handshake li.is-now span { border-color: var(--gold); color: var(--ink); }
+.v2-code { font: 600 1.6rem/1.2 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 0.08em; text-align: center; padding: 14px; border-radius: 12px; background: var(--sunk); overflow-wrap: anywhere; }
+.v2-sealed { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; border-radius: 14px; background: var(--night); color: var(--night-ink); }
+.v2-sealed svg { width: 26px; height: 26px; color: var(--gold); flex: none; margin-top: 2px; }
+.v2-sealed .v2-muted { color: var(--night-muted); }
+.v2-request { display: grid; gap: 8px; padding: 14px 16px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--gold) 50%, var(--line)); background: color-mix(in srgb, var(--gold) 7%, var(--surface)); }
+.v2-quote { font: italic 400 var(--step-0) var(--serif); color: var(--ink-2); }
+.v2-panel .v2-btn svg, .v2-vault-status .v2-btn svg { width: 20px; height: 20px; }
+
+/* ---- Vault ------------------------------------------------------------------------------------------- */
+.v2-vault-status { display: flex; gap: 16px; align-items: flex-start; padding: 20px; border-radius: 18px; background: var(--surface); border: 1.5px dashed color-mix(in srgb, var(--gold) 60%, var(--line)); }
+.v2-vault-status > svg { width: 30px; height: 30px; flex: none; color: var(--gold-ink); margin-top: 2px; }
+.v2-vault-status > div { display: grid; gap: 8px; justify-items: start; }
+.v2-vault-status.is-sealed { background: radial-gradient(120% 120% at 90% 0%, #1c2d5c, var(--night) 65%); border: 0; color: var(--night-ink); }
+.v2-vault-status.is-sealed > svg { color: var(--gold); }
+.v2-vault-line { font: 500 1.35rem/1.2 var(--serif); }
+.v2-vault-status.is-sealed .v2-vault-line { color: #f6e7c1; }
+.v2-secrets { list-style: none; margin: 0; padding: 0; display: grid; }
+.v2-secrets li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+.v2-secrets li:first-child { border-top: 0; }
+.v2-secrets li svg { width: 20px; height: 20px; color: var(--gold-ink); }
+.v2-secret-name { font-weight: 500; overflow-wrap: anywhere; }
+.v2-secret-kind { font-size: 0.8rem; color: var(--muted); }
+fieldset.v2-chips { border: 0; margin: 0; padding: 0; min-width: 0; }

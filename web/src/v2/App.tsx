@@ -4,9 +4,12 @@ import { authEnabled, signInWithGoogle, signOutUser, watchUser } from "../auth";
 import { useAction } from "../ui";
 import { ROLE_TEXT, friendlyError } from "./copy";
 import { ShowHow } from "./demo";
-import { Book, Close, Lock, Mic, People, ThreadMark } from "./icons";
+import { Book as BookIcon, Close, Lock, Mic, People, ThreadMark } from "./icons";
 import { ModelKey } from "./ModelKey";
+import Book from "./owner/Book";
+import FamilyTab from "./owner/FamilyTab";
 import Talk from "./owner/Talk";
+import VaultTab from "./owner/VaultTab";
 
 // The platform admin opens the separate admin portal (PR-12.9).
 const ADMIN_URL = import.meta.env.VITE_ADMIN_URL ?? (import.meta.env.DEV ? "/admin.html" : "https://anvaya-admin.web.app");
@@ -16,7 +19,7 @@ const SHOW_HOW_KEY = "anvaya.v2.showHow";
 type OwnerTab = "talk" | "kept" | "family" | "vault";
 const OWNER_TABS: { id: OwnerTab; label: string; icon: () => ReactNode }[] = [
   { id: "talk", label: "Talk", icon: Mic },
-  { id: "kept", label: "Kept", icon: Book },
+  { id: "kept", label: "Kept", icon: BookIcon },
   { id: "family", label: "Family", icon: People },
   { id: "vault", label: "Vault", icon: Lock },
 ];
@@ -30,6 +33,11 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [drawer, setDrawer] = useState(false);
   const [tab, setTab] = useState<OwnerTab>("talk");
+  const [talkTopic, setTalkTopic] = useState<string | null>(null); // "Talk about this" from the book
+  const owner: OwnerNav = {
+    tab, go: (t) => { setTab(t); window.scrollTo({ top: 0 }); },
+    talkAbout: (q) => { setTalkTopic(q); setTab("talk"); window.scrollTo({ top: 0 }); }, topic: talkTopic,
+  };
   const [showHow, setShowHow] = useState(() => {
     try { return localStorage.getItem(SHOW_HOW_KEY) === "1"; } catch { return false; }
   });
@@ -84,7 +92,7 @@ export default function App() {
         <main className="v2-main">
           {error && <p className="v2-error" role="alert">{error}</p>}
           {!ready && !error && <p className="v2-muted">Opening your demo…</p>}
-          {ready && person && <div key={person.id} className="v2-stack">{screen(person, tab)}</div>}
+          {ready && person && <div key={person.id} className="v2-stack">{screen(person, owner)}</div>}
         </main>
 
         {ready && person?.role === "owner" && (
@@ -110,14 +118,16 @@ export default function App() {
   );
 }
 
+type OwnerNav = { tab: OwnerTab; go: (t: OwnerTab) => void; talkAbout: (question: string) => void; topic: string | null };
+
 // Each person sees their own screens; the server checks who is acting on every request (PR-1.3).
-function screen(person: DemoPerson, tab: OwnerTab) {
+function screen(person: DemoPerson, owner: OwnerNav) {
   switch (person.role) {
     case "owner":
       return (
         <>
           <AliveAlert />
-          <OwnerTabPlaceholder tab={tab} />
+          <OwnerTabScreen owner={owner} />
         </>
       );
     case "family":
@@ -136,16 +146,16 @@ function screen(person: DemoPerson, tab: OwnerTab) {
   }
 }
 
-function OwnerTabPlaceholder({ tab }: { tab: OwnerTab }) {
-  switch (tab) {
+function OwnerTabScreen({ owner }: { owner: OwnerNav }) {
+  switch (owner.tab) {
     case "talk":
-      return <Talk />;
+      return <Talk key={owner.topic ?? ""} topic={owner.topic} />;
     case "kept":
-      return <Soon title="Your book" text="Everything you've kept, as chapters of a book, is coming soon. For now, see it under My plan in the classic design." />;
+      return <Book onTalkAbout={owner.talkAbout} onReview={() => owner.go("talk")} />;
     case "family":
-      return <Soon title="Your family" text="Choosing who receives your vault, and letting family in, is coming soon. For now, use the classic design." />;
+      return <FamilyTab onVault={() => owner.go("vault")} />;
     case "vault":
-      return <Soon title="Your vault" text="The new vault screen is coming soon. For now, use the classic design." />;
+      return <VaultTab onFamily={() => owner.go("family")} />;
   }
 }
 
