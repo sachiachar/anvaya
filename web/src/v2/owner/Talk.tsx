@@ -274,9 +274,11 @@ export default function Talk() {
     const left = () => deadline - Date.now();
     let latest: Turn[] | null = null;
     // A hard limit: every wait and every request fits inside the deadline.
-    while (left() > 0 && !reviewNow.current) {
+    // "Review now" (or the deadline) ends the wait once something has loaded; until then, keep trying
+    // inside the deadline.
+    while (left() > 0 && !(reviewNow.current && latest)) {
       for (let waited = 0; waited < 1200 && left() > 0 && !reviewNow.current; waited += 200) await sleep(200);
-      if (left() <= 0 && latest) break;
+      if ((left() <= 0 || reviewNow.current) && latest) break;
       try {
         latest = (await withTimeout(api.conversation(), Math.max(1500, Math.min(5000, left())))).turns;
         if (!latest.some((t) => !baseline.has(t.id) && t.saving)) break;
