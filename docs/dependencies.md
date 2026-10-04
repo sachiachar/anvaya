@@ -71,6 +71,18 @@ Everything Anvaya is built on, with each item's version, licence and purpose. Ve
 
 **Indirect packages** are MIT, Apache-2.0, BSD-3-Clause, ISC or 0BSD, except `lightningcss` (MPL-2.0). It's a CSS tool Vite uses during the build, and none of its code ships to users.
 
+## Fonts (`web/public/fonts/`)
+
+The brand typefaces, served from our own site, so no visitor's address goes to a font service. Only the new design (`v2.html`) loads them. They come from the Fontsource builds of the Google Fonts releases, as woff2 files.
+
+| Font | Version | Licence | Purpose |
+| --- | --- | --- | --- |
+| lora | 5.3.0 (Fontsource) | OFL-1.1 | Headings and Saathi's words: the brand's warm serif. Latin and Latin Extended, upright and italic |
+| inter | 5.3.0 (Fontsource) | OFL-1.1 | The interface: the brand's sans-serif. Latin and Latin Extended |
+| mukta | 5.3.0 (Fontsource) | OFL-1.1 | Hindi, Marathi and other Devanagari text, regular and semibold |
+
+**Licence exception, for font files only:** the SIL Open Font License 1.1 lets anyone use, embed and share the fonts, including in commercial products. The only conditions are that the licence travels with the font files and that the fonts aren't sold on their own. Each font's folder has its `OFL.txt`, and a test checks that every font folder has one and a row in this table. OFL is not allowed for code.
+
 ## GitHub Actions
 
 | Action | Version | Licence | Purpose |

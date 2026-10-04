@@ -57,6 +57,8 @@ flowchart LR
 | `src/Family.tsx` | Request access; accept the vault invitation (recovery code, key code); restore on a new phone; start the handover; unlock the vault; ask the assistant; settlement |
 | `src/vaultCrypto.ts` | All vault cryptography (Web Crypto): data key, recipient key pair, recovery-code backup (PBKDF2), key fingerprint |
 | `src/api.ts`, `src/ui.tsx` | Typed API client; shared UI and the autonomy badge context |
+| `v2.html`, `src/v2/` | The new design (v2), served at `/v2.html` beside the classic app, which keeps working unchanged. Brand tokens and self-hosted fonts in `v2.css`; line icons and the thread mark in `icons.tsx`; customer wording and plain error messages in `copy.ts`. `App.tsx` holds sign-in, the owner's tabs (Talk, Kept, Family, Vault) and the Demo drawer (whose screen to show, "Show how Saathi works", nickname, reset, knowledge map, classic design). It reuses `api.ts`, `auth.ts`, `liveCall.ts` and `vaultCrypto.ts` and never loads `styles.css`. The tabs are filled in by later changes |
+| `public/fonts/` | Lora, Inter and Mukta (Devanagari) as woff2, each with its `OFL.txt`; only v2 loads them |
 
 ### 3.2 Agents service (`agents/app/`)
 
@@ -348,7 +350,7 @@ Automated tests (`agents/tests/`), with Gemini stubbed so they run without crede
 - governance: server-side roles, approvals, the kill switch, and a portal that never returns conversation text or names;
 - the gateway: every file that calls Gemini goes through it, every agent named in code is registered, and every call is recorded in the ledger;
 - limits per request: output caps, retries, input size, call length and reply length.
-- dependencies: every direct dependency is in the inventory, every installed package has an allowed licence, and the Python and Node versions agree everywhere.
+- dependencies: every direct dependency is in the inventory, every installed package has an allowed licence, every font folder carries its OFL licence and is in the inventory, and the Python and Node versions agree everywhere.
 
 Every pull request runs the linters (ruff for `agents/`, Biome for `web/`), these tests and the web build ([.github/workflows/ci.yml](../.github/workflows/ci.yml)).
 

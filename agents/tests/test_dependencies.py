@@ -81,6 +81,21 @@ def test_npm_packages_have_allowed_licences():
     assert not bad, f"licences need review (see AGENTS.md): {bad}"
 
 
+def test_fonts_carry_their_licence_and_are_in_the_inventory():
+    """Font files are the one place OFL-1.1 is allowed: the licence must travel with them."""
+    fonts_table = INVENTORY.split("## Fonts", 1)[1].split("\n## ", 1)[0]
+    folders = [f for f in (WEB / "public" / "fonts").iterdir() if f.is_dir()]
+    assert folders, "web/public/fonts/ has no font folders"
+    for folder in folders:
+        licence = folder / "OFL.txt"
+        assert licence.is_file(), f"{folder.name}: add its OFL.txt"
+        assert "SIL Open Font License, Version 1.1" in licence.read_text(), f"{folder.name}: OFL.txt isn't OFL-1.1"
+        assert re.search(rf"^\| {re.escape(folder.name)} \|", fonts_table, re.M), (
+            f"{folder.name}: add it to the Fonts table in docs/dependencies.md")
+        others = [f.name for f in folder.iterdir() if f.name != "OFL.txt" and f.suffix != ".woff2"]
+        assert not others, f"{folder.name}: only .woff2 font files and OFL.txt belong here: {others}"
+
+
 def test_runtime_versions_agree_everywhere():
     python = (AGENTS / ".python-version").read_text().strip()
     assert re.search(rf'requires-python = ">={re.escape(python)}"', (AGENTS / "pyproject.toml").read_text())

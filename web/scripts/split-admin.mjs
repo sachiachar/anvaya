@@ -7,3 +7,5 @@ cpSync("dist", "dist-admin", { recursive: true });
 rmSync("dist-admin/index.html");
 renameSync("dist-admin/admin.html", "dist-admin/index.html");
 rmSync("dist-admin/manifest.webmanifest", { force: true });
+rmSync("dist-admin/v2.html", { force: true }); // the new app design belongs on the app site only
+rmSync("dist-admin/fonts", { recursive: true, force: true }); // only v2 uses them
