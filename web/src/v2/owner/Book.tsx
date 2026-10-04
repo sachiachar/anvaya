@@ -32,6 +32,7 @@ export default function Book({ onTalkAbout, onReview }: { onTalkAbout: (question
   const [waiting, setWaiting] = useState(0);
   const [open, setOpen] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<KeptItem | null>(null);
+  const [missingFailed, setMissingFailed] = useState(false); // next steps or gaps couldn't be loaded
   // Separate busy flags: opening the book, changing a page, and Saathi looking for gaps.
   const load = useAction();
   const { busy, error, run } = useAction();
@@ -40,8 +41,8 @@ export default function Book({ onTalkAbout, onReview }: { onTalkAbout: (question
   useEffect(() => {
     load.run(async () => setItems((await api.kept()).items));
     api.owner().then((o) => setOwner({ name: String(o.name ?? ""), family: o.family ?? [] })).catch(() => {});
-    api.tasks().then((r) => { setScore(r.score); setTasks(r.tasks); }).catch(() => setTasks([]));
-    api.gaps().then((r) => setGaps(r.gaps)).catch(() => {});
+    api.tasks().then((r) => { setScore(r.score); setTasks(r.tasks); }).catch(() => { setTasks([]); setMissingFailed(true); });
+    api.gaps().then((r) => setGaps(r.gaps)).catch(() => setMissingFailed(true));
     api.review().then((r) => setWaiting(r.moments.length + r.inventory.length)).catch(() => {});
   }, []);
 
@@ -58,13 +59,25 @@ export default function Book({ onTalkAbout, onReview }: { onTalkAbout: (question
   const forWhom = (owner?.family ?? []).map((f) => f.replace(/\s*\(.*\)$/, "")).filter(Boolean);
   const firstName = owner?.name.split(" ")[0] ?? "";
 
+  if (items === null && load.error) {
+    return (
+      <div className="v2-book">
+        <section className="v2-panel" role="alert">
+          <h2>Your book couldn't be opened just now</h2>
+          <p className="v2-muted">Nothing you kept has changed. {friendlyError(new Error(load.error))}</p>
+          <button className="v2-btn quiet" disabled={load.busy} onClick={() => load.run(async () => setItems((await api.kept()).items))}>Try again</button>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="v2-book">
       <section className="v2-cover" aria-labelledby="book-title">
         {forWhom.length > 0 && <p className="v2-cover-for">For {listOf(forWhom)}</p>}
         <h1 id="book-title">The book of<br />{owner?.name || "your family"}</h1>
         <p className="v2-cover-count">
-          {kept.length === 1 ? "1 page kept" : `${kept.length} pages kept`}
+          {items === null ? "Opening your book…" : kept.length === 1 ? "1 page kept" : `${kept.length} pages kept`}
           {toWrite > 0 && ` · ${toWrite === 1 ? "1 page" : `${toWrite} pages`} still to write`}
         </p>
         <div className="v2-cover-bar" aria-hidden="true"><i style={{ width: `${share}%` }} /></div>
@@ -125,7 +138,7 @@ export default function Book({ onTalkAbout, onReview }: { onTalkAbout: (question
         <h2 id="towrite-title">Pages still to write</h2>
         <p className="v2-muted">These would help your family most. Talk about any of them, or skip the ones you'd rather not.</p>
         {tasks && tasks.length === 0 && gaps.length === 0 && (
-          <p className="v2-muted v2-small">{score === null ? "Saathi hasn't looked for gaps yet." : "Nothing missing right now."}</p>
+          <p className="v2-muted v2-small">{missingFailed ? "What's still missing couldn't be loaded just now." : score === null ? "Saathi hasn't looked for gaps yet." : "Nothing missing right now."}</p>
         )}
         <ul className="v2-steps">
           {gaps.map((g) => (

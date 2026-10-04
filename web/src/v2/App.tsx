@@ -47,7 +47,7 @@ export default function App() {
     try { localStorage.setItem(SHOW_HOW_KEY, v ? "0" : "1"); } catch { /* not saved */ }
     return !v;
   });
-  const switchTo = (id: PersonId) => { setActingAs(id); setActing(id); setDrawer(false); };
+  const switchTo = (id: PersonId) => { setActingAs(id); setActing(id); setDrawer(false); setTalkTopic(null); };
 
   // Sign-in, as in the classic app: "checking" until Firebase answers, then "signed-out", "denied" or "in".
   const [session, setSession] = useState<"checking" | "signed-out" | "denied" | "in">(authEnabled ? "checking" : "in");
@@ -106,7 +106,7 @@ export default function App() {
           <nav className="v2-nav" aria-label="Main">
             <div className="v2-nav-inner">
               {OWNER_TABS.map((t) => (
-                <button key={t.id} aria-current={tab === t.id ? "page" : undefined} onClick={() => setTab(t.id)}>
+                <button key={t.id} aria-current={tab === t.id ? "page" : undefined} onClick={() => owner.go(t.id)}>
                   {t.icon()}
                   {t.label}
                 </button>
