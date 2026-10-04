@@ -62,7 +62,7 @@ gcloud secrets add-iam-policy-binding gemini-api-key --member "serviceAccount:$S
 
 echo "== Deploy agents to Cloud Run"
 gcloud run deploy "$SERVICE" --source agents --region "$REGION" --service-account "$SA" \
-  --allow-unauthenticated --memory 1Gi --timeout 3600 \
+  --allow-unauthenticated --memory 1Gi --timeout 3600 --cpu-boost \
   --set-secrets "GOOGLE_API_KEY=gemini-api-key:latest" \
   --set-env-vars "^;^GOOGLE_GENAI_USE_VERTEXAI=false;STORE=firestore;MEDIA_BUCKET=$BUCKET;KMS_KEY_NAME=$KMS_KEY_NAME;RELEASE_WAIT_SECONDS=60;AUTH_REQUIRED=true;FIREBASE_PROJECT_ID=$PROJECT_ID;ALLOWED_EMAILS=$ALLOWED_EMAILS;BILLING_EXPORT_TABLE=$BILLING_EXPORT_TABLE"
 
