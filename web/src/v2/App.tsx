@@ -5,6 +5,7 @@ import { useAction } from "../ui";
 import { ROLE_TEXT, friendlyError } from "./copy";
 import { ShowHow } from "./demo";
 import { Book as BookIcon, Close, Lock, Mic, People, ThreadMark } from "./icons";
+import KnowledgeMap from "./KnowledgeMap";
 import { ModelKey } from "./ModelKey";
 import Book from "./owner/Book";
 import FamilyTab from "./owner/FamilyTab";
@@ -83,6 +84,11 @@ export default function App() {
 
   if (session === "signed-out" || session === "denied") {
     return <SignIn denied={session === "denied" ? denied : null} error={error} onError={setError} />;
+  }
+
+  // The demo's knowledge map opens in its own window, always as the owner, as in the classic app.
+  if (location.hash === "#knowledge-map") {
+    return ready ? <KnowledgeMap /> : <p className="v2-muted v2-map-wait">{error ?? "Loading…"}</p>;
   }
 
   return (
@@ -288,7 +294,7 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
         )}
 
         <section>
-          <a className="v2-link" href="/#knowledge-map" target="_blank" rel="noopener">Open the knowledge map in a new window</a>
+          <a className="v2-link" href="/v2.html#knowledge-map" target="_blank" rel="noopener">Open the knowledge map in a new window</a>
           <a className="v2-link" href={CLASSIC_URL}>Switch to the classic design</a>
           {people.find((p) => p.id === acting)?.role === "family" && hasRecipientKeys() && (
             <button className="v2-link" onClick={() => { forgetRecipientKeyOnThisDevice(); onClose(); }}>
