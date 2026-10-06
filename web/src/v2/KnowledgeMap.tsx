@@ -71,6 +71,8 @@ export default function KnowledgeMap() {
   const [selected, setSelected] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);  // kept until the next try: refreshes don't clear it
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null); // asked in the page, not window.confirm
+  // A different item (or none) starts fresh: no question or error from the last one.
+  useEffect(() => { setRemoveError(null); setConfirmRemove(null); }, [selected]);
   const [hovered, setHovered] = useState<string | null>(null);
   const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 });
   const [, redraw] = useState(0);
