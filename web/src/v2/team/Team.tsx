@@ -134,14 +134,17 @@ function Confirm({ label, check, busy, onConfirm }: {
 /** After a passing: family members who were never listed. A person checks the relationship. */
 function AccessRequests() {
   const [requests, setRequests] = useState<AccessRequest[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const { busy, error, run } = useAction();
-  const refresh = () => api.teamAccessRequests().then((r) => setRequests(r.requests)).catch(() => { /* shown on next success */ });
+  const refresh = () => api.teamAccessRequests()
+    .then((r) => { setRequests(r.requests); setLoadError(null); })
+    .catch((e) => setLoadError(friendlyError(e)));
   useEffect(() => {
     void refresh();
     const t = setInterval(() => void refresh(), 5000);
     return () => clearInterval(t);
   }, []);
-  if (requests.length === 0) return null;
+  if (requests.length === 0 && !loadError) return null;
   return (
     <section className="v2-panel" aria-labelledby="team-requests">
       <p className="v2-eyebrow">Access requests</p>
@@ -157,6 +160,7 @@ function AccessRequests() {
           </div>
         </div>
       ))}
+      {loadError && <p className="v2-error" role="alert">Access requests couldn't be checked: {loadError}</p>}
       {error && <p className="v2-error" role="alert">{friendlyError(new Error(error))}</p>}
     </section>
   );

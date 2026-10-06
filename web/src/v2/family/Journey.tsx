@@ -22,11 +22,12 @@ export default function Journey({ me }: { me: string }) {
   const [status, setStatus] = useState<Case | null>(null);
   const [statusKnown, setStatusKnown] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [keyHere, setKeyHere] = useState(hasRecipientKeys()); // this phone holds the recipient's key
 
   useEffect(() => {
     api.owner().then((o) => setOwner(String(o.name ?? "").split(" ")[0])).catch(() => {});
     const refresh = () => api.releaseStatus()
-      .then((r) => { setStatus(r.case); setStatusKnown(true); setStatusError(null); })
+      .then((r) => { setStatus(r.case); setStatusKnown(true); setStatusError(null); setKeyHere(hasRecipientKeys()); })
       .catch((e) => setStatusError(friendlyError(e)));
     refresh();
     const t = setInterval(refresh, 3000);
@@ -46,7 +47,12 @@ export default function Journey({ me }: { me: string }) {
       </header>
       {statusError && !statusKnown && <p className="v2-error" role="alert">{statusError}</p>}
       {open?.state === "released" ? (
-        <After parent={parent} />
+        <>
+          {/* On a new phone the key has to be restored (with the recovery code) before the vault opens. */}
+          {!keyHere && <Recipient me={me} parent={parent} />}
+          {/* Keyed on the key: if it leaves this phone, the opened vault closes too. */}
+          <After key={String(keyHere)} parent={parent} />
+        </>
       ) : (
         <>
           <Recipient me={me} parent={parent} />

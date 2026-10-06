@@ -44,7 +44,8 @@ function OpenVault({ parent }: { parent: string }) {
         ) : (
           <ul className="v2-secrets is-open">
             {items.map((v, i) => (
-              <li key={`${v.label}-${v.category}`}>
+              // The vault's own order; two secrets can share a label.
+              <li key={`${i}-${v.label}`}>
                 <span className="v2-secret-name">{v.label}</span>
                 {shown.has(i) ? <code className="v2-secret-value">{v.secret}</code> : (
                   <button className="v2-link" onClick={() => setShown((s) => new Set(s).add(i))}>Show</button>
@@ -64,9 +65,11 @@ function Ask({ parent }: { parent: string }) {
   const [session, setSession] = useState<string | undefined>();
   const [thread, setThread] = useState<{ q: string; a: string; sources: { id: string; title: string }[] }[]>([]);
   const { busy, error, run } = useAction();
-  const papa = parent === "your family member" ? "them" : "Papa";
-  const suggestions = [`What insurance did ${papa} have?`, "पापा ने पैसे बचाने के बारे में क्या कहा था?", `Did ${papa} have any crypto?`];
-  const send = (question: string) => run(async () => {
+  const suggestions = parent === "your family member"
+    ? ["What insurance policies were there?", "Where are the important papers?", "Was there any crypto?"]
+    : ["What insurance did Papa have?", "पापा ने पैसे बचाने के बारे में क्या कहा था?", "Did Papa have any crypto?"];
+  /** One question at a time, so each answer carries on the same conversation (session). */
+  const send = (question: string) => busy ? undefined : run(async () => {
     const r = await api.ask(question, session);
     setSession(r.session_id);
     setThread((t) => [...t, { q: question, a: r.answer, sources: r.sources }]);

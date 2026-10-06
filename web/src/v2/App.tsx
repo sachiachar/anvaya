@@ -291,7 +291,7 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
           <a className="v2-link" href="/#knowledge-map" target="_blank" rel="noopener">Open the knowledge map in a new window</a>
           <a className="v2-link" href={CLASSIC_URL}>Switch to the classic design</a>
           {people.find((p) => p.id === acting)?.role === "family" && hasRecipientKeys() && (
-            <button className="v2-link" onClick={() => { forgetRecipientKeyOnThisDevice(); location.reload(); }}>
+            <button className="v2-link" onClick={() => { forgetRecipientKeyOnThisDevice(); onClose(); }}>
               Simulate a lost or new phone (forgets the key on this device)
             </button>
           )}
