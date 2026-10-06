@@ -210,7 +210,7 @@ Every push to `main` deploys **what changed since each part last deployed** ([.g
 
 **Who can use the demo** is kept in GitHub: *Settings → Environments → production → secret `ALLOWED_EMAILS`* (emails and/or `@domains`, comma-separated). Every API deploy applies it; to apply a change straight away, run **Actions → Deploy → Run workflow → allowlist**.
 
-**Actions → Deploy → Run workflow → all** deploys everything. GitHub signs in to Google Cloud with Workload Identity Federation, so no keys are stored in GitHub. One-time setup: `PROJECT_ID=… REPO=owner/repo ./infra/setup-github-actions.sh`.
+**Actions → Deploy → Run workflow → all** deploys everything. GitHub signs in to Google Cloud with Workload Identity Federation, so no keys are stored in GitHub. Google gives those credentials only to the Deploy workflow running on `main` in the `production` environment, and the deployer can only do what the deploy needs. One-time setup, and again after it changes: `PROJECT_ID=… REPO=owner/repo ./infra/setup-github-actions.sh` (needs a project owner and a repository admin).
 
 ## Demo in three minutes
 
