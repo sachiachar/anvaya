@@ -85,8 +85,8 @@ def known(owner_id: str) -> dict:
         "moments": [{"title": m["title"], "summary": m["summary"]} for m in _all("moments", owner_id)],
         "inventory": [f"{i['institution']} {i['product']} {i['account_hint']} (nominee: "
                       f"{i.get('nominee_or_beneficiary') or 'not recorded'})" for i in _all("inventory", owner_id)],
-        # PR-7.10: what's missing, found by fixed rules and ranked by harm; Saathi may raise one.
-        "open_gaps": gaps.top(owner_id),
+        # PR-7.10: what's missing, found by fixed rules and ranked by harm, and due now; Saathi may raise one.
+        "open_gaps": gaps.due(owner_id),
     }
 
 

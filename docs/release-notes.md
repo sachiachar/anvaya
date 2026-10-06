@@ -33,6 +33,8 @@
 - A new **Model keys** page in the admin portal shows whose key answered each call, failovers, and each person's key status. Platform admins can turn the feature off or limit the kinds of key, for everyone or one person, test a saved key again, or remove it, with a reason that's logged. They never see a key.
 
 **Talking to Saathi (owner)**
+- **Saathi remembers only what Vikram kept.** It no longer reads back earlier conversations, so something he discarded or never kept can't come up again. Within a conversation it still knows what it just asked, so a short answer ("Yes, Priya") makes sense.
+- **No repeated questions.** Saathi asks about each missing piece once. If it's still missing, it comes back later as a gentle reminder ("Last week we talked about…"): after 3 days for something important like a policy with no nominee, and after longer for smaller things, with a longer wait after "not now". After a few reminders it stops asking; the piece stays in Kept as a page still to write.
 - Spoken replies read out only what Saathi actually said, checked on the server. Playing a reply again, or a new reply with the same words, reuses the saved audio.
 - Spoken replies are limited to 1,000 characters.
 - Live calls keep flowing while Saathi saves what was said. Requests answer faster, because sign-in no longer waits on Google each time, and the server starts up faster.

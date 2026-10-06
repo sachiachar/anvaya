@@ -65,7 +65,8 @@ def test_saathi_gets_the_top_two_gaps(client):
     _keep("inventory", {**POLICY, "nominee_or_beneficiary": None})
     _keep("inventory", {**SBI, "institution": "HDFC", "account_hint": "••1111"})
     known = proposals.known(OWNER)
-    assert len(known["open_gaps"]) == 2 and "LIC" in known["open_gaps"][0]
+    assert len(known["open_gaps"]) == 2 and "LIC" in known["open_gaps"][0]["text"]
+    assert known["open_gaps"][0]["harm"] == "high" and known["open_gaps"][0]["reminder"] == 0
     assert "SBI Savings account ••4808 (nominee: not recorded)" in known["inventory"]
 
 
@@ -79,10 +80,12 @@ def test_the_conversation_is_told_about_gaps_and_the_nominee_rule(monkeypatch):
 
     monkeypatch.setattr(loops, "generate_json", fake)
     owner = {"name": "Vikram Rao", "city": "Bengaluru", "country": "India", "family": []}
-    known = {"open_gaps": ["SBI Savings account ••4808 has no nominee recorded."]}
-    asyncio.run(loops.converse(owner, [], "My wife is the nominee for SBI", None, known))
+    known = {"open_gaps": [{"key": "nominee:sbi|4808|savings account", "text": "SBI Savings account ••4808 has no "
+                            "nominee recorded.", "harm": "medium", "reminder": 0}]}
+    asyncio.run(loops.converse(owner, None, "My wife is the nominee for SBI", None, known))
     assert "SBI Savings account ••4808 has no nominee recorded." in seen["prompt"]
     assert "at most ONE" in seen["system"] and "IS, that is a fact" in seen["system"]
+    assert "gentle reminder" in seen["system"]
     assert "open_gaps" in loops.live_instructions(owner, known)
 
 
