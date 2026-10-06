@@ -139,8 +139,16 @@ def _match(owner_id: str, item: dict) -> list[dict]:
     institution, counting kept accounts and new ones waiting for Keep."""
     saved = _all("inventory", owner_id)
     same = [e for e in saved if _same_item(e, item)]
-    if same or _digits(item.get("account_hint")):
+    if same:
         return same
+    if _digits(item.get("account_hint")):
+        # The number arrives after the account was first mentioned without one ("my LIC policy",
+        # then "it ends 1234"): it fills in that card, if it's the only numberless one of that kind
+        # at that institution. Two numberless policies at one insurer stay apart.
+        blank = [e for e in saved if not _digits(e.get("account_hint"))
+                 and _norm(e.get("institution")) == _norm(item.get("institution"))
+                 and (not item.get("category") or not e.get("category") or item.get("category") == e.get("category"))]
+        return blank if len({e.get("updates") or e["id"] for e in blank}) == 1 else []
     at = [e for e in saved if _norm(e.get("institution")) == _norm(item.get("institution"))
           and (not item.get("category") or item.get("category") == e.get("category"))
           and (not item.get("product") or _norm(item.get("product")) == _norm(e.get("product")))]
@@ -160,6 +168,7 @@ def save_inventory(owner_id: str, item: dict, source: dict[str, Any]) -> dict:
         merged["missing_fields"] = [
             f for f in item.get("missing_fields", [])
             if not ("nominee" in f.lower() and merged.get("nominee_or_beneficiary"))
+            and not (("account" in f.lower() or "number" in f.lower()) and _digits(merged.get("account_hint")))
         ]
         return store.update("inventory", existing["id"], merged)
     return _pending("inventory", owner_id, item, **source)
