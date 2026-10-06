@@ -53,7 +53,11 @@ def persona(owner: dict) -> str:
         "as a reminder.\n"
         "Gaps: 'open_gaps' in what is already saved lists the most important missing pieces, "
         "found by the app. When the moment fits (not in the middle of a story), gently ask about "
-        "at most ONE of them, in your own words. Never press; if they don't know, move on.\n"
+        "at most ONE of them, in your own words. Never press; if they don't know, move on. A gap "
+        "with 'reminder' above 0 was asked before ('last_asked', 'last_answer'): bring it up as a "
+        "gentle reminder (\"Last week we talked about..., did you get a chance to...?\"), never as "
+        "if it were new, and never pushy. The app decides when to remind; you only choose the "
+        "moment and the words.\n"
         "People: when they mention someone whose relationship to them you don't know (for "
         "example a nominee), ask who that person is.\n"
         "Never ask for passwords, PINs or full account or policy numbers (the last 4 digits are "
@@ -129,18 +133,25 @@ def reply_problems(owner_message: str, reply: str) -> list[str]:
     return problems
 
 
-async def converse(owner: dict, history: list[dict], text: str | None,
+async def converse(owner: dict, last_said: dict | None, text: str | None,
                    media: tuple[bytes, str] | None, known: dict) -> ConversationTurn:
     """Conversation loop: one turn of the owner's single chat, whatever they send.
 
     Voice is transcribed, photos and documents are read, and anything worth keeping
     comes back as candidate moments or inventory items for the owner to approve.
     A reply that breaks the language or honesty rules is rewritten once.
+
+    Saathi remembers only what the owner kept (in `known`, with the gaps that are due), plus
+    its own last message in this conversation, so a short answer still makes sense. No earlier
+    conversation is sent: what the owner discarded or never kept can't steer it.
+    The parts that change least come first, so Gemini can reuse them from the last request.
     """
-    transcript = "\n".join(f"{t['role']}: {t['text']}" for t in history[-12:])
+    last_gap = known.get("last_gap_asked")
+    saved = {k: v for k, v in known.items() if k != "last_gap_asked"}
     prompt = (
-        f"Conversation so far:\n{transcript or '(none yet)'}\n\n"
-        f"What is already saved: {json.dumps(known, ensure_ascii=False)}\n\n"
+        f"What is already saved: {json.dumps(saved, ensure_ascii=False)}\n\n"
+        f"Your last message in this conversation: {last_said['text'] if last_said else '(none: a new conversation)'}\n"
+        f"last_gap_asked: {json.dumps(last_gap, ensure_ascii=False) if last_gap else 'none'}\n\n"
         f"The owner's LATEST message (reply in its language): {text or '(see attachment)'}"
     )
     result = await _converse_once(owner, prompt, media)
@@ -178,23 +189,23 @@ async def _converse_once(owner: dict, prompt: str, media: tuple[bytes, str] | No
     )
 
 
-def live_instructions(owner: dict, known: dict, recent: list[dict] | None = None) -> str:
-    """System instruction for a live voice call: the same companion as the typed chat,
-    carrying on from the recent conversation (e.g. a question asked from a next step)."""
-    history = "\n".join(f"{t['role']}: {t['text']}" for t in (recent or [])[-8:])
+def live_instructions(owner: dict, known: dict, opening: str | None = None) -> str:
+    """System instruction for a live voice call: the same companion as the typed chat. Like the
+    chat, it gets only what's kept and the gaps that are due, plus, within the same conversation,
+    its own last message (e.g. a question asked from a next step), to open the call with."""
     return (
         persona(owner) + "\n\n"
         "This is a voice call. Speak naturally: one or two short sentences, then ONE gentle "
         "follow-up question that fills a gap (people, dates, where documents are, who should "
-        "receive what). Let them finish before you answer.\n"
+        "receive what). Let them finish before you answer. At most one reminder in this call.\n"
         "Words to avoid on this call: 'noted', 'I've noted', 'saved', 'recorded', 'made a note'. "
         "Say 'I've added that to your list to review' instead, because nothing is saved until "
         "they tap Keep.\n"
         "If they say 'not yet' to something that needs action (a will, a nominee change), don't "
         "drop it: say it's now on their next steps in the app.\n"
         f"Already saved: {json.dumps(known, ensure_ascii=False)}. Don't ask about those again.\n"
-        + (f"Conversation so far (carry on from here; if your last message was a question, "
-           f"start the call by gently asking it again):\n{history}" if history else "")
+        + (f"Your last message, a few minutes ago: \"{opening}\". If it was a question, start the call "
+           f"by gently asking it again." if opening else "")
     )
 
 
@@ -211,10 +222,13 @@ async def extract_from_exchange(owner: dict, heard: str, said: str, known: dict)
             "the owner's words, verbatim. Skip small talk and anything already saved (same "
             "meaning counts). A short answer to the assistant's question adds detail to the moment "
             "it was about: return that moment with its exact saved title and a summary that makes "
-            "sense on its own. Return empty lists if nothing new. " + PRIVACY_RULES
+            "sense on its own. Return empty lists if nothing new. Also say which of open_gaps the "
+            "assistant asked about (asked_gap), and how the owner answered last_gap_asked "
+            "(gap_outcome). " + PRIVACY_RULES
         ),
         prompt=json.dumps({"owner": owner["name"], "owner_said": heard, "assistant_said": said,
-                           "already_saved": known}, ensure_ascii=False),
+                           "already_saved": {k: v for k, v in known.items() if k != "last_gap_asked"},
+                           "last_gap_asked": known.get("last_gap_asked")}, ensure_ascii=False),
     )
 
 

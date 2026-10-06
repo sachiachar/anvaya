@@ -198,16 +198,19 @@ async def converse(owner_id: str, text: str | None = Form(None), file: UploadFil
         attachment = {"kind": kind, "name": file.filename, "mime": mime}
         source = {"recording": path} if kind == "voice" else {"document": path}
 
-    history, known = await asyncio.to_thread(_history_and_known, owner_id)
-    result = await loops.converse(owner, history, text, upload, known)
-    return await asyncio.to_thread(_save_turn, owner_id, text, result, attachment, path, source)
+    # Saathi carries on from what's kept and its own last message, never from older conversation.
+    last_said = gaps.recent(owner.get("last_said"))
+    known = await asyncio.to_thread(_known_and_last_gap, owner_id, last_said)
+    result = await loops.converse(owner, last_said, text, upload, known)
+    return await asyncio.to_thread(_save_turn, owner_id, text, result, attachment, path, source, last_said)
 
 
-def _history_and_known(owner_id: str) -> tuple[list[dict], dict]:
-    return sorted(store.list("turns", owner_id=owner_id), key=lambda t: t["at"]), proposals.known(owner_id)
+def _known_and_last_gap(owner_id: str, last_said: dict | None) -> dict:
+    return {**proposals.known(owner_id), "last_gap_asked": gaps.last_gap(owner_id, last_said)}
 
 
-def _save_turn(owner_id: str, text: str | None, result, attachment: dict | None, path: str | None, source: dict) -> dict:
+def _save_turn(owner_id: str, text: str | None, result, attachment: dict | None, path: str | None, source: dict,
+               last_said: dict | None = None) -> dict:
     with proposals.saving(owner_id):  # cards from a call exchange may be saving at the same moment
         store.update("owners", owner_id, {"language": result.owner_language})
 
@@ -223,6 +226,8 @@ def _save_turn(owner_id: str, text: str | None, result, attachment: dict | None,
                                       "proposals": {"moments": [m["id"] for m in moments],
                                                     "inventory": [i["id"] for i in inventory],
                                                     "people": [p["id"] for p in people]}})
+        gaps.after_reply(owner_id, last_said, text=result.reply, turn_id=ai_turn["id"],
+                         asked_gap=result.asked_gap, outcome=result.gap_outcome)
     return {"autonomy": ACT, "owner_turn": _expand(owner_turn), "assistant_turn": _expand(ai_turn)}
 
 
@@ -494,8 +499,10 @@ def companion_asks(owner_id: str, body: Prompt) -> dict:
     """Start a topic from a next step: the companion's question appears in the chat,
     and the next typed message or live call carries on from it."""
     owner_or_404(owner_id)
-    return store.put("turns", {"id": new_id("turn"), "owner_id": owner_id, "at": time.time(),
+    turn = store.put("turns", {"id": new_id("turn"), "owner_id": owner_id, "at": time.time(),
                                "role": "assistant", "text": body.text, "language": None})
+    store.update("owners", owner_id, {"last_said": {"text": body.text, "turn_id": turn["id"], "at": turn["at"], "gap": None}})
+    return turn
 
 
 class TurnIds(BaseModel):
@@ -543,6 +550,7 @@ def forget_conversation(owner_id: str, body: TurnIds) -> dict:
                     store.delete(collection, doc_id)
                     items += 1
         store.delete("turns", turn["id"])
+    gaps.forget_turns(owner_id, gone)  # its questions no longer count as asked
     # The shared photos and documents, and Saathi's cached spoken replies, go too, unless
     # something still uses them: a kept item, another waiting card, or a reply with the same words.
     in_use = json.dumps([store.list(c, owner_id=owner_id) for c in ("moments", "inventory", "turns")]

@@ -26,7 +26,7 @@ from typing import Callable
 from fastapi import WebSocket, WebSocketDisconnect
 from google.genai import types
 
-from . import loops, proposals
+from . import gaps, loops, proposals
 from .config import settings
 from .gemini import client_for
 from .governance import core as governance
@@ -145,8 +145,10 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
 
 
 def _instructions(owner: dict) -> str:
-    return loops.live_instructions(owner, proposals.known(owner["id"]),
-                                   sorted(store.list("turns", owner_id=owner["id"]), key=lambda t: t["at"]))
+    """What's kept and the gaps that are due; no earlier conversation, only Saathi's own last
+    message if it's from the same conversation (e.g. a question from "Talk about this")."""
+    last_said = gaps.recent(owner.get("last_said"))
+    return loops.live_instructions(owner, proposals.known(owner["id"]), last_said["text"] if last_said else None)
 
 
 async def _from_browser(ws: WebSocket, session) -> None:
@@ -212,15 +214,17 @@ async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expa
     are made for it. The store calls run in a worker thread, so the call's audio never waits on them."""
     owner_id = owner["id"]
     owner_turn, ai_turn = await asyncio.to_thread(_start_exchange, owner_id, heard, said)
+    found, last_said = None, None
     try:
-        known = await asyncio.to_thread(proposals.known, owner_id)
+        known, last_said = await asyncio.to_thread(_known_and_last_gap, owner_id)
         found = await loops.extract_from_exchange(owner, heard, said, known)
         moments, inventory, people = found.moments, found.inventory, found.people
     except Exception:
         log.exception("extraction failed; saving the exchange without proposals")
         moments, inventory, people = [], [], []
 
-    turns = await asyncio.to_thread(_finish_exchange, owner_id, owner_turn, ai_turn, moments, inventory, people, expand)
+    turns = await asyncio.to_thread(_finish_exchange, owner_id, owner_turn, ai_turn, moments, inventory, people, expand,
+                                    found, last_said)
     if turns is None:
         return
     owner_turn, ai_turn = turns
@@ -241,8 +245,16 @@ def _start_exchange(owner_id: str, heard: str, said: str) -> tuple[dict, dict]:
     return owner_turn, ai_turn
 
 
+def _known_and_last_gap(owner_id: str) -> tuple[dict, dict | None]:
+    """What the extractor needs: what's kept and due, and the gap Saathi's last message asked
+    about, to judge the answer. Read fresh, because earlier exchanges of this call changed it; the
+    same last message is used to record the answer, so it's judged against the question it saw."""
+    last_said = (store.get("owners", owner_id) or {}).get("last_said")
+    return {**proposals.known(owner_id), "last_gap_asked": gaps.last_gap(owner_id, last_said)}, last_said
+
+
 def _finish_exchange(owner_id: str, owner_turn: dict, ai_turn: dict, moments, inventory, people,
-                     expand) -> tuple[dict, dict] | None:
+                     expand, found=None, last_said: dict | None = None) -> tuple[dict, dict] | None:
     """Add the cards and clear the "saving" mark. None if the owner discarded the exchange."""
     with proposals.saving(owner_id):
         if not store.get("turns", ai_turn["id"]) or not store.get("turns", owner_turn["id"]):
@@ -270,4 +282,6 @@ def _finish_exchange(owner_id: str, owner_turn: dict, ai_turn: dict, moments, in
                     if current and current.get("status") == "pending" and doc["id"] not in mentioned:
                         store.delete(collection, doc["id"])
             return None
+        gaps.after_reply(owner_id, last_said, text=ai_turn["text"], turn_id=ai_turn["id"], now=ai_turn["at"],
+                         asked_gap=getattr(found, "asked_gap", None), outcome=getattr(found, "gap_outcome", None))
         return owner_turn, expand(ai_turn)

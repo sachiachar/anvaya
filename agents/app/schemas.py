@@ -92,6 +92,14 @@ class ConversationTurn(BaseModel):
         default=[], description="People whose relationship to the owner was stated in this turn "
         "(e.g. 'My wife is Meena', 'Ajay is my nephew'). Not people already in the family list."
     )
+    asked_gap: str | None = Field(
+        default=None, description="If your reply asks about one of open_gaps, that gap's key, exactly; otherwise null."
+    )
+    gap_outcome: Literal["answered", "unsure", "not_now", "declined", "none"] = Field(
+        default="none", description="How the owner's LATEST message answers last_gap_asked: 'answered'; 'unsure' "
+        "(e.g. 'I think it's Meena'); 'not_now' (later, not now); 'declined' (doesn't want to say); or 'none' "
+        "if it doesn't address it or there is none."
+    )
 
 
 class Extraction(BaseModel):
@@ -100,6 +108,15 @@ class Extraction(BaseModel):
     moments: list[Moment] = []
     inventory: list[InventoryItem] = []
     people: list[Person] = []
+    asked_gap: str | None = Field(
+        default=None,
+        description="If what the assistant said asks about one of open_gaps, that gap's key, exactly; otherwise null.",
+    )
+    gap_outcome: Literal["answered", "unsure", "not_now", "declined", "none"] = Field(
+        default="none", description="How what the owner said answers last_gap_asked: 'answered'; 'unsure' "
+        "(e.g. 'I think it's Meena'); 'not_now' (later, not now); 'declined' (doesn't want to say); or 'none' "
+        "if it doesn't address it or there is none."
+    )
 
 
 class ConversationSummary(BaseModel):
