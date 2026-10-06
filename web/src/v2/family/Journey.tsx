@@ -5,6 +5,7 @@
 // phone only.
 import { useEffect, useState } from "react";
 import { api, type Case } from "../../api";
+import { authEnabled } from "../../auth";
 import { useAction } from "../../ui";
 import {
   createRecipientKeys, hasRecipientKeys, myRecipientFingerprint, newRecoveryCode, normalizeRecoveryCode, restoreRecipientKey,
@@ -127,7 +128,13 @@ function Recipient({ me, parent }: { me: string; parent: string }) {
     );
   } else if (registered === false) {
     body = !invite ? (
-      <p className="v2-muted">{parent} hasn't chosen who receives the vault yet. That's done in their own app.</p>
+      <div className="v2-stack">
+        <p className="v2-muted">{parent} hasn't chosen who receives the vault yet. That's done in their own app.</p>
+        {authEnabled && (
+          // Each Google account has its own demo copy: an invite made in another account isn't here.
+          <p className="v2-muted v2-small">Demo: if {parent} invited you from another window, check both are signed in with the same Google account. Each account has its own demo copy.</p>
+        )}
+      </div>
     ) : !forMe ? (
       <p className="v2-muted">{parent} has chosen {invite.name} ({invite.relationship}) to receive the vault.</p>
     ) : (
@@ -169,9 +176,10 @@ function Recipient({ me, parent }: { me: string; parent: string }) {
       <p className="v2-eyebrow">The vault</p>
       <h2 id="recipient-title">Receiving {parent}'s vault</h2>
       {registered === null && !loadError && <p className="v2-muted">Loading…</p>}
-      {loadError && registered === null && (
+      {/* Shown whenever a check fails, not only the first: otherwise the last answer looks current. */}
+      {loadError && (
         <div className="v2-stack">
-          <p className="v2-error" role="alert">{loadError}</p>
+          <p className="v2-error" role="alert">{loadError} This may not be up to date.</p>
           <button className="v2-btn quiet" onClick={() => void refresh()}>Try again</button>
         </div>
       )}
