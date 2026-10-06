@@ -24,6 +24,10 @@ class Moment(BaseModel):
     intended_for: list[str] = Field(
         default=[], description="For a wish: the people it is meant for, if the owner said (names only)"
     )
+    unsure: bool = Field(
+        default=False, description="True if the owner wasn't sure of what they said here ('I think', 'maybe', "
+        "'not sure'), so the app can check with them later"
+    )
 
 
 class Person(BaseModel):
@@ -64,6 +68,10 @@ class InventoryItem(BaseModel):
     )
     missing_fields: list[str] = Field(
         default=[], description="Important fields the document does not show, e.g. 'nominee'"
+    )
+    unsure: bool = Field(
+        default=False, description="True if the owner wasn't sure of what they said here ('I think', 'maybe', "
+        "'not sure'), so the app can check with them later"
     )
 
 

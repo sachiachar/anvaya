@@ -26,10 +26,14 @@ def keys():
     return [g["key"].split(":")[0] for g in gaps.find(OWNER)]
 
 
+def of(kind: str, found: list[dict] | None = None) -> list[dict]:
+    return [g for g in (gaps.find(OWNER) if found is None else found) if g["kind"] == kind]
+
+
 def test_an_account_without_a_nominee_is_a_gap_and_insurance_comes_first(client):
     bank = _keep("inventory", SBI)
     policy = _keep("inventory", {**POLICY, "nominee_or_beneficiary": None})
-    found = gaps.find(OWNER)
+    found = of("nominee")
     assert [g["about"] for g in found[:2]] == [policy["id"], bank["id"]]
     assert found[1]["text"] == "SBI Savings account ••4808 has no nominee recorded."
 
@@ -101,21 +105,21 @@ def test_naming_the_nominee_with_just_the_bank_updates_that_account(client):
 
 def test_a_skipped_gap_never_comes_back(client):
     _keep("inventory", SBI)
-    key = gaps.find(OWNER)[0]["key"]
+    key = of("nominee")[0]["key"]
     r = client.post(f"/api/owners/{OWNER}/gaps/{key}/skip")
-    assert r.status_code == 200 and r.json()["gaps"] == []
-    assert proposals.known(OWNER)["open_gaps"] == []
+    assert r.status_code == 200 and of("nominee", r.json()["gaps"]) == []
+    assert key not in [g["key"] for g in proposals.known(OWNER)["open_gaps"]]
     assert client.post(f"/api/owners/{OWNER}/gaps/nominee:nope/skip").status_code == 404
     assert client.get(f"/api/owners/{OWNER}/gaps", headers=PRIYA).status_code == 403
 
 
 def test_a_skip_holds_after_the_account_is_updated(client):
     kept = _keep("inventory", SBI)
-    gaps.skip(OWNER, gaps.find(OWNER)[0]["key"])
+    gaps.skip(OWNER, of("nominee")[0]["key"])
     card = proposals.save_inventory(OWNER, {**SBI, "approximate_value": "2 lakh"}, {})
     assert card["updates"] == kept["id"]
     proposals.approve("inventory", card)
-    assert gaps.find(OWNER) == []
+    assert of("nominee") == []
 
 
 def test_a_different_kind_of_account_at_the_same_bank_is_a_new_card(client):

@@ -10,19 +10,37 @@ marks a gap as intentionally unknown, and it's never raised again.
     conflict     a wish gives an account to someone other than its nominee
     heir         a property no wish or story says who should receive
     relationship a person whose relationship to the owner isn't known
+    papers       property or insurance with no record of where its papers are kept
+    will         nothing kept says whether there's a will (even "there's no will" counts)
+    loans        nothing kept says whether there are loans or debts
+    first_call   nothing kept says who the family should call first
+    digital      nothing kept about email, phone or online accounts
+    confirm      something kept with doubt ("I think it's Meena"), two weeks on
+    recheck      a nominee, papers or the will, once a year, in case it changed
 """
 
 from __future__ import annotations
 
 import re
 import time
+from datetime import datetime, timezone
 
 from . import knowledge
 from .store import store
 
 NOMINEE_EXPECTED = {"insurance": 3, "bank_account": 2, "investment": 2, "retirement": 2}
 UNKNOWN = {"", "unknown", "not sure", "none", "n/a"}
+KINDS = ("nominee", "conflict", "heir", "relationship", "papers", "will", "loans", "first_call", "digital",
+         "confirm", "recheck")  # as listed above; the web app's Gap type has the same list
 DAY = 86400
+PAPERS_EXPECTED = {"property", "insurance"}  # where their papers are kept, or the family can't claim them
+CONFIRM_AFTER_DAYS = 14  # something kept with doubt ("I think…") comes up to check after this
+RECHECK_EVERY_DAYS = knowledge.STALE_AFTER_DAYS  # nominees, papers and the will: re-confirmed once a year (PR-7.6)
+# Words that show something is already recorded, even "there's no loan". Matched on _words text.
+WILL_WORDS = re.compile(r" (my|a|the|no|his|her) will | testament | vasiyat | wasiyat | वसीयत ")
+LOAN_WORDS = re.compile(r" (loan|loans|debt|debts|emi|emis|mortgage|karz|karza|qarz|कर्ज|कर्ज़|लोन) ")
+DIGITAL_WORDS = re.compile(r" (email|gmail|phone|mobile|password manager|online|upi|net banking|digital) ")
+FIRST_CALL_WORDS = re.compile(r" (call|contact|inform|tell|phone) (\w+ ){0,4}first | first (\w+ ){0,3}(call|contact|inform) ")
 CONVERSATION_GAP = 30 * 60  # Saathi's last message counts as "this conversation" for this long
 # Asking again is a reminder, after a wait in days that grows each time; the more a gap would hurt
 # the family, the sooner it comes back and the more reminders it gets. The length of each tuple is
@@ -38,6 +56,11 @@ RELATION_WORDS = {"wife", "husband", "spouse", "son", "daughter", "mother", "fat
 
 def _plain(text: str | None) -> str:
     return " ".join(re.sub(r"[^a-z0-9']+", " ", (text or "").lower()).split())
+
+
+def _words(text: str | None) -> str:
+    """Like _plain, but keeps Hindi (Devanagari) words, for finding what's been talked about."""
+    return " ".join(re.sub(r"[^\w\u0900-\u097f']+", " ", (text or "").lower()).split())
 
 
 def _who(name: str | None) -> str:
@@ -66,15 +89,38 @@ def _id(item: dict) -> str:
     return _plain(item.get("name") or item.get("title"))
 
 
+def _kept_at(owner_id: str) -> dict[str, float]:
+    """When each kept item was confirmed, by id."""
+    out = {}
+    for cid, entry in knowledge.catalog(owner_id)["concepts"].items():
+        if at := entry.get("kept_at"):
+            out[cid] = datetime.strptime(at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+    return out
+
+
+def _changes(item: dict) -> bool:
+    """Facts that change over the years: a nominee, where the papers are, the will."""
+    return bool((item.get("nominee_or_beneficiary") or "").strip() or (item.get("papers_at") or "").strip()
+                or WILL_WORDS.search(f" {_words(item.get('title'))} {_words(item.get('summary'))} "))
+
+
+def _doubt(item: dict) -> str:
+    parts = [f"{label}: {item[f]}" for f, label in (("nominee_or_beneficiary", "nominee"), ("papers_at", "papers"))
+             if (item.get(f) or "").strip()]
+    return ", ".join(parts) or (item.get("summary") or "")[:80]
+
+
 def _label(item: dict) -> str:
     return " ".join(x for x in (item.get("institution"), item.get("product"), item.get("account_hint")) if x)
 
 
-def find(owner_id: str, *, include_skipped: bool = False) -> list[dict]:
+def find(owner_id: str, *, include_skipped: bool = False, now: float | None = None) -> list[dict]:
     """Open gaps, most harmful first. Each has a stable key, its harm, and a plain sentence."""
+    now = time.time() if now is None else now
     accounts = knowledge.items(owner_id, "inventory")
     moments = knowledge.items(owner_id, "moments")
     people = knowledge.items(owner_id, "people")
+    kept_at = _kept_at(owner_id)
     relations = {_plain(p.get("relationship")): _plain(p.get("name")) for p in people if p.get("relationship")}
     wishes = [m for m in moments if m.get("kind") == "wish"]
     found: list[dict] = []
@@ -105,9 +151,37 @@ def find(owner_id: str, *, include_skipped: bool = False) -> list[dict]:
                         for m in moments)
             if not named:
                 gap(f"heir:{_id(a)}", 2, a["id"], f"Nobody is named to receive {label}.", "heir")
+        if category in PAPERS_EXPECTED and _plain(a.get("papers_at")) in UNKNOWN:
+            gap(f"papers:{_id(a)}", 2, a["id"], f"Where the papers for {label} are kept isn't recorded.", "papers")
     for p in people:
         if _plain(p.get("relationship")) in UNKNOWN:
             gap(f"relationship:{_id(p)}", 1, p["id"], f"How {p.get('name')} is related isn't known.", "relationship")
+
+    # Making sure: something kept with doubt, after a while; and things that change, once a year.
+    for item in [*accounts, *moments]:
+        age = now - kept_at.get(item["id"], now)
+        name = _label(item) or f"\"{item.get('title')}\""
+        if item.get("unsure") and age >= CONFIRM_AFTER_DAYS * DAY:
+            gap(f"confirm:{_id(item)}", 2, item["id"],
+                f"{name} was kept with some doubt ({_doubt(item)}); worth checking it's right.", "confirm")
+        elif _changes(item) and age >= RECHECK_EVERY_DAYS * DAY:
+            cycle = int(age // (RECHECK_EVERY_DAYS * DAY))  # a new key each year, so a "still the same" lasts a year
+            gap(f"recheck:{_id(item)}:{cycle}", 1, item["id"],
+                f"{name} was last confirmed over a year ago ({_doubt(item)}); is it still the same?", "recheck")
+
+    # What families most often can't find. Recorded once anything kept mentions it, even "there's none".
+    said = " ".join(_words(f"{m.get('title')} {m.get('summary')} {m.get('quote')}") for m in moments) + " " + " ".join(
+        _words(f"{a.get('institution')} {a.get('product')}") for a in accounts)
+    categories = {a.get("category") for a in accounts}
+    for kind, harm, text, words, has in (
+        ("will", 3, "Whether there's a will, and where it's kept, isn't recorded.", WILL_WORDS, set()),
+        ("loans", 2, "Whether there are any loans or debts isn't recorded.", LOAN_WORDS, {"loan"}),
+        ("first_call", 2, "Who the family should call first isn't recorded.", FIRST_CALL_WORDS, set()),
+        ("digital", 1, "Email, phone and online accounts aren't recorded.", DIGITAL_WORDS,
+         {"digital_account", "subscription"}),
+    ):
+        if not (categories & has) and not words.search(f" {said} "):
+            gap(f"{kind}:{kind}", harm, "", text, kind)
 
     if not include_skipped:
         skipped = {s["key"] for s in store.list("gap_skips", owner_id=owner_id)}
@@ -128,9 +202,12 @@ def due(owner_id: str, n: int = 2, now: float | None = None) -> list[dict]:
     waiting = {_id(d) for c in ("inventory", "people") for d in store.list(c, owner_id=owner_id, status="pending")}
     chosen: list[dict] = []
     reminded = False
-    for g in find(owner_id):
+    for g in find(owner_id, now=now):
         if waiting & set(g["key"].split(":")[1:]):
             continue
+        events = asks.get(g["key"]) or []
+        if g["kind"] in ("confirm", "recheck") and events and events[-1].get("outcome") == "answered":
+            continue  # they said it's right; keeping a new version closes it for good
         state = {"key": g["key"], "text": g["text"], "harm": HARM_WORDS.get(g["harm"], "low"), "reminder": 0}
         if events := asks.get(g["key"]):
             since = now - events[-1]["at"]

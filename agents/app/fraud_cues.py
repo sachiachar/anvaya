@@ -48,7 +48,7 @@ PATTERNS: dict[str, tuple[str, str | None]] = {
     "account.nominee_missing": ("a bank, investment or retirement account with no nominee recorded", "nominee"),
     "nominee.not_kept": ("an account or policy whose nominee isn't among the family the owner recorded", "nominee"),
     "property.heir_missing": ("property with nobody named to receive it", "heir"),
-    "property.papers_missing": ("property with no record of where its papers are kept", None),
+    "property.papers_missing": ("property with no record of where its papers are kept", "papers"),
     "person.relationship_missing": ("a family member whose relationship isn't recorded", "relationship"),
 }
 ACCOUNTS = {"Bank Account": "bank_account", "Investment": "investment", "Retirement Account": "retirement"}

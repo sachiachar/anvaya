@@ -19,7 +19,9 @@ export type Autonomy = "assist" | "propose" | "act_within_limits";
 export type KeptItem = { id: string; collection: "moments" | "inventory" | "people"; type: string; title: string;
   description: string };
 
-export type Gap = { key: string; kind: "nominee" | "conflict" | "heir" | "relationship"; harm: number;
+// The same kinds as gaps.KINDS on the server.
+export type Gap = { key: string; kind: "nominee" | "conflict" | "heir" | "relationship" | "papers" | "will" | "loans"
+  | "first_call" | "digital" | "confirm" | "recheck"; harm: number;
   about: string; text: string };
 
 export type MapNode = { id: string; label: string; type: string;
