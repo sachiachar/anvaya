@@ -11,8 +11,10 @@
 # it; to apply a change right away: Actions -> Deploy -> Run workflow -> "allowlist".
 #
 # Google credentials come from Workload Identity Federation (no stored keys);
-# see infra/setup-github-actions.sh. Service settings (env vars, secrets) are
-# kept as they are; infra/deploy.sh manages them.
+# see infra/setup-github-actions.sh. Google gives them only to this workflow file, running on
+# main, in environment "production", so every job that signs in to Google must use that
+# environment (a test checks it). Service settings (env vars, secrets) are kept as they are;
+# infra/deploy.sh manages them.
 name: Deploy
 
 on:
@@ -148,6 +150,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
+    environment: production  # Google credentials are given only to this environment (#110)
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

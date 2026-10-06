@@ -308,6 +308,7 @@ On `released`, KMS removes the outer layer and the recipient's phone decrypts th
 | Identifying demo visitors | The portal lists demo copies by hashed key. A visitor may give their copy an optional nickname once, after sign-in; it's cleaned to one short line, shown only to platform admins, never written to logs or the audit log (`demo.set_nickname`, `portal.get_demos`) |
 | Someone seeing or using another person's model key | A key is found only from the verified sign-in (`governance.current_user`), never from an ID the browser sends, and is used only for calls that person causes. It's encrypted with its own Cloud KMS key (`MODEL_KEYS_KMS_KEY_NAME`, separate from the vault's), with the person's user key bound in as additional authenticated data, so a record copied to someone else won't decrypt. It's never sent back to anyone, its owner included: the app and the portal see only its kind, last 4 characters and status. A platform admin sees everyone's usage and can test or remove a key, but never sees it. Key-shaped text is removed from every log record and from Gemini error messages; a request with a malformed key never repeats it. Without a KMS key on Firestore, saving is refused, and an unencrypted record there is never used |
 | Uninvited people using the demo | Google sign-in (Firebase Auth); the server verifies the ID token on every request (`auth.py`) and checks `ALLOWED_EMAILS` (addresses or `@domains`); the live call passes the token as `?token=` |
+| A workflow on another branch deploying, or using the deployer's access | Workload Identity Federation gives Google credentials only to `deploy.yml` running on `main`, in environment `production` (limited to `main`), in this repository by its numeric id (`infra/setup-github-actions.sh`). The deployer has no broad project-wide roles: it acts only as the API's and the build's service accounts, uses storage only on the source and build buckets, writes only to the source-deploy image repository, and can update the Cloud Run service but not change who may call it (#110) |
 
 **Known gaps before real users**
 
@@ -354,6 +355,7 @@ Automated tests (`agents/tests/`), with Gemini stubbed so they run without crede
 - reply rules (script, false claims, "shall I add");
 - document verdict rules (wrong document scores 0);
 - governance: server-side roles, approvals, the kill switch, and a portal that never returns conversation text or names;
+- the deploy identity: only `deploy.yml` signs in to Google, every such job uses environment `production`, Google trusts only that workflow on `main` by repository id, and the deployer has no broad project-wide roles (`test_ci_identity.py`);
 - the gateway: every file that calls Gemini goes through it, every agent named in code is registered, and every call is recorded in the ledger;
 - limits per request: output caps, retries, input size, call length and reply length.
 - responsiveness: Google's sign-in certificates are fetched once until they expire, a slow store doesn't hold up a live call, and two exchanges saved at once make one card.
