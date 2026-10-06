@@ -38,6 +38,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def no_store(request: Request, call_next):
+    """Firebase Hosting's CDN keeps answers that don't say otherwise (a 404 for 10 minutes), so a
+    poll could keep getting "no vault recipient yet" after the person accepted. Every answer here
+    is about someone's own, changing data: nothing is kept."""
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 # Every HTTP route needs a signed-in, allowed user (when AUTH_REQUIRED=true), and works only
 # on that user's own demo copy (PR-1.6): an owner in the path must be theirs, and documents
 # looked up by ID are checked with demo.mine. The live-call WebSocket checks its own token

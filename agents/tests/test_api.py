@@ -74,6 +74,19 @@ def test_owner_alive_cancels_release(client):
     assert client.get(f"/api/owners/{OWNER}/vault/release-bundle", headers=PRIYA).status_code == 403
 
 
+def test_no_answer_is_kept_by_a_cache(client):
+    """Firebase Hosting kept a 404 for 10 minutes, so Priya's app saw "no recipient yet" after she
+    accepted and offered Accept again. Every answer, found or not, says not to keep it."""
+    missing = client.get(f"/api/owners/{OWNER}/vault/recipient", headers=PRIYA)
+    assert missing.status_code == 404 and missing.headers["cache-control"] == "no-store"
+    client.post(f"/api/owners/{OWNER}/vault/invite", json={"name": "Priya", "relationship": "daughter"})
+    client.post(f"/api/owners/{OWNER}/vault/recipient", json=RECIPIENT, headers=PRIYA)
+    found = client.get(f"/api/owners/{OWNER}/vault/recipient", headers=PRIYA)
+    assert found.status_code == 200 and found.headers["cache-control"] == "no-store"
+    assert client.get("/api/no-such-route").headers["cache-control"] == "no-store"
+    assert client.get("/api/healthz").headers["cache-control"] == "no-store"
+
+
 def test_vault_cannot_be_sealed_for_an_unapproved_recipient(client):
     client.post(f"/api/owners/{OWNER}/vault/invite", json={"name": "Priya", "relationship": "daughter"})
     client.post(f"/api/owners/{OWNER}/vault/recipient", json=RECIPIENT, headers=PRIYA)

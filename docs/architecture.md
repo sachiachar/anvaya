@@ -40,7 +40,7 @@ flowchart LR
 
 - The **web app** is an installable, mobile-first React app. It holds all vault cryptography, the microphone capture and the audio playback.
 - The **agents service** is a Python FastAPI app on Cloud Run. It runs the Gemini steps, the live-call relay, the ADK handover agent, and the rules that keep people in control.
-- Firebase Hosting rewrites `/api/**` to Cloud Run. Firebase Hosting can't proxy WebSockets, so in production the live call connects **directly to the Cloud Run URL** (`VITE_LIVE_URL`, set by `infra/deploy.sh`).
+- Firebase Hosting rewrites `/api/**` to Cloud Run. Its CDN keeps any answer that doesn't say otherwise (a 404 for 10 minutes), so every API answer says `Cache-Control: no-store`; otherwise a poll keeps seeing an old answer. Firebase Hosting can't proxy WebSockets, so in production the live call connects **directly to the Cloud Run URL** (`VITE_LIVE_URL`, set by `infra/deploy.sh`).
 
 ## 3. Components
 
@@ -358,6 +358,7 @@ Automated tests (`agents/tests/`), with Gemini stubbed so they run without crede
 - the deploy identity: only `deploy.yml` signs in to Google, every such job uses environment `production`, Google trusts only that workflow on `main` by repository id, and the deployer has no broad project-wide roles (`test_ci_identity.py`);
 - the gateway: every file that calls Gemini goes through it, every agent named in code is registered, and every call is recorded in the ledger;
 - limits per request: output caps, retries, input size, call length and reply length.
+- no API answer, found or not, is kept by a cache;
 - responsiveness: Google's sign-in certificates are fetched once until they expire, a slow store doesn't hold up a live call, and two exchanges saved at once make one card.
 - people's own model keys: two people at once each use only their own key; ours is only the failover, never tried first, and a server error doesn't move on; safety checks, the handover assistant, the live call and fraud runs fail over too; a key is tested before it's saved and a test stores nothing; a stored key never decrypts for anyone else; and a key never reaches a response, log record, the ledger, the store in plain text or the audit log. Platform admins see everyone's usage but no key; a demo user sees only their own.
 - dependencies: every direct dependency is in the inventory, every installed package has an allowed licence, every font folder carries its OFL licence and is in the inventory, and the Python and Node versions agree everywhere.
