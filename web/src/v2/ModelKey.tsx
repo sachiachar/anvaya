@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, type KeyFeature, type KeyKind, type KeyResult, type ModelAccessState } from "../api";
 import { useAction } from "../ui";
 import { friendlyError } from "./copy";
+import { Chevron } from "./icons";
 
 const KIND_TEXT: Record<KeyKind, string> = { studio: "Google AI Studio", vertex_express: "Vertex AI (express mode)" };
 const RESULT_TEXT: Record<KeyResult, string> = {
@@ -61,8 +62,15 @@ export function ModelKey() {
   });
 
   return (
-    <section aria-labelledby="model-key">
-      <p id="model-key" className="v2-eyebrow">Your own model key (optional)</p>
+    <details className="v2-disclosure">
+      <summary className="v2-row-btn">
+        <span className="v2-row-text">
+          <b>Your own model key</b>
+          <span>{access ? `${KIND_TEXT[access.kind]} ${access.last4} · ${access.status === "working" ? "working" : "failing, Anvaya's key answers"}` : "Optional · Anvaya's key answers for now"}</span>
+        </span>
+        <span className="v2-row-chev" aria-hidden="true"><Chevron /></span>
+      </summary>
+      <div className="v2-disclosure-body">
       <p className="v2-muted v2-small">
         Use your own Gemini key for everything you do in this demo. Anvaya's key is used only if yours fails.
         Nobody else can see or use your key, and it isn't shown again after you save it.
@@ -124,6 +132,7 @@ export function ModelKey() {
         </>
       )}
       {error && <p className="v2-error" role="alert">{friendlyError(new Error(error))}</p>}
-    </section>
+      </div>
+    </details>
   );
 }

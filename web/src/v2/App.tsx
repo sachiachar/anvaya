@@ -4,7 +4,7 @@ import { authEnabled, signInWithGoogle, signOutUser, watchUser } from "../auth";
 import { useAction } from "../ui";
 import { ROLE_TEXT, friendlyError } from "./copy";
 import { ShowHow } from "./demo";
-import { Book as BookIcon, Close, Lock, Mic, People, ThreadMark } from "./icons";
+import { Book as BookIcon, Check, Chevron, Close, Lock, Mic, People, ThreadMark } from "./icons";
 import KnowledgeMap from "./KnowledgeMap";
 import { ModelKey } from "./ModelKey";
 import Book from "./owner/Book";
@@ -234,10 +234,12 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
   // A native modal dialog: it traps focus, closes on Escape and dims the page behind it. A click on
   // the dimmed page (the dialog itself, outside its body) closes it too.
   const dialog = useRef<HTMLDialogElement>(null);
+  const title = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     const d = dialog.current;
     if (!d) return;
     if (!d.open) d.showModal();
+    title.current?.focus(); // start on the title, not the close button
     const onBackdrop = (e: MouseEvent) => { if (e.target === d) d.close(); };
     d.addEventListener("click", onBackdrop);
     // No close() here: unmounting removes the dialog, and closing would fire onClose again.
@@ -246,73 +248,112 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
   const saveNickname = (value: string | null) =>
     run(async () => { await api.setNickname(value); onNicknameDone(); });
 
+  const actingRole = people.find((p) => p.id === acting)?.role;
   return (
     <dialog ref={dialog} className="v2-sheet" aria-labelledby="demo-title" onClose={onClose}>
-      <div className="v2-sheet-body">
+      <header className="v2-sheet-top">
         <div className="v2-grab" aria-hidden="true" />
         <div className="v2-sheet-head">
-          <h2 id="demo-title">Demo</h2>
+          <div>
+            <h2 id="demo-title" ref={title} tabIndex={-1}>Demo</h2>
+            <p className="v2-sheet-sub">Synthetic data · this copy is yours alone</p>
+          </div>
           <button className="v2-close" onClick={() => dialog.current?.close()} aria-label="Close"><Close /></button>
         </div>
+      </header>
 
+      <div className="v2-sheet-scroll">
         <section aria-labelledby="demo-people">
-          <p id="demo-people" className="v2-eyebrow">Whose screen to show</p>
-          <div className="v2-people">
-            {people.map((p) => (
-              <button key={p.id} className="v2-person" aria-pressed={p.id === acting} onClick={() => onSwitch(p.id)}>
-                {p.id === "admin" ? "Admin" : p.name}
-                <span>{p.role === "platform_admin" ? "Portal" : ROLE_TEXT[p.role]}</span>
+          <p id="demo-people" className="v2-group-label">Show the app as</p>
+          <ul className="v2-group v2-who">
+            {people.map((p) => {
+              const on = p.id === acting;
+              return (
+                <li key={p.id}>
+                  <button className="v2-row-btn" aria-pressed={on} onClick={() => onSwitch(p.id)}>
+                    <span className={`v2-avatar${on ? " is-on" : ""}`} aria-hidden="true">{(p.id === "admin" ? "A" : p.name[0]).toUpperCase()}</span>
+                    <span className="v2-row-text">
+                      <b>{p.id === "admin" ? "Platform admin" : p.name}</b>
+                      <span>{p.role === "platform_admin" ? "Opens the admin portal" : ROLE_TEXT[p.role]}</span>
+                    </span>
+                    {on && <span className="v2-row-tick"><Check /></span>}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
+        <section aria-labelledby="demo-options">
+          <p id="demo-options" className="v2-group-label">Options</p>
+          <div className="v2-group">
+            <label className="v2-row-btn v2-toggle-row">
+              <span className="v2-row-text">
+                <b>Show how Saathi works</b>
+                <span>Shows the readiness score on Kept</span>
+              </span>
+              <input type="checkbox" role="switch" aria-checked={showHow} className="v2-toggle" checked={showHow} onChange={onToggleShowHow} />
+            </label>
+            <a className="v2-row-btn" href="/#knowledge-map" target="_blank" rel="noopener">
+              <span className="v2-row-text">
+                <b>Open the knowledge map</b>
+                <span>In a new window, filling in as things are kept</span>
+              </span>
+              <span className="v2-row-chev" aria-hidden="true"><Chevron /></span>
+            </a>
+            {actingRole === "family" && hasRecipientKeys() && (
+              <button className="v2-row-btn" onClick={() => { forgetRecipientKeyOnThisDevice(); onClose(); }}>
+                <span className="v2-row-text">
+                  <b>Simulate a lost or new phone</b>
+                  <span>Forgets Priya's key on this device</span>
+                </span>
               </button>
-            ))}
+            )}
+            <ModelKey />
+            {askNickname && (
+              <details className="v2-disclosure">
+                <summary className="v2-row-btn">
+                  <span className="v2-row-text">
+                    <b>A name for your demo copy</b>
+                    <span>Optional · only the Anvaya team sees it</span>
+                  </span>
+                  <span className="v2-row-chev" aria-hidden="true"><Chevron /></span>
+                </summary>
+                <div className="v2-disclosure-body">
+                  <p className="v2-muted v2-small">It doesn't need to be your real name. It tells demo copies apart.</p>
+                  <input id="v2-nickname" className="v2-input" value={nickname} maxLength={30}
+                    onChange={(e) => setNickname(e.target.value)} placeholder="A nickname" aria-label="Nickname" />
+                  <div className="v2-row">
+                    <button className="v2-btn" disabled={busy || !nickname.trim()} onClick={() => saveNickname(nickname.trim())}>Save</button>
+                    <button className="v2-btn quiet" disabled={busy} onClick={() => saveNickname(null)}>Skip</button>
+                  </div>
+                </div>
+              </details>
+            )}
           </div>
         </section>
 
-        <section>
-          <label className="v2-switch">
-            <span>
-              <strong>Show how Saathi works</strong>
-              <span className="v2-switch-hint">Shows the readiness score on Kept.</span>
-            </span>
-            <input type="checkbox" checked={showHow} onChange={onToggleShowHow} />
-          </label>
-        </section>
-
-        <ModelKey />
-
-        {askNickname && (
-          <section aria-labelledby="demo-nickname">
-            <p id="demo-nickname" className="v2-eyebrow">A name for your demo copy</p>
-            <p className="v2-muted v2-small">Optional, and it doesn't need to be your real name. Only the Anvaya team sees it, to tell demo copies apart.</p>
-            <div className="v2-row">
-              <input id="v2-nickname" className="v2-input v2-grow" value={nickname} maxLength={30}
-                onChange={(e) => setNickname(e.target.value)} placeholder="A nickname" aria-label="Nickname" />
-              <button className="v2-btn" disabled={busy || !nickname.trim()} onClick={() => saveNickname(nickname.trim())}>Save</button>
-              <button className="v2-btn quiet" disabled={busy} onClick={() => saveNickname(null)}>Skip</button>
-            </div>
-          </section>
-        )}
-
-        <section>
-          <a className="v2-link" href="/#knowledge-map" target="_blank" rel="noopener">Open the knowledge map in a new window</a>
-          {people.find((p) => p.id === acting)?.role === "family" && hasRecipientKeys() && (
-            <button className="v2-link" onClick={() => { forgetRecipientKeyOnThisDevice(); onClose(); }}>
-              Simulate a lost or new phone (forgets the key on this device)
-            </button>
-          )}
-          {confirmReset ? (
-            <div className="v2-confirm" role="alert">
-              <p>Restore your demo copy to the start? Everything you kept or changed in it is cleared. Nobody else's copy is affected.</p>
-              <div className="v2-row">
-                <button className="v2-btn danger" disabled={busy} onClick={() => run(async () => { await api.seed(); location.reload(); })}>Reset my demo</button>
-                <button className="v2-btn quiet" onClick={() => setConfirmReset(false)}>Keep it</button>
+        <section aria-label="Your demo copy">
+          <div className="v2-group">
+            {confirmReset ? (
+              <div className="v2-confirm v2-group-confirm" role="alert">
+                <p>Restore your demo copy to the start? Everything you kept or changed in it is cleared. Nobody else's copy is affected.</p>
+                <div className="v2-row">
+                  <button className="v2-btn danger" disabled={busy} onClick={() => run(async () => { await api.seed(); location.reload(); })}>Reset my demo</button>
+                  <button className="v2-btn quiet" onClick={() => setConfirmReset(false)}>Keep it</button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <button className="v2-link" onClick={() => setConfirmReset(true)}>Reset my demo</button>
-          )}
-          {authEnabled && email && (
-            <button className="v2-link" onClick={() => signOutUser()} title={email}>Sign out</button>
-          )}
+            ) : (
+              <button className="v2-row-btn is-danger" onClick={() => setConfirmReset(true)}>
+                <span className="v2-row-text"><b>Reset my demo</b><span>Start again from the beginning</span></span>
+              </button>
+            )}
+            {authEnabled && email && (
+              <button className="v2-row-btn" onClick={() => signOutUser()}>
+                <span className="v2-row-text"><b>Sign out</b><span>{email}</span></span>
+              </button>
+            )}
+          </div>
         </section>
         {error && <p className="v2-error" role="alert">{friendlyError(new Error(error))}</p>}
       </div>
