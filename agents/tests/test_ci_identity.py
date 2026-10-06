@@ -14,7 +14,7 @@ GOOGLE_AUTH = "google-github-actions/auth"
 
 
 def _jobs_signing_in_to_google():
-    for path in WORKFLOWS.glob("*.yml"):
+    for path in sorted([*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")]):  # GitHub runs both
         for name, job in (yaml.safe_load(path.read_text()).get("jobs") or {}).items():
             if any(GOOGLE_AUTH in str(step.get("uses", "")) for step in job.get("steps", [])):
                 yield path.name, name, job
@@ -45,3 +45,11 @@ def test_the_deployer_has_no_broad_project_wide_roles():
     # Acting as service accounts only on the two the deploy uses, and storage only on its buckets.
     assert 'for sa in "$RUNTIME_SA" "$BUILD_SA"' in SETUP
     assert "gcloud storage buckets add-iam-policy-binding" in SETUP
+
+
+def test_broad_roles_are_removed_only_after_every_narrow_grant_is_in_place():
+    """Removing first would leave the deployer with nothing if a narrow grant then failed."""
+    last_grant = SETUP.index("gcloud artifacts repositories add-iam-policy-binding")
+    removal = SETUP.index('gcloud projects remove-iam-policy-binding "$PROJECT_ID"')
+    assert removal > last_grant
+    assert 'if [[ "$NARROW_READY" == true ]]' in SETUP[last_grant:removal + 200]

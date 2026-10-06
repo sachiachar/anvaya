@@ -41,32 +41,38 @@ echo "== Deployer service account"
 gcloud iam service-accounts describe "$DEPLOYER_SA" >/dev/null 2>&1 || \
   gcloud iam service-accounts create "$DEPLOYER" --display-name "GitHub Actions deployer"
 
+# Narrow grants first; the broad roles are removed only at the very end, and only once every narrow
+# grant is in place, so a missing piece never leaves the deployer unable to deploy.
+NARROW_READY=true
+
 echo "== Project-wide roles: only what has no narrower place to grant it"
 for role in roles/run.developer roles/cloudbuild.builds.editor roles/serviceusage.serviceUsageConsumer \
             roles/firebasehosting.admin roles/firebaserules.admin; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "$MEMBER" --role "$role" --condition=None >/dev/null
 done
-# Remove the broad roles earlier versions of this script granted across the whole project.
-for role in roles/run.admin roles/storage.admin roles/iam.serviceAccountUser roles/logging.viewer \
-            roles/artifactregistry.writer; do
-  gcloud projects remove-iam-policy-binding "$PROJECT_ID" --member "$MEMBER" --role "$role" \
-    --condition=None >/dev/null 2>&1 || true
-done
 
 echo "== Narrow grants: the API's and the build's service accounts, the source and build buckets, the image repository"
 for sa in "$RUNTIME_SA" "$BUILD_SA"; do
-  gcloud iam service-accounts add-iam-policy-binding "$sa" --member "$MEMBER" \
-    --role roles/iam.serviceAccountUser >/dev/null
+  if gcloud iam service-accounts describe "$sa" >/dev/null 2>&1; then
+    gcloud iam service-accounts add-iam-policy-binding "$sa" --member "$MEMBER" \
+      --role roles/iam.serviceAccountUser >/dev/null
+  else
+    echo "   ! service account ${sa} doesn't exist"; NARROW_READY=false
+  fi
 done
 for bucket in "$SOURCE_BUCKET" "$BUILD_BUCKET"; do
   if gcloud storage buckets describe "gs://${bucket}" >/dev/null 2>&1; then
     gcloud storage buckets add-iam-policy-binding "gs://${bucket}" --member "$MEMBER" --role roles/storage.admin >/dev/null
   else
-    echo "   (bucket ${bucket} doesn't exist yet: deploy once with infra/deploy.sh, then run this again)"
+    echo "   ! bucket ${bucket} doesn't exist yet"; NARROW_READY=false
   fi
 done
-gcloud artifacts repositories add-iam-policy-binding "$AR_REPO" --location "$REGION" --member "$MEMBER" \
-  --role roles/artifactregistry.writer >/dev/null
+if gcloud artifacts repositories describe "$AR_REPO" --location "$REGION" >/dev/null 2>&1; then
+  gcloud artifacts repositories add-iam-policy-binding "$AR_REPO" --location "$REGION" --member "$MEMBER" \
+    --role roles/artifactregistry.writer >/dev/null
+else
+  echo "   ! Artifact Registry repository ${AR_REPO} (${REGION}) doesn't exist yet"; NARROW_READY=false
+fi
 
 echo "== Workload Identity Federation: only deploy.yml, on main, in environment production, in ${REPO} (#${REPO_ID})"
 MAPPING="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.repository_id=assertion.repository_id,attribute.ref=assertion.ref,attribute.workflow_ref=assertion.workflow_ref,attribute.environment=assertion.environment"
@@ -89,10 +95,16 @@ gcloud iam service-accounts add-iam-policy-binding "$DEPLOYER_SA" --role roles/i
 gcloud iam service-accounts remove-iam-policy-binding "$DEPLOYER_SA" --role roles/iam.workloadIdentityUser \
   --member "${POOL_PATH}/attribute.repository/${REPO}" >/dev/null 2>&1 || true
 
-echo "== GitHub environment \"production\": deployments from main only"
-gh api -X PUT "repos/${REPO}/environments/production" --input - >/dev/null <<'JSON'
-{"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}
-JSON
+echo "== GitHub environment \"production\": deployments from main only (its reviewers and wait timer kept)"
+# The update replaces the environment's settings, so send back the protections it already has.
+ENV_SETTINGS=$(gh api "repos/${REPO}/environments/production" --jq '{
+  wait_timer: ([.protection_rules[]? | select(.type == "wait_timer") | .wait_timer][0] // 0),
+  prevent_self_review: ([.protection_rules[]? | select(.type == "required_reviewers") | .prevent_self_review][0] // false),
+  reviewers: ([.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]? | {type: .type, id: .reviewer.id}]
+              | if length == 0 then null else . end),
+  deployment_branch_policy: {protected_branches: false, custom_branch_policies: true}
+}' 2>/dev/null || echo '{"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}')
+gh api -X PUT "repos/${REPO}/environments/production" --input - >/dev/null <<<"$ENV_SETTINGS"
 gh api "repos/${REPO}/environments/production/deployment-branch-policies" --jq '.branch_policies[].name' | grep -qx main || \
   gh api -X POST "repos/${REPO}/environments/production/deployment-branch-policies" -f name=main -f type=branch >/dev/null
 
@@ -107,5 +119,18 @@ gh variable set VITE_LIVE_URL --repo "$REPO" --body "${RUN_URL/https:/wss:}"
 while IFS='=' read -r key value; do
   [[ "$key" == VITE_FIREBASE_* ]] && gh variable set "$key" --repo "$REPO" --body "$value"
 done < web/.env
+
+echo "== Remove the broad project-wide roles earlier versions of this script granted"
+if [[ "$NARROW_READY" == true ]]; then
+  for role in roles/run.admin roles/storage.admin roles/iam.serviceAccountUser roles/logging.viewer \
+              roles/artifactregistry.writer; do
+    gcloud projects remove-iam-policy-binding "$PROJECT_ID" --member "$MEMBER" --role "$role" \
+      --condition=None >/dev/null 2>&1 || true
+  done
+else
+  echo "   ! Kept them for now: something above is missing (marked !). Deploy the API once with"
+  echo "     infra/deploy.sh so it exists, then run this script again to finish."
+  exit 1
+fi
 
 echo "Done. Only deploy.yml on main, in environment production, can deploy; pushes to main deploy only what changed."
