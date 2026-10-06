@@ -14,7 +14,7 @@ marks a gap as intentionally unknown, and it's never raised again.
     will         nothing kept says whether there's a will (even "there's no will" counts)
     loans        nothing kept says whether there are loans or debts
     first_call   nothing kept says who the family should call first
-    digital      nothing kept about email, phone or online accounts
+    digital      nothing kept about email or online accounts
     confirm      something kept with doubt ("I think it's Meena"), two weeks on
     recheck      a nominee, papers or the will, once a year, in case it changed
 """
@@ -39,8 +39,19 @@ RECHECK_EVERY_DAYS = knowledge.STALE_AFTER_DAYS  # nominees, papers and the will
 # Words that show something is already recorded, even "there's no loan". Matched on _words text.
 WILL_WORDS = re.compile(r" (my|a|the|no|his|her) will | testament | vasiyat | wasiyat | वसीयत ")
 LOAN_WORDS = re.compile(r" (loan|loans|debt|debts|emi|emis|mortgage|karz|karza|qarz|कर्ज|कर्ज़|लोन) ")
-DIGITAL_WORDS = re.compile(r" (email|gmail|phone|mobile|password manager|online|upi|net banking|digital) ")
+# Not "phone" or "mobile" alone: "phone Meena first" is about who to call, not an online account.
+DIGITAL_WORDS = re.compile(r" (email|e mail|gmail|password manager|online|upi|net banking|mobile banking|digital|"
+                           r"whatsapp|facebook|social media) ")
 FIRST_CALL_WORDS = re.compile(r" (call|contact|inform|tell|phone) (\w+ ){0,4}first | first (\w+ ){0,3}(call|contact|inform) ")
+COMMON = (  # kind, harm, what's missing
+    ("will", 3, "Whether there's a will, and where it's kept, isn't recorded."),
+    ("loans", 2, "Whether there are any loans or debts isn't recorded."),
+    ("first_call", 2, "Who the family should call first isn't recorded."),
+    ("digital", 1, "Email and online accounts aren't recorded."),
+)
+COMMON_KINDS = {kind for kind, _, _ in COMMON}
+COMMON_SIGNS = {"will": (WILL_WORDS, set()), "loans": (LOAN_WORDS, {"loan"}), "first_call": (FIRST_CALL_WORDS, set()),
+                "digital": (DIGITAL_WORDS, {"digital_account", "subscription"})}
 CONVERSATION_GAP = 30 * 60  # Saathi's last message counts as "this conversation" for this long
 # Asking again is a reminder, after a wait in days that grows each time; the more a gap would hurt
 # the family, the sooner it comes back and the more reminders it gets. The length of each tuple is
@@ -96,6 +107,16 @@ def _kept_at(owner_id: str) -> dict[str, float]:
         if at := entry.get("kept_at"):
             out[cid] = datetime.strptime(at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
     return out
+
+
+def _mentions(kind: str, moments: list[dict], accounts: list[dict]) -> bool:
+    """Whether these items record a common gap: an item of its kind, or words about it."""
+    words, categories = COMMON_SIGNS[kind]
+    if categories & {a.get("category") for a in accounts}:
+        return True
+    said = " ".join(_words(f"{m.get('title')} {m.get('summary')} {m.get('quote')}") for m in moments) + " " + \
+        " ".join(_words(f"{a.get('institution')} {a.get('product')}") for a in accounts)
+    return bool(words.search(f" {said} "))
 
 
 def _changes(item: dict) -> bool:
@@ -162,7 +183,8 @@ def find(owner_id: str, *, include_skipped: bool = False, now: float | None = No
         age = now - kept_at.get(item["id"], now)
         name = _label(item) or f"\"{item.get('title')}\""
         if item.get("unsure") and age >= CONFIRM_AFTER_DAYS * DAY:
-            gap(f"confirm:{_id(item)}", 2, item["id"],
+            # The kept version's id is in the key, so a newer version kept with doubt is checked again.
+            gap(f"confirm:{_id(item)}:{item['id']}", 2, item["id"],
                 f"{name} was kept with some doubt ({_doubt(item)}); worth checking it's right.", "confirm")
         elif _changes(item) and age >= RECHECK_EVERY_DAYS * DAY:
             cycle = int(age // (RECHECK_EVERY_DAYS * DAY))  # a new key each year, so a "still the same" lasts a year
@@ -170,19 +192,14 @@ def find(owner_id: str, *, include_skipped: bool = False, now: float | None = No
                 f"{name} was last confirmed over a year ago ({_doubt(item)}); is it still the same?", "recheck")
 
     # What families most often can't find. Recorded once anything kept mentions it, even "there's none".
-    said = " ".join(_words(f"{m.get('title')} {m.get('summary')} {m.get('quote')}") for m in moments) + " " + " ".join(
-        _words(f"{a.get('institution')} {a.get('product')}") for a in accounts)
-    categories = {a.get("category") for a in accounts}
-    for kind, harm, text, words, has in (
-        ("will", 3, "Whether there's a will, and where it's kept, isn't recorded.", WILL_WORDS, set()),
-        ("loans", 2, "Whether there are any loans or debts isn't recorded.", LOAN_WORDS, {"loan"}),
-        ("first_call", 2, "Who the family should call first isn't recorded.", FIRST_CALL_WORDS, set()),
-        ("digital", 1, "Email, phone and online accounts aren't recorded.", DIGITAL_WORDS,
-         {"digital_account", "subscription"}),
-    ):
-        if not (categories & has) and not words.search(f" {said} "):
+    for kind, harm, text in COMMON:
+        if not _mentions(kind, moments, accounts):
             gap(f"{kind}:{kind}", harm, "", text, kind)
 
+    # A check the owner said is right is closed, for this version (confirm) or this year (recheck).
+    answered = {a["key"] for a in store.list("gap_asks", owner_id=owner_id)
+                if (a.get("events") or [{}])[-1].get("outcome") == "answered"}
+    found = [g for g in found if not (g["kind"] in ("confirm", "recheck") and g["key"] in answered)]
     if not include_skipped:
         skipped = {s["key"] for s in store.list("gap_skips", owner_id=owner_id)}
         found = [g for g in found if g["key"] not in skipped]
@@ -199,16 +216,17 @@ def due(owner_id: str, n: int = 2, now: float | None = None) -> list[dict]:
     a waiting card already answers it (the answer waits for Keep)."""
     now = time.time() if now is None else now
     asks = {a["key"]: a.get("events") or [] for a in store.list("gap_asks", owner_id=owner_id)}
-    waiting = {_id(d) for c in ("inventory", "people") for d in store.list(c, owner_id=owner_id, status="pending")}
+    pending = {c: store.list(c, owner_id=owner_id, status="pending") for c in ("inventory", "people", "moments")}
+    waiting = {_id(d) for c in ("inventory", "people") for d in pending[c]}
     chosen: list[dict] = []
     reminded = False
     for g in find(owner_id, now=now):
         if waiting & set(g["key"].split(":")[1:]):
             continue
-        events = asks.get(g["key"]) or []
-        if g["kind"] in ("confirm", "recheck") and events and events[-1].get("outcome") == "answered":
-            continue  # they said it's right; keeping a new version closes it for good
-        state = {"key": g["key"], "text": g["text"], "harm": HARM_WORDS.get(g["harm"], "low"), "reminder": 0}
+        if g["kind"] in COMMON_KINDS and _mentions(g["kind"], pending["moments"], pending["inventory"]):
+            continue  # a waiting card answers it
+        state = {"key": g["key"], "kind": g["kind"], "text": g["text"], "harm": HARM_WORDS.get(g["harm"], "low"),
+                 "reminder": 0}
         if events := asks.get(g["key"]):
             since = now - events[-1]["at"]
             wait = _wait(g["harm"], events)

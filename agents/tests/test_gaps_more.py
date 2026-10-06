@@ -113,3 +113,43 @@ def test_things_that_change_come_back_once_a_year_with_a_new_key_each_year():
     first = next(g for g in gaps.find(OWNER, now=time.time() + year + DAY) if g["kind"] == "recheck")
     second = next(g for g in gaps.find(OWNER, now=time.time() + 2 * year + DAY) if g["kind"] == "recheck")
     assert first["key"] != second["key"] and "still the same" in first["text"]
+
+
+# ---- From the code review ---------------------------------------------------------
+
+
+def _answer(key: str, at: float) -> None:
+    store.put("gap_asks", {"id": f"{OWNER}:{key}", "owner_id": OWNER, "key": key,
+                           "events": [{"turn_id": new_id("turn"), "at": at, "outcome": "answered"}]})
+
+
+def test_a_check_they_said_is_right_leaves_their_list_too(client):
+    _keep("inventory", {**POLICY, "nominee_or_beneficiary": "Meena", "unsure": True})
+    later = time.time() + 15 * DAY
+    key = next(g["key"] for g in gaps.find(OWNER, now=later) if g["kind"] == "confirm")
+    _answer(key, later)
+    assert "confirm" not in kinds(now=later)
+    assert key not in [g["key"] for g in client.get(f"/api/owners/{OWNER}/gaps").json()["gaps"]]
+
+
+def test_a_newer_version_kept_with_doubt_is_checked_again():
+    _keep("inventory", {**POLICY, "nominee_or_beneficiary": "Meena", "unsure": True})
+    later = time.time() + 15 * DAY
+    _answer(next(g["key"] for g in gaps.find(OWNER, now=later) if g["kind"] == "confirm"), later)
+    doubt = {**POLICY, "nominee_or_beneficiary": "Ravi", "unsure": True}
+    proposals.approve("inventory", proposals.save_inventory(OWNER, doubt, {}))
+    confirm = [g for g in gaps.find(OWNER, now=later) if g["kind"] == "confirm"]
+    assert len(confirm) == 1 and "Ravi" in confirm[0]["text"]
+
+
+def test_a_waiting_story_card_pauses_a_common_gap():
+    assert "will" in [g["kind"] for g in gaps.due(OWNER, n=20)]
+    proposals.save_moment(OWNER, {**STORY, "kind": "practical", "title": "The will", "summary": "My will is with "
+                                  "Advocate Sharma.", "quote": "My will is with Advocate Sharma."}, {})
+    assert "will" not in [g["kind"] for g in gaps.due(OWNER, n=20)]
+    assert "will" in kinds()  # still open until it's kept
+
+
+def test_phone_someone_first_is_not_an_online_account():
+    said("Phone Meena first, then the bank.")
+    assert "first_call" not in kinds() and "digital" in kinds()

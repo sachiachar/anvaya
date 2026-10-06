@@ -34,7 +34,7 @@
 
 **Talking to Saathi (owner)**
 - **Saathi remembers only what Vikram kept.** It no longer reads back earlier conversations, so something he discarded or never kept can't come up again. Within a conversation it still knows what it just asked, so a short answer ("Yes, Priya") makes sense.
-- **Saathi asks about what families most often can't find:** whether there's a will and where it is, where the papers for a property or policy are, any loans or debts, who to call first, and email, phone and online accounts. Once Vikram mentions one, even to say there's none, it isn't asked again.
+- **Saathi asks about what families most often can't find:** whether there's a will and where it is, where the papers for a property or policy are, any loans or debts, who to call first, and email and online accounts. Once Vikram mentions one, even to say there's none, it isn't asked again.
 - **Making sure:** if Vikram wasn't sure of something ("I think the nominee is Meena"), Saathi checks with him about two weeks later. Nominees, where papers are and the will come up once a year, in case they've changed. Once he says it's still right, Saathi stops asking.
 - **No repeated questions.** Saathi asks about each missing piece once. If it's still missing, it comes back later as a gentle reminder ("Last week we talked about…"): after 3 days for something important like a policy with no nominee, and after longer for smaller things, with a longer wait after "not now". After a few reminders it stops asking; the piece stays in Kept as a page still to write.
 - Spoken replies read out only what Saathi actually said, checked on the server. Playing a reply again, or a new reply with the same words, reuses the saved audio.
