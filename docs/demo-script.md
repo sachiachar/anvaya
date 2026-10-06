@@ -6,7 +6,7 @@
 
 - [ ] Use headphones, so Saathi doesn't hear itself.
 - [ ] Sign in at the live site with an allowed Google account, then **Demo** (top right) → **Reset my demo**.
-- [ ] Open a second browser profile (or a phone) for **Priya** (**Demo** → **Priya**), so the key-code match looks real.
+- [ ] Open a second browser profile (or a phone) for **Priya**, **signed in with the same Google account**, then **Demo** → **Priya**, so the key-code match looks real. Each Google account has its own demo copy, so another account won't see Vikram's invite.
 - [ ] Keep a sample death certificate image and a "letters testamentary" image ready (any clearly labelled sample document).
 - [ ] Optional: **Demo** → **Open the knowledge map** in a third window, to show each item appear as it's kept.
 - [ ] Billing on for the Gemini key (free-tier limits can stop mid-take).
