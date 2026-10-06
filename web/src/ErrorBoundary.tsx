@@ -16,12 +16,10 @@ export default class ErrorBoundary extends Component<{ children: ReactNode }, { 
   render() {
     if (!this.state.failed) return this.props.children;
     return (
-      <div className="app">
-        <div className="signin" role="alert">
-          <p><strong>Something went wrong on this screen.</strong></p>
-          <p className="muted">Your demo is safe. Reloading usually fixes it.</p>
-          <button onClick={() => location.reload()}>Reload</button>
-        </div>
+      <div className="crash" role="alert">
+        <p><strong>Something went wrong on this screen.</strong></p>
+        <p className="crash-note">Your demo is safe. Reloading usually fixes it.</p>
+        <button onClick={() => location.reload()}>Reload</button>
       </div>
     );
   }

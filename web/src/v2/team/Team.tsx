@@ -1,7 +1,7 @@
 // Our team (v2): reviewing a reported passing. The certificate check prepares the facts; a person on
 // our team decides, and two different people must confirm the loss and the legal authority (the
 // server enforces it). Going against a "not valid" check needs a written reason, kept in the audit
-// log. The logic follows the classic Team.tsx (copied).
+// log.
 import { useEffect, useState } from "react";
 import { type AccessRequest, api, type Case, type DocumentCheck } from "../../api";
 import { useAction } from "../../ui";

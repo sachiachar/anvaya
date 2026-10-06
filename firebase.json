@@ -26,6 +26,11 @@
           "source": "/admin.html",
           "destination": "https://anvaya-admin.web.app/",
           "type": 301
+        },
+        {
+          "source": "/v2.html",
+          "destination": "/",
+          "type": 301
         }
       ]
     },

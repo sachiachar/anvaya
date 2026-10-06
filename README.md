@@ -177,7 +177,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173, sign in with an allowed Google account, and switch roles with the tabs at the bottom: **Vikram** (owner), **Our team** (reviewers), **Priya** (family). To run without sign-in locally, set `AUTH_REQUIRED=false` and leave `web/.env` out.
+Open http://localhost:5173, sign in with an allowed Google account, and switch people with the **Demo** button at the top right: **Vikram** (owner), **Priya** (family), **Anjali** and **Rahul** (our team). To run without sign-in locally, set `AUTH_REQUIRED=false` and leave `web/.env` out.
 
 Tests (no cloud credentials needed):
 
@@ -216,7 +216,7 @@ Every push to `main` deploys **what changed since each part last deployed** ([.g
 Full script with lines to say: [docs/demo-script.md](docs/demo-script.md).
 
 
-1. **Vikram:** tap 🎤 and talk about family, a first job, and an LIC policy ("make Ajay the nominee"). Keep the cards; open **My plan** to see Next steps.
-2. **Vikram → vault:** choose Priya as recipient. **Priya:** accept and save the recovery code. **Vikram:** confirm the matching code, seal, add a secret.
-3. **Priya:** upload a death certificate. **Our team:** two different reviewers confirm (a reason is needed to override the AI).
-4. After the waiting period, **Priya** unlocks the vault, asks "What insurance did Papa have?", and prepares the claim letters.
+1. **Vikram → Talk:** tap **Talk to Saathi** and talk about family, a first job, and an LIC policy ("make Ajay the nominee"). Tap **End call**: Saathi sums it up, everything is marked to save; tap **Save**. Open **Kept** to see the book and the pages still to write.
+2. **Vikram → Family:** choose Priya and invite her. **Priya** (Demo menu): accept and keep the recovery code. **Vikram:** check the codes match, seal; **Vault:** lock a secret.
+3. **Priya:** start the handover with a certificate. **Anjali**, then **Rahul**: two different reviewers confirm (going against a "not valid" check needs a written reason).
+4. After the waiting period, **Priya** opens the vault, asks "What insurance did Papa have?", and prepares the claim letters. Optional: **Demo → Open the knowledge map** in a second window shows each item appear as it's kept.

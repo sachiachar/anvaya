@@ -17,7 +17,6 @@ import { forgetRecipientKeyOnThisDevice, hasRecipientKeys } from "../vaultCrypto
 
 // The platform admin opens the separate admin portal (PR-12.9).
 const ADMIN_URL = import.meta.env.VITE_ADMIN_URL ?? (import.meta.env.DEV ? "/admin.html" : "https://anvaya-admin.web.app");
-const CLASSIC_URL = "/";
 const SHOW_HOW_KEY = "anvaya.v2.showHow";
 
 type OwnerTab = "talk" | "kept" | "family" | "vault";
@@ -53,7 +52,7 @@ export default function App() {
   });
   const switchTo = (id: PersonId) => { setActingAs(id); setActing(id); setDrawer(false); setTalkTopic(null); };
 
-  // Sign-in, as in the classic app: "checking" until Firebase answers, then "signed-out", "denied" or "in".
+  // Sign-in: "checking" until Firebase answers, then "signed-out", "denied" or "in".
   const [session, setSession] = useState<"checking" | "signed-out" | "denied" | "in">(authEnabled ? "checking" : "in");
   const [email, setEmail] = useState<string | null>(null);
   const [denied, setDenied] = useState<string | null>(null);
@@ -86,7 +85,7 @@ export default function App() {
     return <SignIn denied={session === "denied" ? denied : null} error={error} onError={setError} />;
   }
 
-  // The demo's knowledge map opens in its own window, always as the owner, as in the classic app.
+  // The demo's knowledge map opens in its own window (#knowledge-map), always as the owner.
   if (location.hash === "#knowledge-map") {
     return ready ? <KnowledgeMap /> : <p className="v2-muted v2-map-wait">{error ?? "Loading…"}</p>;
   }
@@ -95,7 +94,7 @@ export default function App() {
     <ShowHow.Provider value={showHow}>
       <div className="v2-app">
         <header className="v2-top">
-          <a className="v2-brand" href="/v2.html" aria-label="Anvaya, home">
+          <a className="v2-brand" href="/" aria-label="Anvaya, home">
             <ThreadMark />
             <b>Anvaya</b>
           </a>
@@ -224,7 +223,7 @@ function SignIn({ denied, error, onError }: { denied: string | null; error: stri
 }
 
 /** Everything that exists only for the demo, out of the customer's way: who is acting, reset,
- *  how Saathi works, the nickname, the knowledge map and the classic design. */
+ *  how Saathi works, the nickname and the knowledge map. */
 function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHow, askNickname, onNicknameDone, email }: {
   people: DemoPerson[]; acting: PersonId; onSwitch: (id: PersonId) => void; onClose: () => void;
   showHow: boolean; onToggleShowHow: () => void; askNickname: boolean; onNicknameDone: () => void; email: string | null;
@@ -272,7 +271,7 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
           <label className="v2-switch">
             <span>
               <strong>Show how Saathi works</strong>
-              <span className="v2-switch-hint">Labels that show what Saathi does on its own and what waits for a person.</span>
+              <span className="v2-switch-hint">Shows the readiness score on Kept.</span>
             </span>
             <input type="checkbox" checked={showHow} onChange={onToggleShowHow} />
           </label>
@@ -294,8 +293,7 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
         )}
 
         <section>
-          <a className="v2-link" href="/v2.html#knowledge-map" target="_blank" rel="noopener">Open the knowledge map in a new window</a>
-          <a className="v2-link" href={CLASSIC_URL}>Switch to the classic design</a>
+          <a className="v2-link" href="/#knowledge-map" target="_blank" rel="noopener">Open the knowledge map in a new window</a>
           {people.find((p) => p.id === acting)?.role === "family" && hasRecipientKeys() && (
             <button className="v2-link" onClick={() => { forgetRecipientKeyOnThisDevice(); onClose(); }}>
               Simulate a lost or new phone (forgets the key on this device)

@@ -1,6 +1,6 @@
 // Vault (v2): passwords, PINs and account details, locked on this phone before they leave it. The
 // server only ever holds the locked form; the screen shows what each secret is, never its locked
-// text. Encryption follows the classic Owner.tsx and lives in vaultCrypto.ts.
+// text. All encryption lives in vaultCrypto.ts.
 import { useEffect, useState } from "react";
 import { api, type VaultItem } from "../../api";
 import { useAction } from "../../ui";

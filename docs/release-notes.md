@@ -4,9 +4,9 @@
 
 ### What's included
 
-**The new design (preview)**
-- A new design of the app, in the brand's own navy, gold and mist with the Lora and Inter typefaces, opens at https://anvaya-saathi.web.app/v2.html. "Try the new design" on the current app's header goes there, and "Switch to the classic design" comes back. Both show the same demo copy, and the current app works as before.
-- This first step brings the look, sign-in, and the owner's new tabs: Talk, Kept, Family and Vault. The tabs fill in over the next updates; until then each one links to the classic design.
+**The new design**
+- **The new design is now the app,** at https://anvaya-saathi.web.app, in the brand's own navy, gold and mist with the Lora and Inter typefaces. The classic design is retired; old links to `/v2.html` go to the same place.
+- Every screen is in the new design: Vikram's Talk, Kept, Family and Vault; Priya's side; our team's review; and the knowledge map.
 - **Talk, in the new design:** one screen from hello to saved, in the same light look throughout. Vikram's home is a greeting, a suggested topic ("Today, perhaps") and a large Talk to Saathi button. Tap it and the microphone goes live in place: gold rings move with his voice, a clock and Mute and End sit under it, and the conversation appears underneath as it happens.
 - Nothing asks for a decision during the conversation. When it ends, Saathi sums it up in a few sentences, and everything it picked up is listed, already marked to save. Vikram removes only what he doesn't want, then saves the rest with one tap. He can also decide later, or discard the whole conversation, which deletes what was said and everything from it still waiting. Things kept before are never touched.
 - Typing and photos use the same screen and the same review: "Review and save" sits above the text box.
