@@ -10,6 +10,9 @@ import Book from "./owner/Book";
 import FamilyTab from "./owner/FamilyTab";
 import Talk from "./owner/Talk";
 import VaultTab from "./owner/VaultTab";
+import Journey from "./family/Journey";
+import Team from "./team/Team";
+import { forgetRecipientKeyOnThisDevice, hasRecipientKeys } from "../vaultCrypto";
 
 // The platform admin opens the separate admin portal (PR-12.9).
 const ADMIN_URL = import.meta.env.VITE_ADMIN_URL ?? (import.meta.env.DEV ? "/admin.html" : "https://anvaya-admin.web.app");
@@ -139,9 +142,9 @@ function screen(person: DemoPerson, owner: OwnerNav) {
         </>
       );
     case "family":
-      return <Soon title="Your family's side" text="The new family screens are coming next. For now, use the classic design." />;
+      return <Journey me={person.name.split(" ")[0]} />;
     case "reviewer":
-      return <Soon title="Our team's review" text="The new review screen is coming next. For now, use the classic design." />;
+      return <Team reviewer={person.name} />;
     case "platform_admin":
       return (
         <section className="v2-panel">
@@ -165,17 +168,6 @@ function OwnerTabScreen({ owner }: { owner: OwnerNav }) {
     case "vault":
       return <VaultTab onFamily={() => owner.go("family")} />;
   }
-}
-
-function Soon({ title, text }: { title: string; text: string }) {
-  return (
-    <section className="v2-soon">
-      <p className="v2-eyebrow">New design · in progress</p>
-      <h2>{title}</h2>
-      <p className="v2-muted">{text}</p>
-      <a className="v2-btn quiet" href={CLASSIC_URL}>Open the classic design</a>
-    </section>
-  );
 }
 
 /** Shown if someone reports the owner's death: one tap stops the release. */
@@ -298,6 +290,11 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
         <section>
           <a className="v2-link" href="/#knowledge-map" target="_blank" rel="noopener">Open the knowledge map in a new window</a>
           <a className="v2-link" href={CLASSIC_URL}>Switch to the classic design</a>
+          {people.find((p) => p.id === acting)?.role === "family" && hasRecipientKeys() && (
+            <button className="v2-link" onClick={() => { forgetRecipientKeyOnThisDevice(); onClose(); }}>
+              Simulate a lost or new phone (forgets the key on this device)
+            </button>
+          )}
           {confirmReset ? (
             <div className="v2-confirm" role="alert">
               <p>Restore your demo copy to the start? Everything you kept or changed in it is cleared. Nobody else's copy is affected.</p>
