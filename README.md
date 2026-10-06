@@ -153,8 +153,9 @@ agents/                 Python service (Cloud Run)
   app/auth.py           Google sign-in and the email allowlist
   tests/                Automated tests (Gemini stubbed)
 web/                    React installable web app (Firebase Hosting)
-  src/Conversation.tsx  The owner's conversation with Saathi
+  src/v2/               The app's screens: Talk, Kept, Family, Vault, Priya's side, our team
   src/vaultCrypto.ts    On-device encryption and recovery codes
+  src/admin/            The platform admin portal
 infra/deploy.sh         One-command Google Cloud deploy
 docs/                   Concept, architecture, use cases, release notes
 ```
