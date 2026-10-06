@@ -176,7 +176,8 @@ def after_reply(owner_id: str, last_said: dict | None, *, text: str, turn_id: st
     if previous and outcome in OUTCOMES:
         doc = store.get("gap_asks", f"{owner_id}:{previous}")
         if doc and doc.get("events"):
-            doc["events"][-1]["outcome"] = outcome
+            # Which turn gave the answer, so discarding that conversation takes the answer back too.
+            doc["events"][-1].update(outcome=outcome, answered_in=turn_id)
             store.put("gap_asks", doc)
     asked = asked_gap if asked_gap and any(g["key"] == asked_gap for g in find(owner_id)) else None
     if asked:
@@ -184,17 +185,25 @@ def after_reply(owner_id: str, last_said: dict | None, *, text: str, turn_id: st
             "id": f"{owner_id}:{asked}", "owner_id": owner_id, "key": asked, "events": []}
         doc["events"].append({"turn_id": turn_id, "at": now, "outcome": None})
         store.put("gap_asks", doc)
-    store.update("owners", owner_id, {"last_said": {"text": text, "turn_id": turn_id, "at": now, "gap": asked}})
+    current = (store.get("owners", owner_id) or {}).get("last_said") or {}
+    if current.get("at", 0) <= now:  # exchanges of a call can finish out of order: keep the newest
+        store.update("owners", owner_id, {"last_said": {"text": text, "turn_id": turn_id, "at": now, "gap": asked}})
 
 
 def forget_turns(owner_id: str, turn_ids: set[str]) -> None:
     """A discarded conversation: its questions no longer count as asked, and Saathi doesn't
     carry on from its last message."""
     for doc in store.list("gap_asks", owner_id=owner_id):
-        kept = [e for e in doc.get("events") or [] if e.get("turn_id") not in turn_ids]
+        events = doc.get("events") or []
+        kept = [e for e in events if e.get("turn_id") not in turn_ids]
+        changed = len(kept) != len(events)
+        for e in kept:
+            if e.get("answered_in") in turn_ids:  # asked in a kept turn, answered in the discarded one
+                e.update(outcome=None, answered_in=None)
+                changed = True
         if not kept:
             store.delete("gap_asks", doc["id"])
-        elif len(kept) != len(doc.get("events") or []):
+        elif changed:
             store.put("gap_asks", {**doc, "events": kept})
     owner = store.get("owners", owner_id) or {}
     if (owner.get("last_said") or {}).get("turn_id") in turn_ids:

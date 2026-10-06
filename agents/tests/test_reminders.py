@@ -205,3 +205,49 @@ def test_discard_forgets_the_questions_asked_and_the_last_message(client, chat):
     assert client.post(f"{URL}/forget", json={"turn_ids": ids}).status_code == 200
     assert store.list("gap_asks", owner_id=OWNER) == []
     assert store.get("owners", OWNER)["last_said"] is None
+
+
+def test_discarding_the_answer_takes_it_back_even_if_the_question_is_kept(client, chat):
+    _, reply = chat
+    _keep("inventory", LIC)
+    key = key_of("lic")
+    reply["asked_gap"] = key
+    client.post(URL, data={"text": "Hello"})  # asked here; this conversation is kept
+    reply.update(asked_gap=None, gap_outcome="declined")
+    answer = client.post(URL, data={"text": "I'd rather not say"}).json()
+    client.post(f"{URL}/forget", json={"turn_ids": [answer["owner_turn"]["id"], answer["assistant_turn"]["id"]]})
+    events = store.get("gap_asks", f"{OWNER}:{key}")["events"]
+    assert len(events) == 1 and events[0]["outcome"] is None  # still asked, but "declined" is gone
+
+
+def test_a_call_judges_each_answer_against_the_question_it_saw(client, monkeypatch):
+    """Exchanges of a call save at the same time and can finish out of order: an answer is
+    recorded on the gap its extractor was shown, and an older exchange never replaces a newer
+    last message."""
+    _keep("inventory", LIC)
+    key = key_of("lic")
+    first_done = asyncio.Event()
+
+    async def extract(owner, heard, said, known):
+        if heard == "First.":
+            await first_done.wait()  # the first exchange finishes last
+            return Extraction()
+        return Extraction(asked_gap=key)
+
+    class WS:
+        async def send_json(self, data):
+            pass
+
+    monkeypatch.setattr(live.loops, "extract_from_exchange", extract)
+    owner = {"id": OWNER, "name": "Vikram Rao"}
+
+    async def run() -> None:
+        first = asyncio.create_task(live._save_exchange(WS(), owner, "First.", "Older reply.", main._expand))
+        await asyncio.sleep(0.05)
+        await live._save_exchange(WS(), owner, "Second.", "Who is the nominee?", main._expand)
+        first_done.set()
+        await first
+
+    asyncio.run(run())
+    last = store.get("owners", OWNER)["last_said"]
+    assert last["text"] == "Who is the nominee?" and last["gap"] == key
