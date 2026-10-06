@@ -34,11 +34,11 @@ flowchart LR
 
 | Principle | In practice |
 | --- | --- |
-| **Talk first** | Tap 🎤 once and talk, like a phone call. No record and stop buttons, and you can interrupt. |
+| **Talk first** | Tap **Talk to Saathi** once and talk, like a phone call. No record and stop buttons, and you can interrupt. |
 | **Cards, not forms** | Saathi suggests; the owner taps **Keep**, **Not now** or **Keep all**. Nothing is saved otherwise. |
 | **One companion** | Saathi is always the same: warm, calls you "Vikram ji", replies in your language, never pretends to save or change things. |
 | **Next steps, not scores** | Readiness shows up to 5 clear steps, each with a button that does something. |
-| **Plain language** | Short sentences, no jargon. Technical labels (like "AI acts within limits") are hidden unless you turn on **Show how the AI works**. |
+| **Plain language** | Short sentences, no jargon. No technical labels: customers meet Saathi and our team, never the machinery. |
 | **Nothing lost** | Follow-up details add to what's saved; a lost phone is restored with a recovery code. |
 | **Grief-aware** | Calm wording after a death, no marketing, a person always involved. |
 
@@ -65,13 +65,13 @@ flowchart LR
 
 | # | Use case | What the owner does | What the AI does | Status |
 | --- | --- | --- | --- | --- |
-| O1 | Talk live | Taps 🎤 and talks naturally; interrupts whenever | Replies out loud in ~1.5 s, shows captions, suggests cards after each exchange | ✅ |
+| O1 | Talk live | Taps **Talk to Saathi** and talks naturally; interrupts whenever | Replies out loud in ~1.5 s, shows the conversation as it happens, and at the end sums it up with everything picked up marked to save | ✅ |
 | O2 | Type or share | Types, or shares a 📷 photo or 📄 document | Reads it; for a policy or statement, creates an account card with numbers masked and missing fields (e.g. "nominee") | ✅ |
 | O3 | Keep what matters | Taps Keep, Not now, or Keep all | Saves only kept items; a repeat adds nothing; a follow-up becomes an **Update** card that adds to the saved text | ✅ |
 | O4 | Build the family list | Says "My wife is Meena…" and keeps the family cards | Creates family cards; asks "Who is Ajay?" when a new name comes up | ✅ |
 | O5 | Record money matters | Mentions a policy or account, then details later ("make Ajay the nominee") | Updates the same card (same institution and last 4 digits); reminds that nominee changes must be submitted to the institution | ✅ |
 | O6 | Record wishes | "The flat should go to Meena, then both children" | Saves it as a wish card; flags that it needs a will | ✅ |
-| O7 | Follow next steps | Opens My plan → Next steps and taps the action button | Explains why each step matters; gives concrete steps for bank or insurer tasks; **Talk about this** starts the conversation on that topic | ✅ |
+| O7 | Follow next steps | Opens Kept → Pages still to write and taps **Talk about this** | Explains why each step matters; gives concrete steps for bank or insurer tasks; **Talk about this** starts the conversation on that topic | ✅ |
 | O8 | Get legal help | Checks which wishes need a legal document; consents | Sends a pre-filled summary to the legal partner, never vault data | ✅ (partner mocked) |
 | O9 | Choose the vault recipient | Picks a family member and invites them; later confirms the matching key code | Only the invited person can accept; the vault can't be sealed until the owner approves | ✅ |
 | O10 | Store secrets | Adds passwords and account access in the vault | Encrypts on the phone; the AI sees only labels the owner allows | ✅ |

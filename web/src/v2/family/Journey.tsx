@@ -1,8 +1,8 @@
 // The family side (v2): one stage at a time. Before anything happens, the chosen person accepts
 // on their own phone and keeps a recovery code; when the time comes, they start the handover and
 // follow it in plain steps; after release, they open the vault, ask about their parent and get
-// the claim letters. The logic follows the classic Family.tsx (copied); all cryptography stays in
-// vaultCrypto.ts, and the vault is decrypted on this phone only.
+// the claim letters. All cryptography stays in vaultCrypto.ts, and the vault is decrypted on this
+// phone only.
 import { useEffect, useState } from "react";
 import { api, type Case } from "../../api";
 import { useAction } from "../../ui";

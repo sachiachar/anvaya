@@ -75,7 +75,7 @@ Dependabot skips FastAPI 0.142 and later (`ignore` in `.github/dependabot.yml`),
 
 ## Fonts (`web/public/fonts/`)
 
-The brand typefaces, served from our own site, so no visitor's address goes to a font service. Only the new design (`v2.html`) loads them. They come from the Fontsource builds of the Google Fonts releases, as woff2 files.
+The brand typefaces, served from our own site, so no visitor's address goes to a font service. The app loads them; the admin portal doesn't. They come from the Fontsource builds of the Google Fonts releases, as woff2 files.
 
 | Font | Version | Licence | Purpose |
 | --- | --- | --- | --- |

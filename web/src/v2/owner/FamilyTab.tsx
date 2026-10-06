@@ -1,7 +1,6 @@
 // Family (v2): who receives the vault, and who may see the stories. Choosing the recipient is a
 // three-step handshake: invite, they accept on their own phone, the owner approves only if both
-// phones show the same code, then seals the vault for them. The logic follows the classic Owner.tsx
-// (copied, so the classic app stays untouched); all cryptography stays in vaultCrypto.ts.
+// phones show the same code, then seals the vault for them. All cryptography stays in vaultCrypto.ts.
 import { useEffect, useState } from "react";
 import { type AccessRequest, api } from "../../api";
 import { useAction } from "../../ui";

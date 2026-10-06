@@ -1,7 +1,5 @@
 // Kept (v2): everything the owner has kept, as a book their family will one day receive. Chapters
-// instead of a score: gaps are "pages still to write", each with a way to write it. The logic for
-// removing, gaps, next steps and the legal check follows the classic Owner.tsx (copied, so the
-// classic app stays untouched).
+// instead of a score: gaps are "pages still to write", each with a way to write it.
 import { useContext, useEffect, useState } from "react";
 import { api, type Gap, type KeptItem, type Task } from "../../api";
 import { useAction } from "../../ui";

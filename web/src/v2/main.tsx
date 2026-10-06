@@ -1,6 +1,5 @@
-// The new design of the customer app (v2), served at /v2.html beside the classic one.
-// It shares the API client, sign-in, live call and vault crypto with the classic app,
-// and has its own styles: it never loads ../styles.css.
+// The customer app. Its screens and styles live in src/v2/; the API client, sign-in, live call
+// and vault crypto are in src/, shared with the platform admin portal where they apply.
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import ErrorBoundary from "../ErrorBoundary";
