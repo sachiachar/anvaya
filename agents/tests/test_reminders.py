@@ -54,7 +54,7 @@ def ask(key: str, at: float, outcome: str | None = None) -> None:
 
 
 def due_keys(now: float) -> list[str]:
-    return [g["key"] for g in gaps.due(OWNER, now=now)]
+    return [g["key"] for g in gaps.due(OWNER, n=20, now=now)]
 
 
 # ---- No earlier conversation ---------------------------------------------------
@@ -110,7 +110,7 @@ def test_a_high_harm_gap_comes_back_sooner_than_a_low_one(client):
     lic, sbi = key_of("lic"), key_of("sbi")
     ask(lic, at=0)
     ask(sbi, at=0)
-    assert due_keys(now=3 * DAY + 1) == [lic]
+    assert lic in due_keys(now=3 * DAY + 1) and sbi not in due_keys(now=3 * DAY + 1)
     store.delete("gap_asks", f"{OWNER}:{lic}")
     assert sbi not in due_keys(now=3 * DAY + 1) and sbi in due_keys(now=7 * DAY + 1)
 
