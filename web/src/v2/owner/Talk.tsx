@@ -23,7 +23,8 @@ const withTimeout = <T,>(p: Promise<T>, ms: number) =>
   Promise.race([p, new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timed out")), ms))]);
 const pending = (turns: Turn[]) => turns.flatMap((t) => t.proposals ?? []).filter((p) => p.status === "pending");
 
-export default function Talk() {
+/** topic: a page still to write that the owner chose in the book ("Talk about this"). */
+export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: string | null; onTopicUsed?: () => void }) {
   const [turns, setTurns] = useState<Turn[] | null>(null);
   const [baseline, setBaseline] = useState<ReadonlySet<string> | null>(null); // turns from before this conversation
   const [phase, setPhase] = useState<Phase>("talk");
@@ -32,7 +33,7 @@ export default function Talk() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [topic, setTopic] = useState<string | null>(null);
+  const [topic, setTopic] = useState<string | null>(chosen);
   const [allowance, setAllowance] = useState<Allowance | null>(null);
   const [text, setText] = useState("");
   const input = useRef<HTMLInputElement | null>(null);
@@ -93,11 +94,13 @@ export default function Talk() {
     api.owner().then((o) => setName(String(o.name ?? "").split(" ")[0])).catch(() => {});
     // Today's topic: the first open step Saathi can talk about, else the most harmful gap. Both are
     // already worked out; this never starts a new readiness check.
-    api.tasks()
-      .then((r) => r.tasks.find((t) => (t.action === "talk" || t.action === "family") && t.question_for_owner)?.question_for_owner ?? null)
-      .then(async (q) => q ?? (await api.gaps()).gaps[0]?.text ?? null)
-      .then(setTopic)
-      .catch(() => setTopic(null));
+    if (!chosen) {
+      api.tasks()
+        .then((r) => r.tasks.find((t) => (t.action === "talk" || t.action === "family") && t.question_for_owner)?.question_for_owner ?? null)
+        .then(async (q) => q ?? (await api.gaps()).gaps[0]?.text ?? null)
+        .then(setTopic)
+        .catch(() => setTopic(null));
+    }
     refreshAllowance();
     // Leaving Talk ends any call, even one still connecting, and any reply being read aloud.
     return () => { const c = call.current; call.current = null; c?.end(); stopSpeaking(); };
@@ -393,6 +396,7 @@ export default function Talk() {
   /** "Talk about this": Saathi asks the question first, then the call carries on from it. */
   async function talkAbout(question: string) {
     if (asking || call.current || !baseline) return;
+    if (question === chosen) onTopicUsed?.(); // a topic picked in the book is offered once
     setError(null);
     setAsking(true);
     try {

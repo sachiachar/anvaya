@@ -4,9 +4,15 @@ import { authEnabled, signInWithGoogle, signOutUser, watchUser } from "../auth";
 import { useAction } from "../ui";
 import { ROLE_TEXT, friendlyError } from "./copy";
 import { ShowHow } from "./demo";
-import { Book, Close, Lock, Mic, People, ThreadMark } from "./icons";
+import { Book as BookIcon, Close, Lock, Mic, People, ThreadMark } from "./icons";
 import { ModelKey } from "./ModelKey";
+import Book from "./owner/Book";
+import FamilyTab from "./owner/FamilyTab";
 import Talk from "./owner/Talk";
+import VaultTab from "./owner/VaultTab";
+import Journey from "./family/Journey";
+import Team from "./team/Team";
+import { forgetRecipientKeyOnThisDevice, hasRecipientKeys } from "../vaultCrypto";
 
 // The platform admin opens the separate admin portal (PR-12.9).
 const ADMIN_URL = import.meta.env.VITE_ADMIN_URL ?? (import.meta.env.DEV ? "/admin.html" : "https://anvaya-admin.web.app");
@@ -16,7 +22,7 @@ const SHOW_HOW_KEY = "anvaya.v2.showHow";
 type OwnerTab = "talk" | "kept" | "family" | "vault";
 const OWNER_TABS: { id: OwnerTab; label: string; icon: () => ReactNode }[] = [
   { id: "talk", label: "Talk", icon: Mic },
-  { id: "kept", label: "Kept", icon: Book },
+  { id: "kept", label: "Kept", icon: BookIcon },
   { id: "family", label: "Family", icon: People },
   { id: "vault", label: "Vault", icon: Lock },
 ];
@@ -30,6 +36,13 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [drawer, setDrawer] = useState(false);
   const [tab, setTab] = useState<OwnerTab>("talk");
+  const [talkTopic, setTalkTopic] = useState<string | null>(null); // "Talk about this" from the book
+  const [topicVisit, setTopicVisit] = useState(0); // a fresh Talk for each topic picked; clearing it doesn't restart Talk
+  const owner: OwnerNav = {
+    tab, go: (t) => { setTab(t); setTalkTopic(null); window.scrollTo({ top: 0 }); },
+    talkAbout: (q) => { setTalkTopic(q); setTopicVisit((v) => v + 1); setTab("talk"); window.scrollTo({ top: 0 }); },
+    topic: talkTopic, visit: topicVisit, clearTopic: () => setTalkTopic(null),
+  };
   const [showHow, setShowHow] = useState(() => {
     try { return localStorage.getItem(SHOW_HOW_KEY) === "1"; } catch { return false; }
   });
@@ -37,7 +50,7 @@ export default function App() {
     try { localStorage.setItem(SHOW_HOW_KEY, v ? "0" : "1"); } catch { /* not saved */ }
     return !v;
   });
-  const switchTo = (id: PersonId) => { setActingAs(id); setActing(id); setDrawer(false); };
+  const switchTo = (id: PersonId) => { setActingAs(id); setActing(id); setDrawer(false); setTalkTopic(null); };
 
   // Sign-in, as in the classic app: "checking" until Firebase answers, then "signed-out", "denied" or "in".
   const [session, setSession] = useState<"checking" | "signed-out" | "denied" | "in">(authEnabled ? "checking" : "in");
@@ -55,7 +68,12 @@ export default function App() {
     if (session !== "checking" && session !== "in") return;
     if (authEnabled && !email) return;
     api.me()
-      .then((m) => { setPeople(m.people); setAskNickname(m.ask_nickname); return api.owner().catch(() => api.seed()); })
+      .then((m) => { setPeople(m.people); setAskNickname(m.ask_nickname); return api.owner().catch((e) => {
+        // Set up the demo copy only when it doesn't exist yet, never because of a passing error:
+        // setting it up again would wipe everything in it.
+        if (/owner not found/.test(String(e?.message))) return api.seed();
+        throw e;
+      }); })
       .then(() => { setSession("in"); setReady(true); })
       .catch((e) => {
         if (e instanceof AuthError) { setDenied(e.message); setSession("denied"); }
@@ -84,14 +102,14 @@ export default function App() {
         <main className="v2-main">
           {error && <p className="v2-error" role="alert">{error}</p>}
           {!ready && !error && <p className="v2-muted">Opening your demo…</p>}
-          {ready && person && <div key={person.id} className="v2-stack">{screen(person, tab)}</div>}
+          {ready && person && <div key={person.id} className="v2-stack">{screen(person, owner)}</div>}
         </main>
 
         {ready && person?.role === "owner" && (
           <nav className="v2-nav" aria-label="Main">
             <div className="v2-nav-inner">
               {OWNER_TABS.map((t) => (
-                <button key={t.id} aria-current={tab === t.id ? "page" : undefined} onClick={() => setTab(t.id)}>
+                <button key={t.id} aria-current={tab === t.id ? "page" : undefined} onClick={() => owner.go(t.id)}>
                   {t.icon()}
                   {t.label}
                 </button>
@@ -110,20 +128,23 @@ export default function App() {
   );
 }
 
+type OwnerNav = { tab: OwnerTab; go: (t: OwnerTab) => void; talkAbout: (question: string) => void; topic: string | null;
+  visit: number; clearTopic: () => void };
+
 // Each person sees their own screens; the server checks who is acting on every request (PR-1.3).
-function screen(person: DemoPerson, tab: OwnerTab) {
+function screen(person: DemoPerson, owner: OwnerNav) {
   switch (person.role) {
     case "owner":
       return (
         <>
           <AliveAlert />
-          <OwnerTabPlaceholder tab={tab} />
+          <OwnerTabScreen owner={owner} />
         </>
       );
     case "family":
-      return <Soon title="Your family's side" text="The new family screens are coming next. For now, use the classic design." />;
+      return <Journey me={person.name.split(" ")[0]} />;
     case "reviewer":
-      return <Soon title="Our team's review" text="The new review screen is coming next. For now, use the classic design." />;
+      return <Team reviewer={person.name} />;
     case "platform_admin":
       return (
         <section className="v2-panel">
@@ -136,28 +157,17 @@ function screen(person: DemoPerson, tab: OwnerTab) {
   }
 }
 
-function OwnerTabPlaceholder({ tab }: { tab: OwnerTab }) {
-  switch (tab) {
+function OwnerTabScreen({ owner }: { owner: OwnerNav }) {
+  switch (owner.tab) {
     case "talk":
-      return <Talk />;
+      return <Talk key={owner.visit} topic={owner.topic} onTopicUsed={owner.clearTopic} />;
     case "kept":
-      return <Soon title="Your book" text="Everything you've kept, as chapters of a book, is coming soon. For now, see it under My plan in the classic design." />;
+      return <Book onTalkAbout={owner.talkAbout} onReview={() => owner.go("talk")} />;
     case "family":
-      return <Soon title="Your family" text="Choosing who receives your vault, and letting family in, is coming soon. For now, use the classic design." />;
+      return <FamilyTab onVault={() => owner.go("vault")} />;
     case "vault":
-      return <Soon title="Your vault" text="The new vault screen is coming soon. For now, use the classic design." />;
+      return <VaultTab onFamily={() => owner.go("family")} />;
   }
-}
-
-function Soon({ title, text }: { title: string; text: string }) {
-  return (
-    <section className="v2-soon">
-      <p className="v2-eyebrow">New design · in progress</p>
-      <h2>{title}</h2>
-      <p className="v2-muted">{text}</p>
-      <a className="v2-btn quiet" href={CLASSIC_URL}>Open the classic design</a>
-    </section>
-  );
 }
 
 /** Shown if someone reports the owner's death: one tap stops the release. */
@@ -280,6 +290,11 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
         <section>
           <a className="v2-link" href="/#knowledge-map" target="_blank" rel="noopener">Open the knowledge map in a new window</a>
           <a className="v2-link" href={CLASSIC_URL}>Switch to the classic design</a>
+          {people.find((p) => p.id === acting)?.role === "family" && hasRecipientKeys() && (
+            <button className="v2-link" onClick={() => { forgetRecipientKeyOnThisDevice(); onClose(); }}>
+              Simulate a lost or new phone (forgets the key on this device)
+            </button>
+          )}
           {confirmReset ? (
             <div className="v2-confirm" role="alert">
               <p>Restore your demo copy to the start? Everything you kept or changed in it is cleared. Nobody else's copy is affected.</p>
