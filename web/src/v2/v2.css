@@ -348,7 +348,8 @@ a { color: inherit; text-decoration-color: var(--gold); text-underline-offset: 3
 /* ---- The conversation, along the gold thread ------------------------------------------------------- */
 .v2-transcript { display: grid; }
 .v2-thread { list-style: none; margin: 0; padding: 0 0 0 26px; display: grid; gap: 14px; position: relative; }
-.v2-thread::before { content: ""; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 1.5px; background: linear-gradient(var(--gold), color-mix(in srgb, var(--gold) 30%, transparent)); }
+/* The thread runs the whole length, at full strength, so every note's dot sits on it. */
+.v2-thread::before { content: ""; position: absolute; left: 8px; top: 0; bottom: 0; width: 1.5px; background: color-mix(in srgb, var(--gold) 75%, transparent); }
 .v2-turn { display: grid; gap: 6px; }
 .v2-turn p { white-space: pre-wrap; }
 .v2-turn.assistant > p { font: 400 1.125rem/1.5 var(--serif); color: var(--ink); }

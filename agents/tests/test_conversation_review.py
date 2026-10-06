@@ -206,3 +206,29 @@ def test_a_save_that_never_finishes_stops_counting_as_saving(client):
     turns = {t["id"]: t for t in client.get(f"/api/owners/{OWNER}/conversation").json()["turns"]}
     assert turns[stale["id"]]["saving"] is False  # nothing waits on it for ever
     assert turns[fresh["id"]]["saving"] is True
+
+
+def test_a_number_given_later_fills_in_the_card_instead_of_making_a_second(client):
+    """'My LIC policy', then 'it ends 1234, Sunita is the nominee': one card, not two."""
+    first = proposals.save_inventory(OWNER, {"category": "insurance", "institution": "LIC", "product": "Insurance policy",
+                                             "account_hint": "••••", "nominee_or_beneficiary": None, "approximate_value": None,
+                                             "missing_fields": ["account_hint", "nominee"]}, {})
+    second = proposals.save_inventory(OWNER, {"category": "insurance", "institution": "LIC", "product": "Life insurance policy",
+                                              "account_hint": "••1234", "nominee_or_beneficiary": "Sunita Rao",
+                                              "approximate_value": None, "missing_fields": []}, {})
+    assert second["id"] == first["id"]
+    cards = [c for c in store.list("inventory", owner_id=OWNER) if c.get("institution") == "LIC"]
+    assert len(cards) == 1
+    assert cards[0]["account_hint"] == "••1234" and cards[0]["nominee_or_beneficiary"] == "Sunita Rao"
+    assert cards[0]["missing_fields"] == []
+
+
+def test_two_numberless_policies_at_one_insurer_stay_apart(client):
+    for product in ("Term policy", "Pension plan"):
+        proposals.save_inventory(OWNER, {"category": "insurance", "institution": "LIC", "product": product,
+                                         "account_hint": "", "nominee_or_beneficiary": None, "approximate_value": None,
+                                         "missing_fields": ["account_hint"]}, {})
+    proposals.save_inventory(OWNER, {"category": "insurance", "institution": "LIC", "product": "Jeevan Anand",
+                                     "account_hint": "••4492", "nominee_or_beneficiary": None, "approximate_value": None,
+                                     "missing_fields": []}, {})
+    assert len([c for c in store.list("inventory", owner_id=OWNER) if c.get("institution") == "LIC"]) == 3
