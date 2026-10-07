@@ -1,6 +1,6 @@
 # Saathi listens: from what people say to safe next steps
 
-**Status:** agreed 7 October 2026. Built: PR-13.1 (#148) and PR-13.3 (#150), except pressure in a wish (PR-13.3.7) · **Issues:** PR-13 (#146), PR-13.1 to PR-13.6 (#140 to #145) · **Owner review:** governance, the registry, the fraud guides, the admin portal · **Builds on:** kept knowledge (PR-7, `knowledge.py`), the gap check (PR-7.10, `gaps.py`), fraud foresight ([fraud-foresight.md](fraud-foresight.md))
+**Status:** agreed 7 October 2026. Built: PR-13.1 (#148); PR-13.3 (#150), except pressure in a wish (PR-13.3.7); PR-13.7 (#155), except one fact, one card (PR-13.7.7) · **Issues:** PR-13 (#146), PR-13.1 to PR-13.6 (#140 to #145), PR-13.7 (#153) · **Owner review:** governance, the registry, the fraud guides, the admin portal · **Builds on:** kept knowledge (PR-7, `knowledge.py`), the gap check (PR-7.10, `gaps.py`), fraud foresight ([fraud-foresight.md](fraud-foresight.md))
 
 ## 1. In short
 
@@ -219,9 +219,10 @@ Each rule has a test.
 | PR-13.1 | Statements and wishes in capture, kept as links | none |
 | PR-13.2 | Saathi listens first: wish follow-ups; fixed gaps only when relevant | PR-13.1 |
 | PR-13.3 | Never pursue a risky step: typed steps and the check (section 6) | none |
-| PR-13.4 | Researching a wish: `wish.planner`, next steps from wishes, readiness as coverage | PR-13.1, PR-13.3 |
+| PR-13.4 | Researching a wish: `wish.planner`, next steps from wishes, readiness as coverage | PR-13.1, PR-13.3; follows PR-10.11 if it's merged first |
 | PR-13.5 | Fraud cues from wishes and pressure signals | PR-13.1, FRD-1 |
 | PR-13.6 | Approved findings become protective steps and step tags | PR-13.3, PR-13.5, FRD-6 |
+| PR-13.7 | Cards say only what was said: each card is checked in code before it's saved (`grounding.py`) | none |
 
 PR-13.3 ships before PR-13.4 or with it. No researched step reaches anyone without the check.
 
