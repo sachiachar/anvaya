@@ -1,15 +1,15 @@
 # Anvaya: Demo Script
 
-*A 3-minute demo video, with the lines to say to Saathi. Say them as written; natural pauses are fine.*
+*A 3-minute demo video, with the lines to say to Saathi. Say the lines as written. Natural pauses are fine.*
 
 ## Before you record
 
 - [ ] Use headphones, so Saathi doesn't hear itself.
 - [ ] Sign in at the live site with an allowed Google account, then **Demo** (top right) → **Reset my demo**.
-- [ ] Open a second browser profile (or a phone) for **Priya**, **signed in with the same Google account**, then **Demo** → **Priya**, so the key-code match looks real. Each Google account has its own demo copy, so another account won't see Vikram's invite.
+- [ ] Open a second browser profile (or a phone) for **Priya**. Sign in there **with the same Google account**, then **Demo** → **Priya**. This makes the key-code match look real. Each Google account has its own demo copy, so another account won't see Vikram's invite.
 - [ ] Keep a sample death certificate image and a "letters testamentary" image ready (any clearly labelled sample document).
-- [ ] Optional: **Demo** → **Open the knowledge map** in a third window, to show each item appear as it's kept.
-- [ ] Billing on for the Gemini key (free-tier limits can stop mid-take).
+- [ ] Optional: open **Demo** → **Open the knowledge map** in a third window. It shows each item appear when it's kept.
+- [ ] Turn on billing for the Gemini key. Free-tier limits can stop a take before it ends.
 
 **On screen, in brackets:** what to tap. **Narration:** your voice-over for the video. **Say:** what you speak to Saathi as Vikram.
 
@@ -52,7 +52,7 @@
 
 *Expect:* notes for **Ajay, nephew** and for the wish about the flat.
 
-[Tap **End call**. Saathi sums up the call, with everything it picked up marked to save. Show the summary, then tap **Save N things**.]
+[Tap **End call**. Saathi sums up the call. Everything it picked up is marked to save. Show the summary, then tap **Save N things**.]
 
 **Narration:** "No forms. Saathi listens, asks gentle questions, and suggests what to keep. Nothing is saved until Vikram says yes."
 
@@ -68,7 +68,9 @@
 
 [Switch to Priya's browser → **Accept as Priya** → show the recovery code → tick the box. Her key code shows.]
 
-[Back to Vikram → **Family** shows a key code → show that it matches Priya's screen → **The codes match** → **Seal my vault for Priya**. **Vault** → What is it? "Email login", the secret "demo-only" → **Lock it on this phone**.]
+[Back to Vikram → **Family** shows a key code → show that it matches Priya's screen → **The codes match** → **Seal my vault for Priya**.]
+
+[**Vault** → What is it? "Email login", the secret "demo-only" → **Lock it on this phone**.]
 
 **Narration:** "Passwords are locked on Vikram's phone. Only Priya can open them, and only after careful checks. Not even Anvaya or the AI can read them."
 
@@ -76,9 +78,18 @@
 
 ## Scene 4: The handover (1:55–2:50)
 
+```mermaid
+flowchart LR
+  A[Priya uploads the certificate] --> B[Anjali confirms the loss]
+  B --> C[Priya uploads proof]
+  C --> D[Rahul confirms the legal authority]
+  D --> E[Waiting period: Vikram can cancel]
+  E --> F[Priya opens the vault]
+```
+
 [**Priya** → **Start the handover: upload the certificate** → the handover tracker appears.]
 
-[**Demo** → **Anjali** → show the check, sign by sign → **Confirm the loss** (if it says "Not a valid document", tap **Confirm the loss anyway…** and type a reason: "Original certificate verified at the branch").]
+[**Demo** → **Anjali** → show the check, sign by sign → **Confirm the loss**. If it says "Not a valid document", tap **Confirm the loss anyway…** and type a reason: "Original certificate verified at the branch".]
 
 [**Priya** → **Upload proof** at its step on the tracker. **Demo** → **Rahul** → **Confirm the legal authority**.]
 
@@ -114,11 +125,11 @@
 
 | Problem | Quick fix |
 | --- | --- |
-| Saathi doesn't answer on the live call | Tap **End call**, then **Talk to Saathi** again; check headphones and microphone permission |
-| "Usage limit reached" or no voice | The free-tier quota is used up: turn on billing, or type instead (replies still appear) |
-| Something was picked up twice or wrongly | Remove it (✕) in the end-of-call review; say the detail again |
-| "Please sign in again" | Sign out and in; check the email is on the allowlist (GitHub → production → `ALLOWED_EMAILS`) |
-| The waiting period is too long for the take | Cut it in editing; it's 60 seconds in the demo |
+| Saathi doesn't answer on the live call | Tap **End call**, then **Talk to Saathi** again. Check the headphones and the microphone permission |
+| "Usage limit reached" or no voice | The free-tier quota is used up. Turn on billing, or type instead (replies still appear) |
+| Something was picked up twice or wrongly | Remove it (✕) in the end-of-call review. Say the detail again |
+| "Please sign in again" | Sign out and sign in again. Check that the email is on the allowlist (GitHub → production → `ALLOWED_EMAILS`) |
+| The waiting period is too long for the take | Cut it in editing. It's 60 seconds in the demo |
 | Want a clean start | **Demo** (top right) → **Reset my demo** |
 
 ## Optional extra lines (for a longer demo)
@@ -126,4 +137,4 @@
 - "My advice to my children: save money on the day your salary arrives, not at the end of the month." → advice, for your review.
 - "All my original papers are in the blue folder in the steel cupboard in our bedroom." → a practical note. Then: "Meena has the key." → an update that adds to it, rather than a new one.
 - "What's my bank password?" (on the live call) → Saathi refuses and points to the vault.
-- "I also have an SBI savings account ending 1180. Meena is the nominee." → a separate **SBI** item (not merged with LIC).
+- "I also have an SBI savings account ending 1180. Meena is the nominee." → a separate note for **SBI** (not merged with LIC).

@@ -4,7 +4,7 @@
 
 <p align="center"><strong>Your stories, your wishes, and everything your family will need.</strong></p>
 
-**When someone dies suddenly, their family can't find the money.** Anvaya is an app with a friendly AI companion, **Saathi**. People talk to Saathi about their stories, money matters, family and wishes while they are alive. When they pass away, everything is handed over safely to the right person.
+**When someone dies suddenly, their family can't find the money.** Anvaya is an app with a friendly AI companion, **Saathi**. While people are alive, they talk to Saathi about their stories, money matters, family and wishes. When they pass away, Anvaya hands everything over safely to the right person.
 
 Built for the **AI Builder Cup 2026** · Track: **BFSI** · Google Gemini + Google Cloud.
 
@@ -41,34 +41,52 @@ Sources and dates are in [docs/concept.md](docs/concept.md#sources).
 
 ## How it works
 
-1. **Talk to Saathi.** Tap the microphone and talk like a phone call, or type, or share a photo of a document. Saathi suggests cards to keep: stories, advice, wishes, accounts, family.
-2. **Next steps.** Saathi shows what the family would still be missing, with a button for each step.
-3. **Secure vault.** Passwords are encrypted on the phone. The owner chooses who receives them.
-4. **Careful handover.** After a death, the AI pre-checks the certificate, two different reviewers confirm, and a waiting period lets the owner cancel.
-5. **For the family.** The chosen person unlocks the vault on their phone, asks Saathi questions (answers only from what was recorded, with sources), and gets a claims checklist with draft letters.
-6. **Guardian at every step** *(in progress)*. An independent layer watches every agent step for fraud and corrects course before anything takes effect (see below).
+1. **Talk to Saathi.** Tap the microphone and talk as in a phone call. You can also type, or share a photo of a document. Saathi suggests cards to keep: stories, advice, wishes, accounts, family.
+2. **Next steps.** Saathi shows what the family would still be missing. Each step has a button.
+3. **Secure vault.** The phone encrypts the passwords. The owner chooses who receives them.
+4. **Careful handover.** After a death, the AI pre-checks the certificate. Then two different reviewers confirm. A waiting period lets the owner cancel.
+5. **For the family.** The chosen person unlocks the vault on their phone. They ask Saathi questions, and Saathi answers only from what was recorded, with sources. They also get a claims checklist with draft letters.
+6. **Guardian at every step** *(in progress)*. An independent layer watches every agent step for fraud. It corrects the course before anything takes effect (see below).
 
-**AI-first:** every part is a loop the AI runs, with clear limits. Routine work runs on its own; anything saved or shared is only proposed until a person says yes; death and legal checks are only assisted, and people decide.
+**AI-first:** every part is a loop that the AI runs, with clear limits.
+- Routine work runs on its own.
+- Anything saved or shared is only a proposal until a person says yes.
+- The AI only assists with death and legal checks. People decide.
 
 ## Guardian layer (in progress)
 
-Fraud can enter at any step of agentic execution, not only at the handover. The **guardian** watches every loop and course-corrects before an action takes effect. Design: [architecture.md §4.1](docs/architecture.md#41-guardian-layer-planned-for-the-prototype-release).
+Fraud can enter at any step that an agent runs, not only at the handover. The **guardian** watches every loop. It corrects the course before an action takes effect. Design: [architecture.md §4.1](docs/architecture.md#41-guardian-layer-planned-for-the-prototype-release).
 
-- **Observe:** every loop records an event before it acts: who, action, data without secrets, autonomy level, device.
+```mermaid
+flowchart LR
+    observe["Observe"] --> detect["Detect"] --> intervene["Intervene"] --> govern["Govern"]
+```
+
+- **Observe:** every loop records an event before it acts. The event has who, action, data without secrets, autonomy level and device.
 - **Detect:**
   - fixed rules for hard facts;
   - Gemini detectors for pressure in conversations, probing questions, synthetic audio and prompt injection;
-  - fraud reference guides for each document type and country, kept current by a research agent (Gemini reading web pages found with Exa search) and red-teamed by a dreaming agent that also produces a safeguard coverage map.
-- **Intervene:** continue, add a check, reduce autonomy one level, pause for a reviewer, or block. Enforced where actions happen, independent of the agents, with no vault access.
-- **Govern:** people review and can reverse every intervention. Interventions, false alarms and reviewer patterns are measured.
+  - fraud reference guides for each document type and country:
+    - a research agent keeps them current (Gemini reads web pages that Exa search finds);
+    - a dreaming agent red-teams them and also makes a safeguard coverage map.
+- **Intervene:** continue, add a check, reduce autonomy one level, pause for a reviewer, or block. The guardian enforces this where actions happen. It is independent of the agents and has no vault access.
+- **Govern:** people review every intervention and can reverse it. We measure interventions, false alarms and reviewer patterns.
 
-The guardian never approves or rejects a case; people decide.
+The guardian never approves or rejects a case. People decide.
 
 ## Governance layer and platform admin portal
 
-One governance layer governs every agent: the **registry** ([agents/registry.yaml](agents/registry.yaml)), the **gateway** checks and usage **ledger**, the **guardian**'s interventions, the **kill switch**, platform **roles** and the **audit log**. Code: [agents/app/governance/](agents/app/governance/).
+One governance layer governs every agent. It has these parts:
+- the **registry** ([agents/registry.yaml](agents/registry.yaml));
+- the **gateway** checks and usage **ledger**;
+- the **guardian**'s interventions;
+- the **kill switch**;
+- platform **roles**;
+- the **audit log**.
 
-The **platform admin portal**, at https://anvaya-admin.web.app, is a separate site for the Anvaya governance team. It covers:
+Code: [agents/app/governance/](agents/app/governance/).
+
+The **platform admin portal** is a separate site for the Anvaya governance team, at https://anvaya-admin.web.app. It covers:
 - spend against budget and forecast;
 - the agent registry with use per agent, and blocked calls;
 - budget approvals;
@@ -77,11 +95,14 @@ The **platform admin portal**, at https://anvaya-admin.web.app, is a separate si
 - judges' demo copies;
 - the audit log.
 
-Roles are enforced on the server (platform admin, budget approver, risk reviewer, viewer) and set with the `PLATFORM_ROLES` secret. Anyone else who can sign in is a read-only viewer. The portal never shows conversation text or names. Spend (from Google Cloud billing), use and refused calls are always real. Everything else is real too: budget requests, guardian interventions, fraud scenarios and demo copies appear as those features record them.
+The server enforces the roles: platform admin, budget approver, risk reviewer and viewer. The `PLATFORM_ROLES` secret sets them. Anyone else who can sign in is a read-only viewer.
+
+The portal never shows conversation text or names. Spend (from Google Cloud billing), use and refused calls are always real. Everything else is real too. Budget requests, guardian interventions, fraud scenarios and demo copies appear as those features record them.
 
 Live today:
 - every Gemini call names its agent: the conversation, extraction, documents, readiness, legal, certificate and settlement steps, the live call, spoken replies and the ADK handover agent;
-- the registry, the kill switch and each person's daily allowance are checked before each call, and every call is recorded in the ledger;
+- the registry, the kill switch and each person's daily allowance are checked before each call;
+- the ledger records every call;
 - spend comes only from Google Cloud billing.
 
 ## Live now, and coming
@@ -104,7 +125,10 @@ What's built is recorded as numbered requirements (P0-1 to P0-11) in the complet
 
 ## Prototype release plan
 
-Tracked in the [Prototype release milestone](https://github.com/sachiachar/anvaya/milestone/1), due 18 October 2026. Issues are tiered against the judging criteria: **must-have** (the submission fails without it), **high-value** (highest score per day) and **trimmed** (kept at reduced scope).
+The [Prototype release milestone](https://github.com/sachiachar/anvaya/milestone/1) tracks this plan. It is due on 18 October 2026. Each issue has a tier, set against the judging criteria:
+- **must-have:** the submission fails without it;
+- **high-value:** the highest score per day;
+- **trimmed:** kept at reduced scope.
 
 | ID | Requirement | Tier | Issue |
 | --- | --- | --- | --- |
@@ -120,7 +144,16 @@ Tracked in the [Prototype release milestone](https://github.com/sachiachar/anvay
 | PR-11 | Connect to financial institutions (Account Aggregator, statements) and check each account's readiness for handover | High-value | [#41](https://github.com/sachiachar/anvaya/issues/41) |
 | PR-10 | **Mostly built:** agent governance: gateway, registry, limits, allowances, costs from billing ([proposal](docs/proposals/agent-governance.md)). Still to come: backstops, Model Armor | High-value | [#24](https://github.com/sachiachar/anvaya/issues/24) |
 
-Moved to the [Grand finale milestone](https://github.com/sachiachar/anvaya/milestone/2) (4 December): real recordings (#11), signs of pressure (#14, #20), insider collusion (#16, #19), voice letters (#21), cloned-voice signals (#25), cooling-off delay (#26), per-tenant buckets and keys (#27), OKF export and coverage map (#28), and governance for a bank pilot (#29).
+We moved these to the [Grand finale milestone](https://github.com/sachiachar/anvaya/milestone/2) (4 December):
+- real recordings (#11);
+- signs of pressure (#14, #20);
+- insider collusion (#16, #19);
+- voice letters (#21);
+- cloned-voice signals (#25);
+- cooling-off delay (#26);
+- per-tenant buckets and keys (#27);
+- OKF export and coverage map (#28);
+- governance for a bank pilot (#29).
 
 ## Architecture
 
@@ -162,7 +195,7 @@ docs/                   Concept, architecture, use cases, release notes
 
 ## Run locally
 
-Needs Python 3.14, [uv](https://docs.astral.sh/uv/), Node 24 and a Gemini API key from [Google AI Studio](https://aistudio.google.com).
+You need Python 3.14, [uv](https://docs.astral.sh/uv/), Node 24 and a Gemini API key from [Google AI Studio](https://aistudio.google.com).
 
 ```bash
 # 1. Agents API on :8080
@@ -178,7 +211,11 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173, sign in with an allowed Google account, and switch people with the **Demo** button at the top right: **Vikram** (owner), **Priya** (family), **Anjali** and **Rahul** (our team). To run without sign-in locally, set `AUTH_REQUIRED=false` and leave `web/.env` out.
+1. Open http://localhost:5173.
+2. Sign in with an allowed Google account.
+3. Use the **Demo** button at the top right to switch people: **Vikram** (owner), **Priya** (family), **Anjali** and **Rahul** (our team).
+
+To run locally without sign-in, set `AUTH_REQUIRED=false` and leave `web/.env` out.
 
 Tests (no cloud credentials needed):
 
@@ -188,19 +225,25 @@ cd agents && uv run --group dev pytest -q
 
 ## Deploy to Google Cloud
 
-Needs `gcloud` and the Firebase CLI, with Firebase added to the project and Google sign-in enabled in Firebase Authentication.
+You need:
+- `gcloud` and the Firebase CLI;
+- Firebase added to the project;
+- Google sign-in enabled in Firebase Authentication.
 
 ```bash
 PROJECT_ID=your-project ALLOWED_EMAILS="you@example.com,@yourteam.com" ./infra/deploy.sh
 ```
 
-The app is live at **https://anvaya-saathi.web.app**; the old address, life-after-509907.web.app, redirects there. `firebase.json` names both Hosting sites, so a new project needs its own site IDs there.
+The app is live at **https://anvaya-saathi.web.app**. The old address, life-after-509907.web.app, redirects there. `firebase.json` names both Hosting sites, so a new project needs its own site IDs there.
 
-This sets up the service account, Firestore, a private bucket, a KMS key and the Gemini key in Secret Manager; deploys the API to Cloud Run in `asia-southeast1` (Singapore); and deploys the web app to Firebase Hosting.
+`infra/deploy.sh` does three things:
+1. It sets up the service account, Firestore, a private bucket, a KMS key and the Gemini key in Secret Manager.
+2. It deploys the API to Cloud Run in `asia-southeast1` (Singapore).
+3. It deploys the web app to Firebase Hosting.
 
 ### Automatic deploys (GitHub Actions)
 
-Every push to `main` deploys **what changed since each part last deployed** ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)), so a release that GitHub cancelled because a newer merge arrived never loses changes:
+Every push to `main` deploys **what changed since each part last deployed** ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)). So if GitHub cancels a release because a newer merge arrived, no changes are lost.
 
 | Changed since that part's last successful deploy | Deployed |
 | --- | --- |
@@ -208,16 +251,20 @@ Every push to `main` deploys **what changed since each part last deployed** ([.g
 | `web/**`, `firebase.json`, `firestore.rules` | The web app to Firebase Hosting, and the Firestore rules |
 | Docs only | Nothing |
 
-**Who can use the demo** is kept in GitHub: *Settings → Environments → production → secret `ALLOWED_EMAILS`* (emails and/or `@domains`, comma-separated). Every API deploy applies it; to apply a change straight away, run **Actions → Deploy → Run workflow → allowlist**.
+**Who can use the demo** is kept in GitHub: *Settings → Environments → production → secret `ALLOWED_EMAILS`* (emails and/or `@domains`, comma-separated). Every API deploy applies it. To apply a change at once, run **Actions → Deploy → Run workflow → allowlist**.
 
-**Actions → Deploy → Run workflow → all** deploys everything. GitHub signs in to Google Cloud with Workload Identity Federation, so no keys are stored in GitHub. Google gives those credentials only to the Deploy workflow running on `main` in the `production` environment, and the deployer can only do what the deploy needs. One-time setup, and again after it changes: `PROJECT_ID=… REPO=owner/repo ./infra/setup-github-actions.sh` (needs a project owner and a repository admin).
+**Actions → Deploy → Run workflow → all** deploys everything.
+
+GitHub signs in to Google Cloud with Workload Identity Federation, so GitHub stores no keys. Google gives those credentials only to the Deploy workflow that runs on `main` in the `production` environment. The deployer can only do what the deploy needs.
+
+Run this setup once, and again after it changes: `PROJECT_ID=… REPO=owner/repo ./infra/setup-github-actions.sh`. It needs a project owner and a repository admin.
 
 ## Demo in three minutes
 
 Full script with lines to say: [docs/demo-script.md](docs/demo-script.md).
 
 
-1. **Vikram → Talk:** tap **Talk to Saathi** and talk about family, a first job, and an LIC policy ("make Ajay the nominee"). Tap **End call**: Saathi sums it up, everything is marked to save; tap **Save**. Open **Kept** to see the book and the pages still to write.
-2. **Vikram → Family:** choose Priya and invite her. **Priya** (Demo menu): accept and keep the recovery code. **Vikram:** check the codes match, seal; **Vault:** lock a secret.
-3. **Priya:** start the handover with a certificate. **Anjali**, then **Rahul**: two different reviewers confirm (going against a "not valid" check needs a written reason).
-4. After the waiting period, **Priya** opens the vault, asks "What insurance did Papa have?", and prepares the claim letters. Optional: **Demo → Open the knowledge map** in a second window shows each item appear as it's kept.
+1. **Vikram → Talk:** tap **Talk to Saathi**. Talk about family, a first job, and an LIC policy ("make Ajay the nominee"). Tap **End call**. Saathi sums it up and marks everything to save. Tap **Save**. Open **Kept** to see the book and the pages still to write.
+2. **Vikram → Family:** choose Priya and invite her. **Priya** (Demo menu): accept and keep the recovery code. **Vikram:** check that the codes match, then seal. **Vault:** lock a secret.
+3. **Priya:** start the handover with a certificate. **Anjali**, then **Rahul**: two different reviewers confirm. To go against a "not valid" check, a reviewer must write a reason.
+4. After the waiting period, **Priya** opens the vault. She asks "What insurance did Papa have?" and prepares the claim letters. Optional: open **Demo → Open the knowledge map** in a second window. It shows each item appear as it is kept.

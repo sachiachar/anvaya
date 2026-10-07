@@ -2,15 +2,30 @@
 
 *Team Saathi · Revision 1, 30 September 2026 · the idea is in [concept.md](concept.md); how it is built is in [architecture.md](architecture.md)*
 
-*All figures here are **illustrative**: prices are proposals, and costs are estimates from published list prices and our own assumptions. Each one is listed below so it can be replaced with pilot data.*
+*All figures here are **illustrative**. The prices are proposals. The costs are estimates from published list prices and our own assumptions. We list each assumption below, so that pilot data can replace it.*
 
 ---
 
 ## In short
 
-Anvaya earns from four sources: yearly plans for people who come directly, licences for banks and insurers, fees from partners in the marketplace, and optional extras for families. Families never pay for the handover itself.
+```mermaid
+flowchart LR
+  C[Customer] -- direct plan --> A[Anvaya]
+  B[Bank or insurer] -- licence --> A
+  P[Partner] -- marketplace fee --> A
+  F[Family] -- optional extras --> A
+```
 
-The biggest cost of serving someone is the **first year**, when most of the conversation happens. After that, a customer mostly keeps their records up to date. So the margin on each customer **rises every year they stay**.
+Anvaya earns money from four sources:
+
+- yearly plans for customers who come directly;
+- licences for banks and insurers;
+- fees from partners in the marketplace;
+- optional extras for families.
+
+Families never pay for the handover itself.
+
+The largest cost of serving a customer is in the **first year**. Most of the conversation happens then. After that, a customer mostly keeps their records up to date. So the margin on each customer **rises every year they stay**.
 
 | Per customer, per year | Year 1 | Year 2 onwards |
 | --- | --- | --- |
@@ -20,7 +35,7 @@ The biggest cost of serving someone is the **first year**, when most of the conv
 | **Marketplace introductions** | about 85% margin | about 85% margin |
 | **Family extras** | high; priced above the cost of the extra use | high |
 
-These are contribution margins: revenue less the cost of serving that customer. The fixed costs of running the company are covered separately below.
+These are contribution margins: revenue less the cost of serving that customer. A separate section below covers the fixed costs of running the company.
 
 ## Illustrative prices
 
@@ -32,7 +47,7 @@ These are contribution margins: revenue less the cost of serving that customer. 
 | Marketplace | A flat listing fee, or a fee per introduction where the rules allow | The partner |
 | Family extras | A small top-up once the family has used its included allowance | The family, only if they want more |
 
-There is no commission where professional rules forbid it, such as for legal advice. The first conversations with Saathi are free to try, so people feel the value before they choose a plan.
+Anvaya takes no commission where professional rules forbid it, for example for legal advice. The first conversations with Saathi are free. People can see the value before they choose a plan.
 
 ## What it costs to serve one customer
 
@@ -49,11 +64,11 @@ There is no commission where professional rules forbid it, such as for legal adv
 | **Total cost** | **₹784** | **₹458** | |
 | **Margin** | **48%** | **69%** | |
 
-Paid on the web, where payment fees are about 3% (₹45) instead of 15%, the total cost falls to ₹604 in year 1 and ₹278 after, giving margins of **60%** and **81%**.
+On the web, payment fees are about 3% (₹45) instead of 15%. Then the total cost falls to ₹604 in year 1 and ₹278 after. The margins become **60%** and **81%**.
 
 ### Licence (₹499 a year per enrolled customer)
 
-Not every enrolled customer is active in a given year. We assume 4 in 10 are, each using about as much as a direct customer in year two.
+Not every enrolled customer is active in a given year. We assume that 4 in 10 are active. Each active customer uses about as much as a direct customer in year two.
 
 | Cost per enrolled customer | Per year |
 | --- | --- |
@@ -66,29 +81,35 @@ Not every enrolled customer is active in a given year. We assume 4 in 10 are, ea
 | **Total cost** | **₹137** |
 | **Margin** | **72%** |
 
-There are no app-store fees on a licence, and the institution brings the customers, so there is no cost to win them one by one.
+A licence has no app-store fees. The institution brings the customers, so Anvaya has no cost to win them one by one.
 
 ### The family's allowance and extras
 
-When the time comes, the family receives the handover and a **generous included allowance** at no cost: unlocking the vault, a set number of questions to Saathi, and the checklist and draft letters for every institution. The cost of that allowance is part of the handover cost above, already paid for by the plan or licence.
+When the time comes, the family receives the handover and a **generous included allowance** at no cost. The allowance includes:
 
-If the family wants more than the allowance, such as more questions, more letters, or keeping the records open for longer, they can buy extras. Extras are priced above the cost of the extra use, so they add margin rather than cost. The family can also move onto a plan of their own, which is how the next generation becomes a customer.
+- unlocking the vault;
+- a set number of questions to Saathi;
+- the checklist and draft letters for every institution.
+
+The cost of the allowance is part of the handover cost above. The plan or licence already pays for it.
+
+The family can buy extras if they want more than the allowance. Examples are more questions, more letters, or keeping the records open for longer. The price of an extra is above the cost of the extra use, so extras add margin, not cost. The family can also move to a plan of their own. This is how the next generation becomes a customer.
 
 ### Marketplace
 
-A partner fee has almost no cost of service: the introduction is a short summary the customer has already approved. The main costs are vetting partners and handling payments, leaving a margin of about **85%**.
+A partner fee has almost no cost of service. The introduction is a short summary that the customer already approved. The main costs are vetting partners and handling payments. The margin is about **85%**.
 
 ## What keeps costs low
 
-- **The most affordable services that do the job.** Chat, extraction and document reading use the lowest-cost tier of language services, with more capable ones only as a fallback.[^text]
-- **Voice when people want it.** Voice is the largest variable cost. Typing and photos cost a small fraction of it, and many people mix the two.
-- **The vault lives on the phone.** Secrets are encrypted on the customer's device, so there is no large, costly store of secrets to run and protect.
-- **People decide; automated checks prepare.** Every certificate is pre-checked before a reviewer sees it, so reviewer time goes on decisions, not paperwork.
-- **Conversation tapers off.** Most of the talking happens in year one; after that, Saathi mostly helps keep records up to date.
+- **The lowest-cost services that do the job.** Chat, extraction and document reading use the lowest-cost tier of language services. More capable services are only a fallback.[^text]
+- **Voice when people want it.** Voice is the largest variable cost. Typing and photos cost a small fraction of it. Many people use both.
+- **The vault lives on the phone.** The customer's device encrypts the secrets. So Anvaya has no large, costly store of secrets to run and protect.
+- **People decide; automated checks prepare.** An automated check examines every certificate before a reviewer sees it. Reviewers spend their time on decisions, not paperwork.
+- **Conversation decreases.** Most of the talking happens in year one. After that, Saathi mostly helps keep records up to date.
 
 ## Fixed costs of running the company
 
-These don't grow with each customer, so their share of revenue falls as Anvaya grows:
+These costs don't grow with each customer. So their share of revenue falls as Anvaya grows:
 
 - **Product and engineering**: the app, the service and new languages
 - **Security and compliance**: independent security audits, certification (such as ISO 27001), and data-protection compliance (such as India's Digital Personal Data Protection Act)
@@ -98,11 +119,14 @@ These don't grow with each customer, so their share of revenue falls as Anvaya g
 
 ## Why the margins grow over time
 
-- **Recurring revenue, falling cost.** Plans and licences renew each year, while the cost of serving each customer falls after year one.
-- **Institutions bring customers at scale.** A single licence can reach millions of customers without paying to win each one.
-- **Every handover introduces the next generation.** The son or daughter who receives a vault is the most natural next customer, and costs almost nothing to acquire.
-- **The marketplace grows with every gap.** Each missing will or nominee is a real need, met by a partner, at close to pure margin.
-- **Room to cut costs further.** Caching the conversation context, batch processing for work that isn't urgent, and newer lower-cost service tiers can all bring the cost per customer down as volumes grow.
+- **Recurring revenue, falling cost.** Plans and licences renew each year. The cost of serving each customer falls after year one.
+- **Institutions bring many customers.** One licence can reach millions of customers. Anvaya does not pay to win each one.
+- **Every handover introduces the next generation.** The son or daughter who receives a vault is the most likely next customer. That customer costs almost nothing to acquire.
+- **The marketplace grows with every gap.** Each missing will or nominee is a real need. A partner meets it, at close to pure margin.
+- **Possible further cost cuts.** As volumes grow, these can lower the cost per customer:
+  - caching the conversation context;
+  - batch processing for work that isn't urgent;
+  - newer, lower-cost service tiers.
 
 ## Assumptions to validate in the pilot
 
@@ -119,6 +143,6 @@ These don't grow with each customer, so their share of revenue falls as Anvaya g
 
 ---
 
-[^voice]: Google's list price for its live voice service is about US$0.005 per minute of audio in and US$0.018 per minute of audio out ([Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing), updated 24 September 2026). We use US$0.03 a minute to allow for conversation context and for turning each exchange into cards.
-[^text]: The lowest-cost language tier is listed at US$0.25 per million input tokens and US$1.50 per million output tokens ([Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)). Spoken replies cost about US$0.0015 per 10 seconds of audio until December 2026, and US$0.003 from January 2027.
-[^stores]: Apple and Google both charge 15% on subscriptions under their standard subscription or small-business terms, and up to 30% otherwise.
+[^voice]: Google's list price for its live voice service is about US$0.005 per minute of audio in. It is about US$0.018 per minute of audio out ([Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing), updated 24 September 2026). We use US$0.03 a minute. This allows for conversation context and for turning each exchange into cards.
+[^text]: The lowest-cost language tier is listed at US$0.25 per million input tokens and US$1.50 per million output tokens ([Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)). Spoken replies cost about US$0.0015 per 10 seconds of audio until December 2026. From January 2027 they cost US$0.003.
+[^stores]: Apple and Google both charge 15% on subscriptions under their standard subscription or small-business terms. Otherwise they charge up to 30%.
