@@ -36,9 +36,10 @@ _ABOUT_YOUR_DEATH = re.compile(
     re.IGNORECASE,
 )
 
-# Any death words at all: next steps and suggested topics are always about the owner.
+# Any death words at all: next steps and suggested topics are always about the owner. Not a bare
+# "die": in Hinglish it means "gave" ("jo papers aapne die").
 _DEATH_WORDS = re.compile(
-    r"\b(death|deaths|die|dies|died|dying|dead|deceased|demise|passed away|pass away|funeral|"
+    r"\b(death|deaths|dies|died|dying|dead|deceased|demise|passed away|pass away|funeral|"
     r"last rites|no longer (here|around|with us))\b"
     r"|मृत्यु|मौत|देहांत",
     re.IGNORECASE,

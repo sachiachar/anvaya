@@ -56,3 +56,4 @@ def test_steps_saved_before_the_check_never_reach_the_owner():
                             **_gap(q).model_dump()})
     assert [t["question_for_owner"] for t in tasks.open_tasks(owner_id)] == [GOOD]
     assert step_problems(_gap(GOOD).model_dump()) == []
+    assert step_problems(_gap("Jo papers aapne Sunita ko die, woh kahan rakhe hain?").model_dump()) == []  # Hinglish "gave"
