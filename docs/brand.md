@@ -1,10 +1,10 @@
 # Anvaya: Brand
 
-*Name, taglines and the companion's name in each market. Draft, 30 September 2026. Every non-English line needs a check by a native speaker before it is used in public.*
+*Name, taglines and the companion's name in each market. Draft, 30 September 2026. A native speaker must check every non-English line before public use.*
 
 ## The name
 
-**Anvaya** (अन्वय, *un-VAH-ya*) is Sanskrit for lineage, connection and succession: the thread that links one generation to the next. It says what the product does, handing things on safely, without mentioning death.
+**Anvaya** (अन्वय, *un-VAH-ya*) is Sanskrit for lineage, connection and succession: the thread that links one generation to the next. The name says what the product does: it hands things on safely. It does not mention death.
 
 | Use | Wording |
 | --- | --- |
@@ -23,7 +23,7 @@
 
 ## Taglines by language
 
-The main tagline, adapted rather than translated word for word. The English under each line is a back-translation.
+Each line adapts the main tagline. It is not a word-for-word translation. The English for each line is a back-translation.
 
 ### Indian languages
 
@@ -56,11 +56,11 @@ A warmer Hindi line for the family side: **आपकी बातें, आप�
 | Philippines | Filipino | Walang mawawala, sa bawat henerasyon. | Nothing will be lost, in every generation. |
 | Australia | English | Nothing lost between generations. Not even your super. | Ties to the A$21.2 billion in lost super. |
 
-**Singapore** has four official languages, so show the English, Chinese, Malay and Tamil lines together. That is a good touch for the Grand Finale.
+**Singapore** has four official languages. Show the English, Chinese, Malay and Tamil lines together. This works well for the Grand Finale.
 
 ## The companion's name
 
-The companion is the same everywhere; only its name changes, to the everyday word for a companion or friend in the customer's language. It follows the language the customer speaks, not the country.
+The companion is the same everywhere. Only its name changes. The name is the everyday word for a companion or friend in the customer's language. The name follows the language that the customer speaks, not the country.
 
 | Language | Name | Meaning |
 | --- | --- | --- |
@@ -91,10 +91,17 @@ The companion is the same everywhere; only its name changes, to the everyday wor
 | Interface | Inter | Clear sans-serif |
 | Tagline | *The thread that connects generations.* | Under the wordmark |
 
-Files in [assets/](assets/): `anvaya-logo.png` (mark and wordmark), `anvaya-mark.png` (mark only), `anvaya-icon.png` (app icon) and `anvaya-hero.jpg` (brand photo). They are cut from the brand sheet at low resolution, so they suit documents but not print or app-store icons.
+Files in [assets/](assets/):
+
+- `anvaya-logo.png` (mark and wordmark);
+- `anvaya-mark.png` (mark only);
+- `anvaya-icon.png` (app icon);
+- `anvaya-hero.jpg` (brand photo).
+
+We cut these files from the brand sheet at low resolution. They are good for documents, but not for print or app-store icons.
 
 ## Checks before public use
 
-- Have a native speaker check every tagline and companion name; the Kannada, Malayalam and Chinese lines most need it.
-- Before launching under the name, search the trademark registers for "Anvaya" in classes 9, 36 and 42: WIPO Global Brand Database, IP India, IPOS (Singapore) and IP Australia. The web search on 30 September 2026 found no finance or inheritance product with the name.
-- The app icons in `web/public/` now use the new mark, but they are enlarged from a small crop. Redraw the mark as a vector (SVG) and regenerate them before any app-store listing.
+- Ask a native speaker to check every tagline and companion name. The Kannada, Malayalam and Chinese lines need this most.
+- Search the trademark registers for "Anvaya" in classes 9, 36 and 42 before launch under the name. The registers are WIPO Global Brand Database, IP India, IPOS (Singapore) and IP Australia. The web search on 30 September 2026 found no finance or inheritance product with the name.
+- The app icons in `web/public/` now use the new mark. But they are enlarged from a small crop. Redraw the mark as a vector (SVG). Then regenerate the icons before any app-store listing.
