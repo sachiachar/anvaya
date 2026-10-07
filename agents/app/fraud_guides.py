@@ -16,8 +16,9 @@ import time
 from collections.abc import Callable
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
+from .step_types import CHANNELS, FLAGS, STEP_TYPES
 from .store import store
 
 log = logging.getLogger(__name__)
@@ -58,6 +59,15 @@ class Exploits(BaseModel):
     types: list[str] = []
     channels: list[str] = []
     flags: list[str] = []
+
+    @field_validator("types", "channels", "flags")
+    @classmethod
+    def _known(cls, values: list[str], info) -> list[str]:
+        """A typo would make an approved tactic block nothing, so an unknown tag is refused."""
+        allowed = {"types": STEP_TYPES, "channels": CHANNELS, "flags": FLAGS}[info.field_name]
+        if unknown := [v for v in values if v not in allowed]:
+            raise ValueError(f"unknown {info.field_name}: {', '.join(unknown)}")
+        return values
 
     def empty(self) -> bool:
         return not (self.types or self.channels or self.flags)
@@ -112,13 +122,12 @@ def _latest_stored(key: str) -> Guide | None:
     return Guide.model_validate({k: v for k, v in latest.items() if k != "id"})
 
 
-def keys() -> list[str]:
-    """Every guide: the built-in ones and any saved ones."""
-    try:
-        saved = {v["key"] for v in store.list("fraud_guide_versions")}
-    except Exception:  # Firestore unavailable: the built-in guides still count
-        saved = set()
-    return sorted(set(BUILT_IN) | saved)
+def current_all() -> list[Guide]:
+    """Every current guide, read strictly: if the store can't be read this raises instead of
+    falling back to the built-in copy, so the next-step check (PR-13.3) fails closed rather than
+    forgetting the tactics reviewers approved."""
+    saved = {v["key"] for v in store.list("fraud_guide_versions")}
+    return [g for k in sorted(set(BUILT_IN) | saved) if (g := _latest_stored(k) or BUILT_IN.get(k))]
 
 
 def current(key: str) -> Guide | None:

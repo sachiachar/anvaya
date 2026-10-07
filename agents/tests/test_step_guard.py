@@ -1,6 +1,7 @@
 """Never pursue a next step that could be part of a fraud (PR-13.3, docs/proposals/listening.md §6).
 Checked in code: unknown means no; never a secret (except into the owner's own vault); an approved
-tactic's tags block matching steps; a dropped step leaves a count with no words or names."""
+tactic's tags block matching steps; flags come from the step's words too; if the guides can't be
+read nothing is pursued; a dropped step leaves a count with no words or names."""
 
 import pytest
 
@@ -20,19 +21,20 @@ def _gap(**changes):
             "steps": ["Ask LIC for the nominee change form at the branch"], "severity": "high", **changes}
 
 
+def _with(*tactics):
+    """The built-in guides plus these approved tactics."""
+    return lambda: [g.model_copy(update={"tactics": [*g.tactics, *tactics]}) for g in fraud_guides.BUILT_IN.values()]
+
+
+FEE = Tactic(id="t_fee", name="Release fee", steps=[Step(text="Agent asks for a fee", caught_by="gap")],
+             label="validated", trust="human-reviewed",
+             exploits=Exploits(types=["record_with_institution"], flags=["payment"]))
+
+
 @pytest.fixture()
 def fee_tactic(monkeypatch):
     """A reviewer approved: 'pay a fee through an agent to release a claim'."""
-    real = fraud_guides.current
-
-    def current(key):
-        guide = real(key)
-        tactic = Tactic(id="t_fee", name="Release fee", steps=[Step(text="Agent asks for a fee", caught_by="gap")],
-                        label="validated", trust="human-reviewed",
-                        exploits=Exploits(types=["record_with_institution"], flags=["payment"]))
-        return guide.model_copy(update={"tactics": [*guide.tactics, tactic]}) if guide else guide
-
-    monkeypatch.setattr(fraud_guides, "current", current)
+    monkeypatch.setattr(fraud_guides, "current_all", _with(FEE))
 
 
 @pytest.fixture(autouse=True)
@@ -62,31 +64,50 @@ def test_never_a_secret_except_into_the_owners_own_vault():
     assert step_guard.check({**WILL, "title": "Update the flat's address and PIN code"}, []) is None  # a postal code
 
 
+def test_plurals_and_the_vault_exception_cant_be_used_to_slip_a_secret_through():
+    for text in ("Share your PINs with Ajay", "Write your passwords down for the agent", "Send the OTPs to the caller"):
+        assert step_guard.check({**WILL, "title": text}, []) == "secret", text
+    vault = {"type": "add_to_vault", "channel": "anvaya_app", "flags": []}
+    assert step_guard.check({**vault, "title": "Give the agent your OTP"}, []) == "secret"
+    assert step_guard.check({**vault, "title": "Add your net banking password to the vault"}, []) is None
+    for text in ("Update the PIN-code on the address", "पता और पिन कोड बदलें"):
+        assert step_guard.check({**WILL, "title": text}, []) is None, text
+
+
 def test_an_approved_tactic_blocks_matching_steps_only(fee_tactic):
     tactics = step_guard.approved_tactics()
     paying = {"type": "record_with_institution", "channel": "institution_official", "flags": ["payment"],
-              "title": "Pay the processing charge to release the claim"}
+              "title": "Clear the claim with the insurer"}
     assert step_guard.check(paying, tactics) == "tactic:IN.death_certificate:t_fee"
     assert step_guard.check({**paying, "flags": []}, tactics) is None  # no payment: the tactic doesn't apply
     assert step_guard.check(WILL, tactics) is None
 
 
-def test_an_unapproved_or_untagged_tactic_blocks_nothing(monkeypatch):
-    def current(key):
-        guide = fraud_guides.BUILT_IN.get(key)
-        imagined = Tactic(id="t_x", name="Imagined", steps=[], label="simulated", trust="unverified",
-                          exploits=Exploits(flags=["payment"]))
-        untagged = Tactic(id="t_y", name="Untagged", steps=[], label="validated", trust="human-reviewed")
-        return guide.model_copy(update={"tactics": [imagined, untagged]}) if guide else guide
+def test_flags_come_from_the_words_too(fee_tactic):
+    tactics = step_guard.approved_tactics()
+    # A real readiness step has no flags; its words still show the payment.
+    assert step_guard.check(step_guard.typed(_gap(title="Pay the release fee to the agent")), tactics) \
+        == "tactic:IN.death_certificate:t_fee"
+    assert step_guard.flags_of({"title": "Do it today, the man who called said"}) >= {"deadline", "started_by_other"}
 
-    monkeypatch.setattr(fraud_guides, "current", current)
+
+def test_an_unapproved_or_untagged_tactic_blocks_nothing(monkeypatch):
+    imagined = Tactic(id="t_x", name="Imagined", steps=[], label="simulated", trust="unverified",
+                      exploits=Exploits(flags=["payment"]))
+    untagged = Tactic(id="t_y", name="Untagged", steps=[], label="validated", trust="human-reviewed")
+    monkeypatch.setattr(fraud_guides, "current_all", _with(imagined, untagged))
     assert step_guard.approved_tactics() == []
+
+
+def test_a_typo_in_a_tactics_tags_is_refused():
+    with pytest.raises(ValueError, match="unknown flags: payments"):
+        Exploits(flags=["payments"])
 
 
 def test_a_dropped_step_never_reaches_the_owner_and_leaves_only_a_count(fee_tactic):
     tasks.refresh(OWNER, [_gap(), _gap(title="Pay the release fee to the agent", action="institution",
                                        why_it_matters="The money is held until a charge is paid.",
-                                       flags=["payment"], question_for_owner="Have you paid the fee?"),
+                                       question_for_owner="Have you paid the fee?"),
                           _gap(title="Share the OTP with the Paytm agent", why_it_matters="He will finish it today.",
                                question_for_owner="What's the OTP?")])
     assert [t["title"] for t in tasks.open_tasks(OWNER)] == ["Record the nominee for the LIC policy"]
@@ -98,13 +119,23 @@ def test_a_dropped_step_never_reaches_the_owner_and_leaves_only_a_count(fee_tact
 
 
 def test_a_step_stored_before_a_tactic_was_approved_is_hidden_on_the_next_read(monkeypatch):
-    tasks.refresh(OWNER, [_gap(title="Pay the processing charge", flags=["payment"])])
+    tasks.refresh(OWNER, [_gap(title="Pay the processing charge")])
     assert len(tasks.open_tasks(OWNER)) == 1
-    real = fraud_guides.current
-    monkeypatch.setattr(fraud_guides, "current", lambda key: (g := real(key)) and g.model_copy(update={"tactics": [
-        Tactic(id="t_fee", name="Fee", steps=[], label="validated", trust="human-reviewed",
-               exploits=Exploits(flags=["payment"]))]}))
+    monkeypatch.setattr(fraud_guides, "current_all", _with(FEE))
     assert tasks.open_tasks(OWNER) == []
+
+
+def test_if_the_guides_cant_be_read_nothing_is_pursued_and_nothing_is_lost(monkeypatch):
+    tasks.refresh(OWNER, [_gap()])
+
+    def broken():
+        raise RuntimeError("store down")
+
+    monkeypatch.setattr(fraud_guides, "current_all", broken)
+    assert tasks.open_tasks(OWNER) == []  # fails closed
+    tasks.refresh(OWNER, [_gap(title="Something new")])  # a refresh while down changes nothing
+    monkeypatch.undo()
+    assert [t["title"] for t in tasks.open_tasks(OWNER)] == ["Record the nominee for the LIC policy"]
 
 
 def test_saathi_is_told_to_point_to_the_safer_way():

@@ -58,7 +58,10 @@ def refresh(owner_id: str, gaps: list[dict]) -> None:
             continue
         new_list.append(gap)
     # Never pursue a step that could be part of a fraud (PR-13.3): it's dropped before it's stored.
-    new_list = step_guard.pursue(owner_id, [step_guard.typed(g) for g in new_list])[:MAX_OPEN]
+    try:
+        new_list = step_guard.pursue(owner_id, new_list)[:MAX_OPEN]
+    except step_guard.TacticsUnavailable:
+        return  # leave the stored list as it is; reads show nothing until the guides can be read
 
     # Keep ids stable for steps that are still there; drop the ones that no longer apply.
     for task in open_now:
@@ -77,7 +80,5 @@ def refresh(owner_id: str, gaps: list[dict]) -> None:
 def open_tasks(owner_id: str) -> list[dict]:
     # Steps saved before the tone check (or that slipped past it) never reach the owner.
     # A step stored before a tactic was approved is checked again on every read (PR-13.3).
-    tactics = step_guard.approved_tactics()
-    tasks = [t for t in store.list("tasks", owner_id=owner_id, status="open")
-             if not step_problems(t) and step_guard.check(step_guard.typed(t), tactics) is None]
+    tasks = step_guard.allowed([t for t in store.list("tasks", owner_id=owner_id, status="open") if not step_problems(t)])
     return sorted(tasks, key=lambda t: (SEVERITY_ORDER.get(t["severity"], 3), t["created_at"]))
