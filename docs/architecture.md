@@ -116,7 +116,8 @@ flowchart LR
 
 **Rules enforced in code, not just in prompts**
 
-- *Replies* (`loops.reply_problems`): reply in the script of the owner's latest message; never claim "noted" or "saved"; never ask "shall I add". A reply that breaks a rule is regenerated once with the broken rule named. Live audio can't be regenerated, so there the rules live in the instructions only.
+- *Replies* (`loops.reply_problems`): reply in the script of the owner's latest message; never claim "noted" or "saved"; never ask "shall I add"; never talk about the owner's own death ("final wishes", "after you're gone"; `tone.py`). A reply that breaks a rule is regenerated once with the broken rule named. Live audio can't be regenerated, so there the rules live in the instructions only.
+- *Next steps* (`tone.step_problems`): the owner is alive, so a step's title, reason and question use no death words at all. The readiness planner writes a step like that again once, then leaves it out; steps saved earlier are hidden when the list is read.
 - *Cards* (`proposals`): a repeat of a kept item adds nothing. A follow-up detail becomes an update card and **combines** with the saved summary instead of replacing it. The same institution and last 4 digits update the same card.
 - *Documents* (`loops.review_summary`): the wrong document type scores 0 %; the wrong person is capped at 30 %; a warning sign our team has reviewed, if found, caps it at 50 %; any concern or any warning sign found means "Needs a closer look". Every sign in the guide gets a result (found, ruled out or can't tell); signs the model invents are dropped. Imagined (`simulated`) signs never reach the check, and projections are at most a third of its signs.
 - *Next steps* (`tasks`): near-duplicates are merged, except when they name different institutions (LIC vs SBI); done or dismissed steps never come back, even reworded; at most 5 steps are open.

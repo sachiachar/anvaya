@@ -14,6 +14,7 @@ import re
 from .config import settings
 from .fraud_guides import Guide, signs_for_check
 from .gemini import generate_json
+from .tone import ALIVE_RULES, about_their_death, step_problems
 from .schemas import (
     CaptureResult,
     ConversationSummary,
@@ -37,6 +38,7 @@ def persona(owner: dict) -> str:
         f"{': ' + ', '.join(owner['family']) if owner.get('family') else ''}.\n"
         f"Character: warm, calm and respectful, like a trusted family friend. Always address them "
         f"as \"{first_name} ji\". Short, simple sentences. Never rush them.\n"
+        f"Life, not death: {ALIVE_RULES}\n"
         "Language: reply in exactly the language and script of their LATEST message, even if "
         "earlier messages used another language. English gets English, Hinglish in Latin letters "
         "gets Hinglish in Latin letters, Hindi in Devanagari gets Devanagari. Never mix languages "
@@ -130,6 +132,9 @@ def reply_problems(owner_message: str, reply: str) -> list[str]:
     if _FALSE_CLAIMS.search(reply):
         problems.append("Don't say you noted or saved anything: it is only added to their list "
                         "to review until they tap Keep.")
+    if about_their_death(reply):
+        problems.append("Don't talk about their death or 'final wishes': they are alive and talking about "
+                        "their life. Talk about the family knowing things instead.")
     return problems
 
 
@@ -284,25 +289,32 @@ async def assess_readiness(owner: dict, inventory: list[dict], moments: list[dic
             {"step": t["title"], "why": t["why_it_matters"], "status": t["status"]}
             for t in tasks if t["status"] != "open"],
     }
-    return await generate_json(
-        agent="readiness.planner",
-        model=settings.pro_model,
-        schema=Readiness,
-        system=(
-            "You check whether a family could settle this person's affairs if they died "
-            "tomorrow. Look for missing nominees or beneficiaries, asset types that are "
-            "common for someone of this age and country but absent, missing will or "
-            "digital-assets clause, no named vault recipient, and unclear practical "
-            "details. Each gap is a next step with an action the app can help with. A wish that "
-            "changes a nominee means the owner must submit a change with that institution "
-            "('institution'); a wish about property usually needs a will ('legal'). Never suggest "
-            "a step that is already done or dismissed, even in other words (a done will covers "
-            "all inheritance wishes), and count done steps as progress in the score. Each step "
-            "must be distinct: merge overlapping ones. Order by severity; at most 5. You do not see vault "
-            "secrets and must not ask for passwords. No legal advice."
-        ),
-        prompt=json.dumps(context, ensure_ascii=False),
+    system = (
+        "You check whether this person's family would know what they need to, and could "
+        "manage things, without having to ask them. Look for missing nominees or beneficiaries, asset types that are "
+        "common for someone of this age and country but absent, missing will or "
+        "digital-assets clause, no named vault recipient, and unclear practical "
+        "details. Each gap is a next step with an action the app can help with. A wish that "
+        "changes a nominee means the owner must submit a change with that institution "
+        "('institution'); a wish about property usually needs a will ('legal'). Never suggest "
+        "a step that is already done or dismissed, even in other words (a done will covers "
+        "all inheritance wishes), and count done steps as progress in the score. Each step "
+        "must be distinct: merge overlapping ones. Order by severity; at most 5. You do not see vault "
+        "secrets and must not ask for passwords. No legal advice. The owner reads every title, "
+        "why_it_matters and question_for_owner, so use no death words in them at all. " + ALIVE_RULES
     )
+    prompt = json.dumps(context, ensure_ascii=False)
+    result = await generate_json(agent="readiness.planner", model=settings.pro_model, schema=Readiness,
+                                 system=system, prompt=prompt)
+    # Checked in code (rule 8): a step that talks about death is written again once, then left out.
+    problems = [p for g in result.gaps for p in step_problems(g.model_dump())]
+    if problems:
+        result = await generate_json(
+            agent="readiness.planner", model=settings.pro_model, schema=Readiness, system=system,
+            prompt=prompt + "\n\nYour previous steps talked about death; write them again without it:\n- "
+            + "\n- ".join(problems))
+    result.gaps = [g for g in result.gaps if not step_problems(g.model_dump())]
+    return result
 
 
 async def find_legal_needs(owner: dict, wishes: list[dict], inventory: list[dict],
