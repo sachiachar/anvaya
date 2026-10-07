@@ -640,6 +640,27 @@ def test_a_research_run_where_every_check_failed_fails(stub, monkeypatch):
     assert run["status"] == "failed" and run["error"].startswith("Nothing could be checked: gemini-3.8-flash")
 
 
+def test_a_dreaming_run_where_imagining_worked_but_every_check_failed_fails(stub, monkeypatch):
+    """Imagining works, then every source check fails (say the search key was revoked). The run
+    checked nothing, so it fails rather than showing as done with nothing kept (#129)."""
+    async def search_down(**kw):
+        raise gemini.ModelBusy("gemini-3.8-flash and gemini-3.5-flash-lite are busy or out of quota")
+
+    monkeypatch.setattr(fraud_pipeline, "answer_from_web", search_down)
+    run = dream()
+    assert run["counts"]["imagined"] > 0 and run["counts"]["kept"] == 0
+    assert run["status"] == "failed" and run["error"].startswith("Nothing could be checked: gemini-3.8-flash")
+
+
+def test_a_dreaming_run_where_every_imagining_failed_fails(stub, monkeypatch):
+    async def cut_off(**kw):
+        raise gemini.CutOff("cut off")
+
+    monkeypatch.setattr(fraud_pipeline, "generate_json", cut_off)
+    run = dream()
+    assert run["status"] == "failed" and run["error"].startswith("Nothing could be checked")
+
+
 def test_a_failed_step_with_nothing_new_elsewhere_isnt_a_failed_run(stub, monkeypatch):
     """The first sequence fails to imagine; the second works but everything it imagines is a
     repeat. Nothing is kept, but something worked, so the run is done, not failed."""
