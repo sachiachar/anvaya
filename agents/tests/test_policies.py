@@ -40,6 +40,20 @@ def test_both_files_pass_their_checks():
     files.check(*real())
 
 
+def test_the_gateway_reads_what_passed_the_checks(monkeypatch):
+    reg, pol = real()
+    del policy_of(pol, "saathi.chat")["consumption"]["call"]["max_retries"]
+    loads = iter([reg, pol])
+    monkeypatch.setattr(core.yaml, "safe_load", lambda _text: next(loads))
+    core._files.cache_clear()
+    try:
+        assert core.limit("saathi.chat", "max_retries", 2) == 2  # unset stays unset, not None
+        assert core.limit("saathi.chat", "max_output_tokens") == 4000
+        assert isinstance(core.limit("handover.assistant", "max_model_calls_per_run"), int)
+    finally:
+        core._files.cache_clear()
+
+
 def test_every_agent_has_exactly_one_policy_and_every_policy_an_agent():
     agents = [a["id"] for a in core.registry()]
     governed = [p["agent"] for p in core.policies()]
@@ -83,6 +97,8 @@ def test_a_broken_file_is_refused_with_the_reason(change, problem):
     lambda r, p: policy_of(p, "saathi.chat")["role"].update(autonomy="decide"),
     lambda r, p: policy_of(p, "fraud.dreamer")["models"].update(thinking="lots"),
     lambda r, p: policy_of(p, "saathi.chat")["models"].update(allow=[]),
+    lambda r, p: policy_of(p, "handover.assistant")["consumption"]["run"].update(max_model_calls_per_run="6"),
+    lambda r, p: r["agents"][0].update(safety_critical="yes"),
 ])
 def test_an_unknown_field_or_value_is_refused(change):
     with pytest.raises(ValueError):

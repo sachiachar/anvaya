@@ -19,7 +19,8 @@ UNLIMITED_POOLS = ("safety", "platform")
 
 
 class Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    # strict: a quoted number ("6") or a "yes" is refused, never converted.
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
 # ---- registry.yaml ---------------------------------------------------------------------

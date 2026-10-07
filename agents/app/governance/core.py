@@ -112,10 +112,12 @@ def small(n: int) -> int | None:
 
 @lru_cache(maxsize=1)
 def _files() -> tuple[dict, dict]:
-    """Both files, checked against their schemas and each other; a problem stops start-up."""
-    reg, pol = yaml.safe_load(REGISTRY_PATH.read_text()), yaml.safe_load(POLICIES_PATH.read_text())
-    files.check(reg, pol)
-    return reg, pol
+    """Both files, checked against their schemas and each other; a problem stops start-up.
+    The gateway reads the validated objects, never the raw YAML, so what it enforces is
+    exactly what passed the checks. Unset optional fields are left out, so a missing limit
+    stays missing rather than becoming None."""
+    reg, pol = files.check(yaml.safe_load(REGISTRY_PATH.read_text()), yaml.safe_load(POLICIES_PATH.read_text()))
+    return reg.model_dump(exclude_none=True), pol.model_dump(exclude_none=True)
 
 
 def check_files() -> None:
