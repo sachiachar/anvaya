@@ -183,7 +183,9 @@ async def _converse_once(owner: dict, prompt: str, media: tuple[bytes, str] | No
             "meaning is already saved, don't add it again. A short answer to your own question "
             "(like 'Yes, that would be Priya') is a detail of the moment you asked about: return "
             "that moment again with its exact saved title and a summary that includes the new "
-            "detail. Every summary must make sense on its own. Keep quotes verbatim. " + PRIVACY_RULES
+            "detail. Every summary must make sense on its own. Keep quotes verbatim. Give each moment its "
+            "statements (subject, predicate, object), with predicates only from the list; anything they "
+            "want, plan or promised is a wish statement. " + PRIVACY_RULES
         ),
         prompt=prompt,
     )
@@ -222,7 +224,9 @@ async def extract_from_exchange(owner: dict, heard: str, said: str, known: dict)
             "the owner's words, verbatim. Skip small talk and anything already saved (same "
             "meaning counts). A short answer to the assistant's question adds detail to the moment "
             "it was about: return that moment with its exact saved title and a summary that makes "
-            "sense on its own. Return empty lists if nothing new. Also say which of open_gaps the "
+            "sense on its own. Give each moment its statements (subject, predicate, object), with "
+            "predicates only from the list; anything they want, plan or promised is a wish statement. "
+            "Return empty lists if nothing new. Also say which of open_gaps the "
             "assistant asked about (asked_gap), and how the owner answered last_gap_asked "
             "(gap_outcome). " + PRIVACY_RULES
         ),

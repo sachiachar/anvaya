@@ -4,9 +4,49 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # ---- Capture loop ---------------------------------------------------------
+
+# Statements (PR-13.1, docs/proposals/listening.md §3): what the owner said, as subject, predicate
+# and object. The predicate list is closed and lives here, in code. Anything else is kept as
+# "other" with the words, and is never acted on. A wish predicate makes the card a wish.
+FACT_PREDICATES = ("owns", "holds_at", "nominee_is", "papers_at", "related_to", "knows_about", "owes", "is_owed")
+WISH_PREDICATES = ("wants_to_give", "wants_done", "wants_family_to_know", "wants_to_change", "wants_to_do",
+                   "promised_to")
+FEELING_PREDICATES = ("worries_about", "proud_of")
+PREDICATES = (*FACT_PREDICATES, *WISH_PREDICATES, *FEELING_PREDICATES, "other")
+
+
+class Statement(BaseModel):
+    subject: str = Field(description="Who or what it is about: 'owner' for the owner, or a name, an asset or a place")
+    predicate: str = Field(
+        description="Exactly one of: " + ", ".join(PREDICATES) + ". Wishes (anything the owner wants, plans or "
+        "promised): " + ", ".join(WISH_PREDICATES) + ". Use 'other' if none fits."
+    )
+    object: str = Field(description="What it is about: an asset, a person, a place or a short phrase")
+    recipient: str | None = Field(
+        default=None, description="For wants_to_give, promised_to and wants_family_to_know: the person (a name)"
+    )
+    words: str | None = Field(default=None, description="For 'other': the owner's words for it")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _closed_list(cls, data):
+        """A predicate outside the list becomes 'other', keeping what was said in 'words'."""
+        if isinstance(data, dict):
+            said = str(data.get("predicate") or "").strip()
+            key = said.lower().replace(" ", "_").replace("-", "_")
+            if key not in PREDICATES:
+                data = {**data, "predicate": "other", "words": data.get("words") or said or None}
+            else:
+                data = {**data, "predicate": key}
+        return data
+
+
+def is_wish(statements: list[dict] | None) -> bool:
+    """Whether what was said includes a wish: decided from the closed list, not by the model."""
+    return any((s or {}).get("predicate") in WISH_PREDICATES for s in statements or [])
 
 
 class Moment(BaseModel):
@@ -27,6 +67,10 @@ class Moment(BaseModel):
     unsure: bool = Field(
         default=False, description="True if the owner wasn't sure of what they said here ('I think', 'maybe', "
         "'not sure'), so the app can check with them later"
+    )
+    statements: list[Statement] = Field(
+        default=[], description="What the owner said here, as short statements (subject, predicate, object). "
+        "Include every wish: anything they want, plan or promised."
     )
 
 
