@@ -6,6 +6,8 @@
 
 Every agent in Anvaya should be **identifiable**, have **one specific role**, and be **authorised to use only specific tools and models**. Every model call should count against **token budgets**, from the platform as a whole down to the agent, the tenant, the user and the single request. **One user must not be able to use up shared capacity**, and **safety-critical agents must keep working even when budgets run out**. Cost overruns are stopped by layered limits, ending in a hard cap at the Google Cloud level. **Any extra budget goes through an approval.**
 
+**Next step:** [agent-security.md](agent-security.md) splits the registry into an agent registry (what each agent is) and agent policies (what it may do), enforced by one decision point at the AI gateway and the tool gateway.
+
 **Governance dashboards** give our team a view of the whole platform, and give each bank or insurer a view of its own customers (§6.1).
 
 The proposal adds one control point, an **agent gateway**, that every model call must pass through. It sits next to the guardian (§4.1): the guardian watches *what* agents do for fraud, and the gateway controls *who* may use *which* model and tools, and *how much*.
@@ -253,7 +255,7 @@ Status on 3 October 2026 is in the last column; [#24](https://github.com/sachiac
 
 - Move to **Vertex AI** in-region, with separate service accounts and quotas for the safety and fraud agents. This also closes India data residency.
 - Put **Apigee in front of Vertex AI** for tenant token quotas (an API product per bank), semantic caching, Model Armor and analytics. First check whether it can proxy live-call WebSockets.
-- Move the handover and guardian agents to **Agent Runtime behind Agent Gateway**, for SPIFFE identities and default-deny access to tools and MCP servers, with Agent Registry replacing our own registry.
+- Move the handover and guardian agents to **Agent Runtime behind Agent Gateway**, for SPIFFE identities and default-deny access to tools and MCP servers. Our registry and policies stay the reviewed source and are exported to Agent Registry and Agent Gateway ([agent-security.md](agent-security.md) §6).
 - Tenant budgets and a bank admin approval page.
 - Pub/Sub-driven automatic kill switch.
 - Per-agent dashboards.
