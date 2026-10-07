@@ -1,5 +1,5 @@
 """The agent gateway covers every model call (PR-10.1): structured calls, spoken replies,
-the live call and the ADK handover agent all go through the registry and the ledger."""
+the live call and the ADK handover agent all go through the registry, the policies and the ledger."""
 
 import asyncio
 import pathlib
@@ -9,7 +9,6 @@ from types import SimpleNamespace
 import pytest
 
 from app import executor_agent, speech
-from app.config import settings
 from app.governance import core
 from app.governance.seed import clear_samples as seed
 from app.store import store
@@ -44,23 +43,11 @@ def test_every_agent_named_in_code_is_registered():
     assert named and named <= registered, named - registered
 
 
-def test_configured_models_are_allowed_by_the_registry():
-    def allowed(agent):
-        e = core.agent_entry(agent)
-        return {e["models"]["primary"], *e["models"]["fallback"]}
-
-    for agent in ("saathi.chat", "saathi.summary", "capture.extractor", "documents.reader", "readiness.planner", "legal.needs",
-                  "activation.checker", "settlement.planner", "handover.assistant"):
-        assert {settings.flash_model, settings.pro_model, settings.fallback_model} <= allowed(agent), agent
-    assert settings.live_model in allowed("saathi.voice")
-    assert set(settings.tts_models) <= allowed("saathi.speech")
-
-
 def test_kill_switch_pauses_optional_features_first():
     store.update("platform_settings", "settings", {"kill_switch": "optional_paused"})
     with pytest.raises(core.Refused):
-        core.check_call("saathi.voice", settings.live_model)
-    core.check_call("saathi.chat", settings.flash_model)  # typed conversation continues
+        core.check_call("saathi.voice", core.primary_model("saathi.voice"))
+    core.check_call("saathi.chat", core.primary_model("saathi.chat"))  # typed conversation continues
     with pytest.raises(speech.VoiceUnavailable):
         asyncio.run(speech.speak("Hello"))
     assert any(b["agent"] == "saathi.speech" and b["kind"] == "kill_switch" for b in store.list("gateway_blocked"))
@@ -86,7 +73,7 @@ def test_handover_agent_calls_are_checked_and_recorded():
     ctx = SimpleNamespace(state={})
     with pytest.raises(core.Refused):
         executor_agent.gateway_check(ctx, SimpleNamespace(model="gemini-3.8-pro", config=None))
-    executor_agent.gateway_check(ctx, SimpleNamespace(model=settings.flash_model, config=None))
+    executor_agent.gateway_check(ctx, SimpleNamespace(model=core.primary_model("saathi.chat"), config=None))
     before = (store.get("usage_days", core._today()) or {"agents": {}})["agents"].get("handover.assistant", {}).get("calls", 0)
     executor_agent.gateway_record(ctx, SimpleNamespace(error_code=None, usage_metadata=SimpleNamespace(
         prompt_token_count=900, candidates_token_count=80, thoughts_token_count=None)))
@@ -116,6 +103,6 @@ def test_prototype_release_uses_the_gemini_api_not_vertex(monkeypatch):
             return SimpleNamespace(parsed=parsed, text=None, usage_metadata=None)
 
     monkeypatch.setattr(gemini, "client", lambda: SimpleNamespace(aio=SimpleNamespace(models=FakeModels())))
-    asyncio.run(gemini.generate_json(model=settings.flash_model, schema=DocumentCheck, prompt="p",
+    asyncio.run(gemini.generate_json(model=core.primary_model("saathi.chat"), schema=DocumentCheck, prompt="p",
                                      agent="activation.checker"))
     assert sent["config"].labels is None

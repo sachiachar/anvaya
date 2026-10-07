@@ -130,7 +130,7 @@ def h(who):
 def ask(user: str | None, agent: str = "saathi.chat"):
     """One structured model call caused by `user`."""
     core.set_current_user(user)
-    return asyncio.run(gemini.generate_json(model=settings.flash_model, schema=DocumentCheck, prompt="p", agent=agent))
+    return asyncio.run(gemini.generate_json(schema=DocumentCheck, prompt="p", agent=agent))
 
 
 def everything_stored() -> str:
@@ -231,7 +231,7 @@ def test_two_people_at_once_each_use_only_their_own_key(fake):
     async def as_person(user):
         core.set_current_user(user)  # each task has its own context, like each request
         await asyncio.sleep(0)
-        await gemini.generate_json(model=settings.flash_model, schema=DocumentCheck, prompt="p", agent="saathi.chat")
+        await gemini.generate_json(model=core.primary_model("saathi.chat"), schema=DocumentCheck, prompt="p", agent="saathi.chat")
         return keys.chain()[0][2]
 
     async def both():
@@ -327,7 +327,7 @@ def test_calls_on_a_persons_own_key_are_not_counted_against_their_allowance(fake
     store.update("platform_settings", "settings", {"kill_switch": "all_paused"})
     core.set_current_user(A)
     with pytest.raises(core.Refused):  # the kill switch still applies on their own key
-        core.check_call("saathi.chat", settings.flash_model)
+        core.check_call("saathi.chat", core.primary_model("saathi.chat"))
 
 
 def test_a_fraud_run_uses_its_starters_key_after_the_request_has_finished(monkeypatch):
@@ -360,8 +360,9 @@ def test_the_handover_assistant_fails_over_too(monkeypatch):
         yield LlmResponse(content=types.Content(role="model", parts=[types.Part(text="ok")]))
 
     monkeypatch.setattr(Gemini, "generate_content_async", fake_generate)
-    model = executor_agent.KeyedGemini(model=settings.flash_model, retry_options=gemini.retry_for("handover.assistant"))
-    request = LlmRequest(model=settings.flash_model, config=types.GenerateContentConfig(),
+    first = core.primary_model("handover.assistant")
+    model = executor_agent.KeyedGemini(model=first, retry_options=gemini.retry_for("handover.assistant"))
+    request = LlmRequest(model=first, config=types.GenerateContentConfig(),
                          contents=[types.Content(role="user", parts=[types.Part(text="Where are the papers?")])])
 
     async def run():

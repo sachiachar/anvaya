@@ -1,0 +1,170 @@
+# Agent policies: what each agent MAY DO. The role it takes, the models and tools it may use,
+# how much it may consume, and from which budget pool. Reviewed like code, separately from the
+# registry (registry.yaml says what each agent is). Design: docs/proposals/agent-security.md §2.
+#
+# Deny by default: an agent with no policy here, or a model or tool its policy doesn't list,
+# is refused and recorded. Each registered agent has exactly one policy, and every model the
+# registry has it try must be allowed here. Checked when the API starts.
+#
+# role.autonomy: assist, propose or act_within_limits (architecture §4).
+#
+# models.allow: the models it may call. models.thinking (optional): minimal, low, medium or
+#   high. Thinking counts toward max_output_tokens, so an agent whose answers are long thinks less.
+#
+# tools: each tool it may call, with its scope (read, write or external; the same as the tool's
+#   effect in the registry).
+#
+# consumption (the gateway enforces these, PR-10.2):
+#   call:
+#     max_input_tokens         estimated before the call; larger requests are refused
+#     max_output_tokens        sent with the request, so the model stops there
+#     max_retries              retries after the first attempt, then one try on the fallback model
+#     max_call_minutes         length of one live call
+#     max_characters           length of one spoken reply
+#   run:
+#     max_model_calls_per_run  model calls in one ADK run (handover agent) or one fraud run (cost cap)
+#     and the fraud run's own caps on what one run may produce
+#   per_user.pool: which daily allowance it counts against (user_allowances below).
+
+version: 1
+
+# Daily allowance per person for each budget pool (PR-10.4). Voice counts minutes, spoken
+# replies count replies, and the rest count tokens (in + out). Pools not listed here (safety,
+# platform) have no per-person limit: certificate checks and the guardian always run.
+# Approved requests in the platform admin portal add to these until they expire.
+user_allowances:
+  owner: {tokens_per_day: 300000, voice_minutes_per_day: 30, spoken_replies_per_day: 50}
+  family: {tokens_per_day: 200000}
+
+policies:
+  - agent: saathi.chat
+    role: {autonomy: act_within_limits}
+    models: {allow: [gemini-3.1-flash-lite, gemini-3.5-flash-lite]}
+    tools: []
+    consumption:
+      call: {max_input_tokens: 20000, max_output_tokens: 4000, max_retries: 2}
+      per_user: {pool: owner}
+
+  - agent: saathi.voice
+    role: {autonomy: act_within_limits}
+    models: {allow: [gemini-3.8-live]}
+    tools: []
+    consumption:
+      call: {max_call_minutes: 20}
+      per_user: {pool: owner}
+
+  - agent: saathi.speech
+    role: {autonomy: act_within_limits}
+    models: {allow: [gemini-3.8-flash-lite-tts, gemini-3.8-flash-tts, gemini-3.1-flash-tts-preview]}
+    tools: []
+    consumption:
+      call: {max_characters: 1000}
+      per_user: {pool: owner}
+
+  - agent: capture.extractor
+    role: {autonomy: propose}
+    models: {allow: [gemini-3.1-flash-lite, gemini-3.5-flash-lite]}
+    tools: []
+    consumption:
+      call: {max_input_tokens: 12000, max_output_tokens: 4000, max_retries: 2}
+      per_user: {pool: owner}
+
+  - agent: saathi.summary
+    role: {autonomy: assist}
+    models: {allow: [gemini-3.1-flash-lite, gemini-3.5-flash-lite]}
+    tools: []
+    consumption:
+      call: {max_input_tokens: 12000, max_output_tokens: 600, max_retries: 2}
+      per_user: {pool: owner}
+
+  - agent: documents.reader
+    role: {autonomy: propose}
+    models: {allow: [gemini-3.1-flash-lite, gemini-3.5-flash-lite]}
+    tools: []
+    consumption:
+      call: {max_input_tokens: 8000, max_output_tokens: 2000, max_retries: 2}
+      per_user: {pool: owner}
+
+  - agent: readiness.planner
+    role: {autonomy: propose}
+    models: {allow: [gemini-3.1-flash-lite, gemini-3.5-flash-lite]}
+    tools: []
+    consumption:
+      call: {max_input_tokens: 30000, max_output_tokens: 4000, max_retries: 2}
+      per_user: {pool: owner}
+
+  - agent: legal.needs
+    role: {autonomy: propose}
+    models: {allow: [gemini-3.1-flash-lite, gemini-3.5-flash-lite]}
+    tools: []
+    consumption:
+      call: {max_input_tokens: 20000, max_output_tokens: 2000, max_retries: 2}
+      per_user: {pool: owner}
+
+  - agent: activation.checker
+    role: {autonomy: assist}
+    models: {allow: [gemini-3.1-flash-lite, gemini-3.5-flash-lite]}
+    tools: []             # the fraud reference guide is given in its instructions (PR-2.3.4)
+    consumption:
+      call: {max_input_tokens: 8000, max_output_tokens: 2000, max_retries: 2}
+      per_user: {pool: safety}
+
+  - agent: handover.assistant
+    role: {autonomy: act_within_limits}
+    models: {allow: [gemini-3.1-flash-lite, gemini-3.5-flash-lite]}
+    tools:                # PR-7.5: reads the kept-knowledge bundle
+      - {tool: read_bundle_index, scope: read}
+      - {tool: read_concept, scope: read}
+      - {tool: list_accounts, scope: read}
+    consumption:
+      call: {max_input_tokens: 60000, max_output_tokens: 1500, max_retries: 2}
+      run: {max_model_calls_per_run: 6}
+      per_user: {pool: family}
+
+  - agent: settlement.planner
+    role: {autonomy: propose}
+    models: {allow: [gemini-3.1-flash-lite, gemini-3.5-flash-lite]}
+    tools: []
+    consumption:
+      call: {max_input_tokens: 30000, max_output_tokens: 8000, max_retries: 2}
+      per_user: {pool: family}
+
+  - agent: guardian.detectors
+    role: {autonomy: assist}
+    models: {allow: [gemini-3.1-flash-lite]}
+    tools: []
+    consumption:
+      call: {max_input_tokens: 8000, max_output_tokens: 1000, max_retries: 1}
+      per_user: {pool: safety}
+
+  - agent: fraud.researcher
+    role: {autonomy: propose}
+    # thinking low: it reads pages and copies sentences; thinking had used up its output cap (#129)
+    models: {allow: [gemini-3.8-flash, gemini-3.5-flash-lite], thinking: low}
+    tools:                # the only agent with web access (Exa, web_search.py); saving drafts is our own code
+      - {tool: web_search, scope: external}
+    consumption:
+      call: {max_input_tokens: 8000, max_output_tokens: 2000, max_retries: 1}
+      run: {max_model_calls_per_run: 6, max_new_patterns_per_run: 2}
+      per_user: {pool: platform}
+
+  - agent: fraud.dreamer
+    role: {autonomy: propose}
+    # thinking low: its answers are long lists of scenarios; leave the output cap for them (#129)
+    models: {allow: [gemini-3.8-flash, gemini-3.5-flash-lite], thinking: low}
+    tools: []             # no web access: it imagines from our own guide, safeguards and events
+    consumption:
+      call: {max_input_tokens: 12000, max_output_tokens: 4000, max_retries: 1}
+      run: {max_model_calls_per_run: 8, max_scenarios_per_sequence: 3, max_sequences_per_run: 2}
+      per_user: {pool: platform}
+
+  - agent: access.tester
+    role: {autonomy: assist}
+    # Every model a person's key might be used for: chat and handover, fraud research, live voice
+    # and spoken replies. Each test call uses only the key being tested, never ours.
+    models: {allow: [gemini-3.1-flash-lite, gemini-3.8-flash, gemini-3.8-live, gemini-3.8-flash-lite-tts,
+                     gemini-3.8-flash-tts, gemini-3.1-flash-tts-preview]}
+    tools: []
+    consumption:
+      call: {max_input_tokens: 100, max_output_tokens: 16, max_retries: 0}
+      per_user: {pool: platform}

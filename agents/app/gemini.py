@@ -41,7 +41,7 @@ class ModelBusy(RuntimeError):
 
 class CutOff(RuntimeError):
     """The answer stopped at the agent's output limit, so it can't be read. Thinking counts
-    toward that limit, which is why the registry can set each agent's thinking level."""
+    toward that limit, which is why each agent's policy can set its thinking level."""
 
 
 THINKING_LEVELS = {"minimal", "low", "medium", "high"}
@@ -118,22 +118,24 @@ def no_429(retry: types.HttpRetryOptions) -> types.HttpRetryOptions:
 
 async def generate_json(
     *,
-    model: str,
     schema: type[T],
     prompt: str,
     media: list[tuple[bytes, str]] | None = None,
     system: str | None = None,
     agent: str,
+    model: str | None = None,
 ) -> T:
     """Ask Gemini for output that validates against `schema`.
 
     `media` is a list of (bytes, mime_type) pairs, e.g. an audio recording or a
     photo of a document, sent alongside the text prompt.
 
-    `agent` is the registered agent making the call (registry.yaml). The governance
-    layer refuses models the agent isn't allowed and calls the kill switch pauses, and
-    records every call's tokens and cost in the ledger.
+    `agent` is the registered agent making the call (registry.yaml). It uses the agent's
+    primary model, then its fallback, from the registry; `model` is only for tests. The
+    governance layer refuses models the agent's policy doesn't allow and calls the kill switch
+    pauses, and records every call's tokens in the ledger.
     """
+    model = model or governance.primary_model(agent)
     governance.check_call(agent, model)
     governance.check_input(agent, governance.estimate_tokens(len(prompt) + len(system or ""), len(media or [])))
     parts: list[types.Part] = [types.Part.from_bytes(data=d, mime_type=m) for d, m in media or []]
@@ -208,5 +210,5 @@ async def generate_json(
 
 
 def thinking_for(agent: str) -> str | None:
-    """The agent's thinking level from the registry, if it sets one."""
-    return (governance.agent_entry(agent) or {}).get("thinking")
+    """The agent's thinking level from its policy, if it sets one."""
+    return governance.thinking(agent)

@@ -31,6 +31,8 @@ from .store import new_id, store
 # Keys people add themselves never reach a log line, from any library (PR-10.10).
 model_keys.install_log_redaction()
 
+# A broken registry.yaml or policies.yaml stops the API here, rather than loosening a rule.
+governance_core.check_files()
 app = FastAPI(title="Anvaya agents", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,

@@ -77,7 +77,8 @@ The guardian never approves or rejects a case. People decide.
 ## Governance layer and platform admin portal
 
 One governance layer governs every agent. It has these parts:
-- the **registry** ([agents/registry.yaml](agents/registry.yaml));
+- the **registry** of what each agent is ([agents/registry.yaml](agents/registry.yaml));
+- the **policies** for what each agent may do ([agents/policies.yaml](agents/policies.yaml));
 - the **gateway** checks and usage **ledger**;
 - the **guardian**'s interventions;
 - the **kill switch**;

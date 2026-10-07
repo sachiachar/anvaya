@@ -85,13 +85,15 @@ flowchart LR
 | `executor_agent.py` | Google ADK agent for the handover (the handover assistant). It reads the owner's kept-knowledge bundle (PR-7.5). While the bundle is small, the whole bundle goes in its instructions. Otherwise it gets `index.md` and the tools `read_bundle_index`, `read_concept` and `list_accounts`. It has a fallback model |
 | `release.py` | Vault release state machine: two-person rule, override reasons, waiting period, owner cancel |
 | `escrow.py` | Cloud KMS wrap and unwrap of the vault key blob |
-| `gemini.py` | Shared Gemini client with retries and backoff. `generate_json` uses Pydantic schemas. It falls back to the agent's own fallback model from the registry. An agent without one reports the model as busy |
-| `web_search.py` | Web search for the fraud researcher, with Exa (exa.ai). Our code searches. Gemini answers only from the returned pages and must quote them word for word. A source counts only if its quote is really in the page. Only agents that the registry allows `web_search` may search. Queries carry fraud research only, never owner data |
+| `gemini.py` | Shared Gemini client with retries and backoff. `generate_json` uses Pydantic schemas. It uses the agent's primary model from the registry, then the agent's own fallback. An agent without one reports the model as busy |
+| `web_search.py` | Web search for the fraud researcher, with Exa (exa.ai). Our code searches. Gemini answers only from the returned pages and must quote them word for word. A source counts only if its quote is really in the page. Only agents whose policy grants `web_search` may search. Queries carry fraud research only, never owner data |
 | `schemas.py` | Pydantic models used as Gemini `response_schema` and as the API contract |
 | `store.py` | Document store: `memory` (tests), `file` (local demo, survives restarts), `firestore` (Google Cloud). Its calls block. So the live call, the Talk route and sign-in run them in worker threads (`asyncio.to_thread`). Saving cards holds the owner's `proposals.saving` lock, so two saves at once can't make the same card |
 | `media.py`, `config.py` | Original media (Cloud Storage or local folder); settings from the environment |
 
-### 3.3 Models (all configurable in `.env`)
+### 3.3 Models (set per agent in `agents/registry.yaml`, allowed in `agents/policies.yaml`)
+
+Each agent's models, in the order it tries them, are in the registry; its policy lists the models it may use. Neither comes from an environment variable, so changing a model is a reviewed change to those files (PR-10.11).
 
 | Use | Default | Why |
 | --- | --- | --- |
@@ -99,7 +101,7 @@ flowchart LR
 | Fallback when overloaded | `gemini-3.5-flash-lite` | Separate capacity; used after retries on 429/5xx |
 | Live voice call | `gemini-3.8-live` | Two-way audio, ~1.3 s response, can be interrupted |
 | Spoken replies (TTS) | `gemini-3.8-flash-lite-tts`, then `gemini-3.8-flash-tts`, then `gemini-3.1-flash-tts-preview` | Each has its own quota; tried in order |
-| Voice | `Sulafat` | A warm voice, used for both TTS and live calls |
+| Voice | `Sulafat` (`GEMINI_TTS_VOICE`) | A warm voice, used for both TTS and live calls |
 
 **Your own model key (PR-10.10, `governance/keys.py`).** Anyone who signs in may add their own Gemini key. This is optional. It can be a Google AI Studio key (free or paid) or a Vertex AI express-mode key.
 
@@ -180,10 +182,15 @@ flowchart LR
 | **Governance** | A Guardian page shows every intervention with its reason. People confirm or reverse each one, and the decision is logged. The page also shows false-alarm rates, reviewer pattern analytics, and the dreaming agent's safeguard coverage map. |
 
 **How it's built** (`agents/app/governance/`, one layer shared by the gateway, the guardian and the portal):
-- `core.py`: the registry, roles and permissions, the audit log, the gateway's `check_call` (registry and kill switch), `record_usage` (daily ledger with calls, tokens and minutes; never dollars), `record_blocked` and `record_intervention`;
+- `core.py`: the registry and policies, roles and permissions, the audit log, the gateway's `check_call` (registry, policy and kill switch), `record_usage` (daily ledger with calls, tokens and minutes; never dollars), `record_blocked` and `record_intervention`;
 - `billing.py`: actual spend from the Cloud Billing export to BigQuery (PR-10.9). This is the only source of dollar figures. It's cached for an hour and covers up to yesterday. The portal says "not available yet" rather than estimating;
 - `portal.py`: the platform admin portal API under `/api/platform` (PR-12), with roles checked on the server;
-- planned: `registry.yaml` keeps what each agent is. A new `policies.yaml` says what it may do (role, models, tools, consumption per agent and per person, guardrails). One decision point at the AI gateway and the tool gateway checks it ([agent-security.md](proposals/agent-security.md));
+- `files.py`: strict schemas for the two files, and the checks between them (PR-10.11).
+  - `agents/registry.yaml` says what each agent is: its purpose, status, kind and the models it tries in order. It also lists every model and tool.
+  - `agents/policies.yaml` says what each agent may do: its autonomy, allowed models and thinking level, tools with their scope, limits per call and per run, and its per-person budget pool. It also holds the daily allowances.
+  - The gateway denies by default. It refuses and records an agent with no policy, an agent that isn't active, and a model or tool that the policy doesn't list.
+  - The gateway reads the validated files, never the raw YAML. A broken file stops the API at start-up.
+  - Still planned: a daily cap per agent, who may start each agent, guardrails, one decision point for the AI and tool gateways, and the decision log ([agent-security.md](proposals/agent-security.md));
 - `seed.py`: nothing is seeded; the portal shows only real data. On the first portal request after a release, it removes any examples that earlier versions seeded. It keeps real data and the kill switch.
 
 The portal is a separate entry point (`web/admin.html`). Its own Firebase Hosting site, `anvaya-admin`, serves it.
@@ -375,7 +382,7 @@ On `released`, KMS removes the outer layer. The recipient's phone then decrypts 
 | `KMS_KEY_NAME` | empty (dev mode) | vault escrow key |
 | `MODEL_KEYS_KMS_KEY_NAME` | empty (dev mode: keys stored unencrypted, local only) | the `model-keys` KMS key; empty means people can't save their own key |
 | `MEDIA_BUCKET` | empty (local folder) | private bucket |
-| `GEMINI_*_MODEL(S)`, `GEMINI_TTS_VOICE`, `GEMINI_LIVE_MODEL` | see section 3.3 | same; confirm they are served in your region |
+| `GEMINI_TTS_VOICE` | `Sulafat` | same. Models aren't environment variables: they're in `agents/registry.yaml` and `agents/policies.yaml` (section 3.3); confirm they are served in your region |
 | `AUTH_REQUIRED`, `FIREBASE_PROJECT_ID`, `ALLOWED_EMAILS` | `true`, the project, your email | same (from `agents/.env` or `ALLOWED_EMAILS=… ./infra/deploy.sh`) |
 | `VITE_FIREBASE_*` (web) | `web/.env` (public Firebase config) | same |
 | `RELEASE_WAIT_SECONDS` | 60 | 60 for the demo; days in production |
@@ -411,9 +418,10 @@ Automated tests (`agents/tests/`) stub Gemini, so they run without credentials. 
 - reply rules (script, false claims, "shall I add");
 - document verdict rules (wrong document scores 0);
 - governance: server-side roles, approvals, the kill switch, and a portal that never returns conversation text or names;
+- registry and policies: every agent has exactly one policy, and every policy has an agent. Each part lives in one file only. The check refuses each of these, with the reason: a missing policy, a model the policy doesn't allow, an unknown model, tool or pool, a wrong tool scope, a duplicate, a typo, an unknown value and a quoted number. No code takes a model from settings. The gateway follows the policy and refuses an agent that isn't active. Tools, limits, pools and thinking come from the policy. A call uses the registry's primary model, then its fallback. The portal shows both files;
 - the deploy identity (`test_ci_identity.py`): only `deploy.yml` signs in to Google, and every such job uses environment `production`. Google trusts only that workflow on `main`, by repository id. The deployer has no broad project-wide roles;
 - the gateway: every file that calls Gemini goes through it, every agent named in code is registered, and every call is recorded in the ledger;
-- limits per request: output caps, retries, input size, call length and reply length. Each agent's thinking level comes from the registry. An answer cut off at its output limit, or both models busy, gives a plain error;
+- limits per request: output caps, retries, input size, call length and reply length. Each agent's thinking level comes from its policy. An answer cut off at its output limit, or both models busy, gives a plain error;
 - fraud runs: one failed model call costs one item, not the run. A reason that stops every item (no search key, refused by the gateway, stopped) still stops the run;
 - no API answer, found or not, is kept by a cache;
 - responsiveness: Google's sign-in certificates are fetched once until they expire. A slow store doesn't hold up a live call. Two exchanges saved at once make one card;

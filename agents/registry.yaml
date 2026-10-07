@@ -1,173 +1,164 @@
-# Agent registry: every agent that calls a model, with its one role, autonomy level,
-# allowed models and tools, limits and budget pool. Reviewed like code.
+# Agent registry: what each agent IS. Its identity, purpose, how it's built and which models
+# it tries, in order. Also the catalogue of every model and tool that exists. Reviewed like code.
 #
-# Limits the gateway enforces (PR-10.2):
-#   max_input_tokens         estimated before the call; larger requests are refused
-#   max_output_tokens        sent with the request, so the model stops there
-#   max_retries              retries after the first attempt, then one try on the fallback model
-#   max_model_calls_per_run  model calls in one ADK run (handover agent) or one fraud run (cost cap)
-#   max_call_minutes         length of one live call
-#   max_characters           length of one spoken reply
+# What each agent MAY DO (its role and autonomy, allowed models and tools, limits and budget
+# pool) is in policies.yaml, reviewed separately. Design: docs/proposals/agent-security.md §2.
+# Both files are checked against a strict schema when the API starts (governance/core.py), and
+# each agent here must have exactly one policy there.
 #
-# thinking (optional, beside limits): how much the model may think, minimal, low, medium or high.
-# Thinking counts toward max_output_tokens, so an agent whose answers are long thinks less.
-#
-# The platform admin portal (PR-12) shows this file. The agent gateway (PR-10.1) will
-# enforce it: a call with a model or tool not listed here is refused and recorded.
-# Design: docs/proposals/agent-governance.md §2.
+# The platform admin portal (PR-12) shows both files. The gateway (PR-10.1) refuses a call
+# from an agent that isn't here and active, or with a model or tool its policy doesn't allow.
 
-version: 1
+version: 2
 
-# Daily allowance per person for each budget pool (PR-10.4). Every agent belongs to one
-# pool (its budget_class). Voice counts minutes, spoken replies count replies, and the
-# rest count tokens (in + out). Pools not listed here (safety, platform) have no
-# per-person limit: certificate checks and the guardian always run.
-# Approved requests in the platform admin portal add to these until they expire.
-allowances:
-  owner: {tokens_per_day: 300000, voice_minutes_per_day: 30, spoken_replies_per_day: 50}
-  family: {tokens_per_day: 200000}
+# Every model any agent may call. A model an agent tries, or a policy allows, must be listed.
+models:
+  - {id: gemini-3.1-flash-lite, kind: text}
+  - {id: gemini-3.5-flash-lite, kind: text}
+  - {id: gemini-3.8-flash, kind: text}
+  - {id: gemini-3.8-live, kind: live}
+  - {id: gemini-3.8-flash-lite-tts, kind: speech}
+  - {id: gemini-3.8-flash-tts, kind: speech}
+  - {id: gemini-3.1-flash-tts-preview, kind: speech}
 
+# Every tool any agent may be given. effect: read (inside Anvaya), write, or external (reaches
+# outside Anvaya). data: what it can see.
+tools:
+  - {id: read_bundle_index, kind: function, effect: read, data: owner_bundle_after_release}   # PR-7.5
+  - {id: read_concept, kind: function, effect: read, data: owner_bundle_after_release}
+  - {id: list_accounts, kind: function, effect: read, data: owner_bundle_after_release}
+  - {id: web_search, kind: function, effect: external, data: none}   # Exa, web_search.py; never owner data
+
+mcp_servers: []          # none yet; each will list its endpoint and tools
+
+# kind: model_step (one call through gemini.generate_json), adk_agent, live (a voice call) or
+#       speech (spoken replies).
+# status: active, or planned (registered, not built yet). Only an active agent may call a model.
+# models: the order the agent tries them, primary first. The model actually used comes from
+#         here, never from an environment variable.
+# safety_critical: keeps running when the kill switch pauses everything else.
+# optional: paused first by the kill switch.
 agents:
   - id: saathi.chat
-    role: Typed or photo conversation with the owner
-    autonomy: act_within_limits
+    purpose: Typed or photo conversation with the owner
+    owner: team-saathi
+    status: active
+    kind: model_step
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
-    tools: []
-    limits: {max_input_tokens: 20000, max_output_tokens: 4000, max_retries: 2}
-    budget_class: owner
     safety_critical: false
 
   - id: saathi.voice
-    role: Live voice conversation with the owner
-    autonomy: act_within_limits
+    purpose: Live voice conversation with the owner
+    owner: team-saathi
+    status: active
+    kind: live
     models: {primary: gemini-3.8-live, fallback: []}
-    tools: []
-    limits: {max_call_minutes: 20}
-    budget_class: owner
     safety_critical: false
-    optional: true        # paused first by the kill switch
+    optional: true
 
   - id: saathi.speech
-    role: Speaks Saathi's own replies aloud
-    autonomy: act_within_limits
+    purpose: Speaks Saathi's own replies aloud
+    owner: team-saathi
+    status: active
+    kind: speech
     models: {primary: gemini-3.8-flash-lite-tts, fallback: [gemini-3.8-flash-tts, gemini-3.1-flash-tts-preview]}
-    tools: []
-    limits: {max_characters: 1000}
-    budget_class: owner
     safety_critical: false
-    optional: true        # paused first by the kill switch
+    optional: true
 
   - id: capture.extractor
-    role: Turns each exchange into suggestion cards
-    autonomy: propose
+    purpose: Turns each exchange into suggestion cards
+    owner: team-saathi
+    status: active
+    kind: model_step
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
-    tools: []
-    limits: {max_input_tokens: 12000, max_output_tokens: 4000, max_retries: 2}
-    budget_class: owner
     safety_critical: false
 
   - id: saathi.summary
-    role: Sums up one conversation in a few sentences when it ends
-    autonomy: assist
+    purpose: Sums up one conversation in a few sentences when it ends
+    owner: team-saathi
+    status: active
+    kind: model_step
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
-    tools: []
-    limits: {max_input_tokens: 12000, max_output_tokens: 600, max_retries: 2}
-    budget_class: owner
     safety_critical: false
-    optional: true        # paused first by the kill switch
+    optional: true
 
   - id: documents.reader
-    role: Reads a policy or statement photo into an account card
-    autonomy: propose
+    purpose: Reads a policy or statement photo into an account card
+    owner: team-saathi
+    status: active
+    kind: model_step
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
-    tools: []
-    limits: {max_input_tokens: 8000, max_output_tokens: 2000, max_retries: 2}
-    budget_class: owner
     safety_critical: false
 
   - id: readiness.planner
-    role: Next steps and the most important gap to ask about
-    autonomy: propose
+    purpose: Next steps and the most important gap to ask about
+    owner: team-saathi
+    status: active
+    kind: model_step
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
-    tools: []
-    limits: {max_input_tokens: 30000, max_output_tokens: 4000, max_retries: 2}
-    budget_class: owner
     safety_critical: false
 
   - id: legal.needs
-    role: Finds wishes that need a legal document
-    autonomy: propose
+    purpose: Finds wishes that need a legal document
+    owner: team-saathi
+    status: active
+    kind: model_step
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
-    tools: []
-    limits: {max_input_tokens: 20000, max_output_tokens: 2000, max_retries: 2}
-    budget_class: owner
     safety_critical: false
 
   - id: activation.checker
-    role: Pre-checks certificates and proof of authority
-    autonomy: assist
+    purpose: Pre-checks certificates and proof of authority
+    owner: team-saathi
+    status: active
+    kind: model_step
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
-    tools: []             # the fraud reference guide is given in its instructions (PR-2.3.4)
-    limits: {max_input_tokens: 8000, max_output_tokens: 2000, max_retries: 2}
-    budget_class: safety
     safety_critical: true
 
   - id: handover.assistant
-    role: Answers the family's questions from kept knowledge, citing sources
-    autonomy: act_within_limits
+    purpose: Answers the family's questions from kept knowledge, citing sources
+    owner: team-saathi
+    status: active
+    kind: adk_agent
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
-    tools: [read_bundle_index, read_concept, list_accounts]   # PR-7.5: reads the kept-knowledge bundle
-    limits: {max_input_tokens: 60000, max_output_tokens: 1500, max_model_calls_per_run: 6, max_retries: 2}
-    budget_class: family
     safety_critical: false
 
   - id: settlement.planner
-    role: Claims checklist and draft letters
-    autonomy: propose
+    purpose: Claims checklist and draft letters
+    owner: team-saathi
+    status: active
+    kind: model_step
     models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.5-flash-lite]}
-    tools: []
-    limits: {max_input_tokens: 30000, max_output_tokens: 8000, max_retries: 2}
-    budget_class: family
     safety_critical: false
 
   - id: guardian.detectors
-    role: Pressure, probing, synthetic audio and hidden-instruction signals
-    autonomy: assist
+    purpose: Pressure, probing, synthetic audio and hidden-instruction signals
+    owner: team-saathi
+    status: planned          # no code calls a model as this agent yet
+    kind: model_step
     models: {primary: gemini-3.1-flash-lite, fallback: []}
-    tools: []
-    limits: {max_input_tokens: 8000, max_output_tokens: 1000, max_retries: 1}
-    budget_class: safety
     safety_critical: true
 
   - id: fraud.researcher
-    role: Checks imagined scenarios and new fraud tactics against cited sources
-    autonomy: propose
+    purpose: Checks imagined scenarios and new fraud tactics against cited sources
+    owner: team-saathi
+    status: active
+    kind: model_step
     models: {primary: gemini-3.8-flash, fallback: [gemini-3.5-flash-lite]}
-    tools: [web_search]      # the only agent with web access (Exa, web_search.py); saving drafts is our own code
-    thinking: low            # it reads pages and copies sentences; thinking had used up its output cap (#129)
-    limits: {max_input_tokens: 8000, max_output_tokens: 2000, max_new_patterns_per_run: 2, max_model_calls_per_run: 6, max_retries: 1}
-    budget_class: platform
     safety_critical: false
 
   - id: fraud.dreamer
-    role: Imagines attacks on our safeguards and maps which one catches each
-    autonomy: propose
+    purpose: Imagines attacks on our safeguards and maps which one catches each
+    owner: team-saathi
+    status: active
+    kind: model_step
     models: {primary: gemini-3.8-flash, fallback: [gemini-3.5-flash-lite]}
-    tools: []                # no web access: it imagines from our own guide, safeguards and events
-    thinking: low            # its answers are long lists of scenarios; leave the output cap for them (#129)
-    limits: {max_input_tokens: 12000, max_output_tokens: 4000, max_scenarios_per_sequence: 3, max_sequences_per_run: 2,
-             max_model_calls_per_run: 8, max_retries: 1}
-    budget_class: platform
     safety_critical: false
 
   - id: access.tester
-    role: Tests a person's own model key before it's saved, with one tiny call per model (PR-10.10)
-    autonomy: assist
-    # Every model the person's key might be used for: chat and handover, fraud research, live
-    # voice and spoken replies. Each test call uses only the key being tested, never ours.
-    models: {primary: gemini-3.1-flash-lite, fallback: [gemini-3.8-flash, gemini-3.8-live, gemini-3.8-flash-lite-tts,
-                                                        gemini-3.8-flash-tts, gemini-3.1-flash-tts-preview]}
-    tools: []
-    limits: {max_input_tokens: 100, max_output_tokens: 16, max_retries: 0}
-    budget_class: platform
+    purpose: Tests a person's own model key before it's saved, with one tiny call per model (PR-10.10)
+    owner: team-saathi
+    status: active
+    kind: model_step
+    # It calls each model it tests directly; which ones it may test is in its policy.
+    models: {primary: gemini-3.1-flash-lite, fallback: []}
     safety_critical: false

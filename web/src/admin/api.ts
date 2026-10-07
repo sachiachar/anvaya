@@ -46,11 +46,14 @@ export type Overview = {
   blocked_30d: number;
 };
 
+/** What an agent is (registry.yaml) beside what it may do (policies.yaml). */
 export type Agent = {
   id: string;
-  role: string;
+  purpose: string;
+  status: "active" | "planned";
   autonomy: "assist" | "propose" | "act_within_limits";
   models: { primary: string; fallback: string[] };
+  allowed_models: string[];
   tools: string[];
   limits: Record<string, number>;
   budget_class: string;

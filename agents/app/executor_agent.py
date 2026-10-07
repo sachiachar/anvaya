@@ -24,7 +24,6 @@ from google.adk.utils.context_utils import Aclosing
 from google.genai import errors, types
 
 from . import knowledge
-from .config import settings
 from .gemini import client_for, no_429, retry_for
 from .governance import core as governance
 from .governance import keys
@@ -94,7 +93,7 @@ AGENT = "handover.assistant"
 
 def gateway_check(callback_context, llm_request: LlmRequest) -> LlmResponse | None:
     """Before every model call the agent makes: the gateway checks the registry and kill switch."""
-    model = llm_request.model or settings.flash_model
+    model = llm_request.model or governance.primary_model(AGENT)
     callback_context.state["temp:model"] = model
     governance.check_call(AGENT, model)
     chars = sum(len(p.text or "") for c in (getattr(llm_request, "contents", None) or []) for p in (c.parts or []))
@@ -111,7 +110,7 @@ def gateway_check(callback_context, llm_request: LlmRequest) -> LlmResponse | No
 def gateway_record(callback_context, llm_response: LlmResponse) -> LlmResponse | None:
     """After every model call: record its tokens in the usage ledger."""
     usage = llm_response.usage_metadata
-    model = callback_context.state.get("temp:model") or settings.flash_model
+    model = callback_context.state.get("temp:model") or governance.primary_model(AGENT)
     t_in = (usage.prompt_token_count or 0) if usage else 0
     t_out = ((usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)) if usage else 0
     source = (getattr(llm_response, "custom_metadata", None) or {}).get("key_source", keys.PLATFORM)
@@ -121,8 +120,7 @@ def gateway_record(callback_context, llm_response: LlmResponse) -> LlmResponse |
 
 
 def _max_calls() -> int:
-    entry = governance.agent_entry(AGENT) or {}
-    return int(entry.get("limits", {}).get("max_model_calls_per_run", 6))
+    return int(governance.limit(AGENT, "max_model_calls_per_run", 6))
 
 
 RULES = (
@@ -210,8 +208,8 @@ def build_agent() -> LlmAgent:
         name="handover_assistant",
         # Retries on overload, then falls back to a second model.
         model=FallbackModel(models=[
-            KeyedGemini(model=settings.flash_model, retry_options=retry_for(AGENT)),
-            KeyedGemini(model=settings.fallback_model, retry_options=retry_for(AGENT, 1)),
+            KeyedGemini(model=governance.primary_model(AGENT), retry_options=retry_for(AGENT)),
+            *(KeyedGemini(model=m, retry_options=retry_for(AGENT, 1)) for m in governance.models_in_order(AGENT)[1:2]),
         ]),
         description="Answers the family's questions from the owner's own words and records.",
         instruction=instruction,

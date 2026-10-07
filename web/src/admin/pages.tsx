@@ -291,7 +291,7 @@ export function AgentsPage() {
   if (!data) return <Loading error={error} />;
   return (
     <>
-      <p className="pa-lede">Every agent is registered with one role, an autonomy level, and only its allowed models and tools (<span className="pa-mono">registry.yaml</span>). The gateway refuses anything else and records it below.</p>
+      <p className="pa-lede">Every agent is registered with what it is (<span className="pa-mono">registry.yaml</span>) and has one policy for what it may do: its autonomy level, and only its allowed models and tools (<span className="pa-mono">policies.yaml</span>). The gateway refuses anything else and records it below.</p>
       <Section title="Agent registry and use, 30 days">
         <div className="pa-scroll">
           <table className="pa-agents">
@@ -301,7 +301,8 @@ export function AgentsPage() {
               <tr key={a.id}>
                 <td>
                   <span className="pa-mono">{a.id}</span>{a.safety_critical && <span className="pa-tag">Safety</span>}
-                  <div className="pa-sub">{a.role}</div>
+                  {a.status !== "active" && <span className="pa-tag">{fmt.label(a.status)}</span>}
+                  <div className="pa-sub">{a.purpose}</div>
                 </td>
                 <td>{fmt.label(a.autonomy)}<div className="pa-sub">{fmt.label(a.budget_class)} pool</div></td>
                 <td className="pa-mono">

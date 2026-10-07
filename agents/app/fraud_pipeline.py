@@ -33,7 +33,6 @@ from google.genai import errors as genai_errors
 from pydantic import BaseModel, Field
 
 from . import fraud_cues, fraud_guides
-from .config import settings
 from .fraud_guides import CHECKABLE, Guide
 from .gemini import CutOff, ModelBusy, generate_json
 from .governance import core as governance
@@ -215,7 +214,6 @@ async def check_claim(claim: str) -> Evidence:
     and a source counts only if the model's quote from it really appears in the page)."""
     answer = await answer_from_web(
         agent=RESEARCHER,
-        model=settings.research_model,
         query=claim,
         claim=claim,
         system=("You check claims about fraud for a fraud-prevention team. Say YES only if a page describes "
@@ -351,7 +349,7 @@ async def _imagine(guide: Guide, tactic, events: list[dict], ruled_out: list[str
         "Where it fits, aim a variant at one of the common gaps, and name its pattern in `cue`."
     )
     imagined = await generate_json(
-        agent=DREAMER, model=settings.research_model, schema=Imagined, prompt=prompt,
+        agent=DREAMER, schema=Imagined, prompt=prompt,
         system=("You think like a fraudster to help a fraud-prevention team find blind spots before real "
                 "attackers do. Describe attacks at the level of steps and safeguards, never operational detail "
                 "such as tools, templates or where to buy them. Each scenario targets one safeguard by its exact "
@@ -365,7 +363,7 @@ async def _map(scenario: ImaginedScenario) -> tuple[str | None, str, str]:
     fixed list count as 'none'."""
     safeguards = "\n".join(f"- {name}: {how}" for name, how in SAFEGUARDS.items())
     result = await generate_json(
-        agent=DREAMER, model=settings.research_model, schema=Coverage,
+        agent=DREAMER, schema=Coverage,
         system="You judge which of a fixed list of safeguards would stop an attack, exactly as each is described.",
         prompt=f"Safeguards:\n{safeguards}\n\nAttack: {scenario.title}\nSteps: {scenario.steps}",
     )
@@ -503,8 +501,7 @@ async def research(run: dict) -> dict:
         guard.call(RESEARCHER)
         guard.say("research", f"Searching the web for new tactics: {guide.document}, {guide.country}")
         found = await answer_from_web(
-            agent=RESEARCHER, model=settings.research_model,
-            query=f"{guide.document} {guide.country} forgery fraud tactics",
+            agent=RESEARCHER, query=f"{guide.document} {guide.country} forgery fraud tactics",
             system=("You research document fraud for a fraud-prevention team. Report only what the pages "
                     "describe. Never give operational detail such as tools, templates or where to buy them."),
             question=(f"Document: {guide.document}, {guide.country}.\nWe already know: {known}\n\n"
@@ -516,7 +513,7 @@ async def research(run: dict) -> dict:
             return _finish(run, counts)
         guard.call(RESEARCHER)
         structured = await generate_json(
-            agent=RESEARCHER, model=settings.research_model, schema=NewTactics,
+            agent=RESEARCHER, schema=NewTactics,
             system="You turn a research note into structured data. Use only what the note says.",
             prompt=(f"Note:\n{found.text}\n\nWarning sign ids: {[s.id for s in guide.signs]}\n"
                     f"Safeguards: {list(SAFEGUARDS)}"),

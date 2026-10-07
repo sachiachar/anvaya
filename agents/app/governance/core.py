@@ -2,8 +2,9 @@
 
 One layer governs every agent (docs/proposals/agent-governance.md, architecture §4.1):
 
-- **Registry** (registry.yaml): each agent's identity, role, autonomy, allowed models and
-  tools, limits and budget pool.
+- **Registry** (registry.yaml): what each agent is: its identity, purpose and the models it
+  tries, in order. **Policies** (policies.yaml): what it may do: its autonomy, allowed models
+  and tools, limits and budget pool. Checked against each other at start-up (files.py).
 - **Ledger**: usage per day, per agent, model and tenant, recorded by the gateway (PR-10).
 - **Guardian events**: interventions recorded by the guardian (PR-2.7), reviewed by people.
 - **Kill switch**, **roles** and the **audit log** for every human decision.
@@ -29,6 +30,7 @@ from pydantic import BaseModel
 
 from ..config import settings
 from ..store import new_id, store
+from . import files
 
 ROLES = ("viewer", "demo_admin", "budget_approver", "risk_reviewer", "platform_admin")
 PERMISSIONS: dict[str, set[str]] = {
@@ -44,6 +46,7 @@ PERMISSIONS: dict[str, set[str]] = {
 KILL_SWITCH_STATES = ("off", "optional_paused", "all_paused")
 SMALL_COUNT = 5
 REGISTRY_PATH = pathlib.Path(__file__).resolve().parents[2] / "registry.yaml"
+POLICIES_PATH = REGISTRY_PATH.with_name("policies.yaml")
 
 
 # ---- Who is asking -----------------------------------------------------------
@@ -108,17 +111,31 @@ def small(n: int) -> int | None:
 
 
 @lru_cache(maxsize=1)
-def _registry_file() -> dict:
-    return yaml.safe_load(REGISTRY_PATH.read_text())
+def _files() -> tuple[dict, dict]:
+    """Both files, checked against their schemas and each other; a problem stops start-up."""
+    reg, pol = yaml.safe_load(REGISTRY_PATH.read_text()), yaml.safe_load(POLICIES_PATH.read_text())
+    files.check(reg, pol)
+    return reg, pol
+
+
+def check_files() -> None:
+    """Called when the API starts, so a broken registry or policies file stops it."""
+    _files()
 
 
 def registry() -> list[dict]:
-    return _registry_file()["agents"]
+    """What each agent is (registry.yaml)."""
+    return _files()[0]["agents"]
+
+
+def policies() -> list[dict]:
+    """What each agent may do (policies.yaml)."""
+    return _files()[1]["policies"]
 
 
 def allowances() -> dict[str, dict]:
-    """Daily allowance per person for each budget pool (registry.yaml, PR-10.4)."""
-    return _registry_file().get("allowances", {})
+    """Daily allowance per person for each budget pool (policies.yaml, PR-10.4)."""
+    return _files()[1].get("user_allowances", {})
 
 
 def platform_settings() -> dict:
@@ -134,17 +151,45 @@ class Refused(Exception):
 
 
 def agent_entry(agent: str) -> dict | None:
+    """The agent's registry entry: what it is, and the models it tries in order."""
     return next((a for a in registry() if a["id"] == agent), None)
 
 
+def policy(agent: str) -> dict | None:
+    """The agent's policy: what it may do. None means it may do nothing."""
+    return next((p for p in policies() if p["agent"] == agent), None)
+
+
+def models_in_order(agent: str) -> list[str]:
+    """The models the agent tries, primary first (registry.yaml); never an environment variable."""
+    models = agent_entry(agent)["models"]
+    return [models["primary"], *models.get("fallback", [])]
+
+
+def primary_model(agent: str) -> str:
+    return models_in_order(agent)[0]
+
+
+def model_kind(model: str) -> str | None:
+    """text, live or speech, from the registry's model catalogue."""
+    return next((m["kind"] for m in _files()[0]["models"] if m["id"] == model), None)
+
+
+def thinking(agent: str) -> str | None:
+    """How much the agent may think, if its policy sets it."""
+    return ((policy(agent) or {}).get("models") or {}).get("thinking")
+
+
 def check_call(agent: str, model: str) -> None:
-    """Refuse a model call the registry doesn't allow, or that the kill switch pauses."""
-    entry = agent_entry(agent)
-    if entry is None:
-        record_blocked(agent, "agent", agent, "Agent not in the registry")
+    """Refuse a model call the agent's policy doesn't allow, or that the kill switch pauses."""
+    entry, rules = agent_entry(agent), policy(agent)
+    if entry is None or rules is None:
+        record_blocked(agent, "agent", agent, "Agent not in the registry or without a policy")
         raise Refused(f"{agent} is not a registered agent.")
-    allowed = [entry["models"]["primary"], *entry["models"].get("fallback", [])]
-    if model not in allowed:
+    if entry["status"] != "active":
+        record_blocked(agent, "agent", agent, f"Agent is {entry['status']}, not active")
+        raise Refused(f"{agent} is not active.")
+    if model not in rules["models"]["allow"]:
         record_blocked(agent, "model", model, "Model not allowed for this agent")
         raise Refused(f"{agent} may not use {model}.")
     state = kill_switch()
@@ -157,16 +202,19 @@ def check_call(agent: str, model: str) -> None:
 
 
 def check_tool(agent: str, tool: str) -> None:
-    """Refuse a tool the registry doesn't list for this agent, e.g. Google Search."""
-    if tool not in (agent_entry(agent) or {}).get("tools", []):
+    """Refuse a tool the agent's policy doesn't grant, e.g. web search."""
+    if tool not in [g["tool"] for g in (policy(agent) or {}).get("tools", [])]:
         record_blocked(agent, "tool", tool, "Tool not allowed for this agent")
         raise Refused(f"{agent} may not use {tool}.")
 
 
 def limit(agent: str, key: str, default: int | None = None) -> int | None:
-    """One of the agent's limits from the registry (PR-10.2)."""
-    entry = agent_entry(agent) or {}
-    return entry.get("limits", {}).get(key, default)
+    """One of the agent's limits from its policy, per call or per run (PR-10.2)."""
+    consumption = (policy(agent) or {}).get("consumption", {})
+    for group in ("call", "run"):
+        if key in consumption.get(group, {}):
+            return consumption[group][key]
+    return default
 
 
 def estimate_tokens(chars: int, media: int = 0) -> int:
@@ -198,7 +246,7 @@ def labels(agent: str, tenant: str = "direct") -> dict[str, str]:
 
 # ---- Daily allowances per person (PR-10.4) ----------------------------------------
 #
-# Each person has a daily allowance per budget pool (registry.yaml "allowances"), so one
+# Each person has a daily allowance per budget pool (policies.yaml "user_allowances"), so one
 # person can't use up capacity meant for everyone. The safety pool (certificate checks,
 # the guardian) is never limited or counted against anyone, so cancelling a false report
 # or checking a certificate always works. Approved requests in the platform admin portal
@@ -264,7 +312,7 @@ def current_user() -> str | None:
 
 
 def _pool(agent: str) -> str:
-    return (agent_entry(agent) or {}).get("budget_class", "owner")
+    return (policy(agent) or {}).get("consumption", {}).get("per_user", {}).get("pool", "owner")
 
 
 def _usage_today(user: str) -> dict:

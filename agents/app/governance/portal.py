@@ -73,9 +73,16 @@ def agents_view() -> list[dict]:
     blocked = store.list("gateway_blocked")
     out = []
     for a in registry():
+        rules = core.policy(a["id"]) or {}
+        consumption = rules.get("consumption", {})
         rows = [d["agents"][a["id"]] for d in days if a["id"] in d["agents"]]
         calls = sum(r["calls"] for r in rows)
-        out.append({**a, "usage_30d": {
+        # What it is (registry.yaml) beside what it may do (policies.yaml).
+        out.append({**a, "autonomy": rules.get("role", {}).get("autonomy"),
+                    "allowed_models": rules.get("models", {}).get("allow", []),
+                    "tools": [g["tool"] for g in rules.get("tools", [])],
+                    "limits": {**consumption.get("call", {}), **consumption.get("run", {})},
+                    "budget_class": consumption.get("per_user", {}).get("pool"), "usage_30d": {
             "calls": calls,
             "tokens_in": sum(r["tokens_in"] for r in rows),
             "tokens_out": sum(r["tokens_out"] for r in rows),

@@ -8,7 +8,6 @@ import pytest
 from google.genai import errors
 
 from app import executor_agent, gemini, live, speech
-from app.config import settings
 from app.governance import core
 from app.governance.seed import clear_samples as seed
 from app.schemas import DocumentCheck
@@ -40,7 +39,7 @@ def blocked(agent, what):
 def test_output_cap_and_retries_come_from_the_registry(monkeypatch):
     calls = []
     fake_client(monkeypatch, calls)
-    asyncio.run(gemini.generate_json(model=settings.flash_model, schema=DocumentCheck, prompt="p",
+    asyncio.run(gemini.generate_json(model=core.primary_model("saathi.chat"), schema=DocumentCheck, prompt="p",
                                      agent="activation.checker"))
     config = calls[0]["config"]
     assert config.max_output_tokens == core.limit("activation.checker", "max_output_tokens")
@@ -50,9 +49,9 @@ def test_output_cap_and_retries_come_from_the_registry(monkeypatch):
 def test_fallback_model_gets_a_single_attempt(monkeypatch):
     calls = []
     fake_client(monkeypatch, calls, fail_first=True)
-    asyncio.run(gemini.generate_json(model=settings.flash_model, schema=DocumentCheck, prompt="p",
+    asyncio.run(gemini.generate_json(model=core.primary_model("saathi.chat"), schema=DocumentCheck, prompt="p",
                                      agent="activation.checker"))
-    assert calls[1]["model"] == settings.fallback_model
+    assert calls[1]["model"] == core.models_in_order("activation.checker")[1]
     assert calls[1]["config"].http_options.retry_options.attempts == 1
 
 
@@ -61,7 +60,7 @@ def test_oversized_request_is_refused_before_any_call(monkeypatch):
     fake_client(monkeypatch, calls)
     huge = "x" * (core.limit("activation.checker", "max_input_tokens") * 4 + 400)
     with pytest.raises(core.Refused):
-        asyncio.run(gemini.generate_json(model=settings.flash_model, schema=DocumentCheck, prompt=huge,
+        asyncio.run(gemini.generate_json(model=core.primary_model("saathi.chat"), schema=DocumentCheck, prompt=huge,
                                          agent="activation.checker"))
     assert calls == [] and blocked("activation.checker", "max_input_tokens")
 
@@ -75,11 +74,11 @@ def test_spoken_replies_are_limited_in_length():
 def test_handover_agent_requests_carry_the_output_cap_and_big_inputs_are_refused():
     ctx = SimpleNamespace(state={})
     config = SimpleNamespace(labels=None, max_output_tokens=None)
-    executor_agent.gateway_check(ctx, SimpleNamespace(model=settings.flash_model, config=config, contents=[]))
+    executor_agent.gateway_check(ctx, SimpleNamespace(model=core.primary_model("saathi.chat"), config=config, contents=[]))
     assert config.max_output_tokens == core.limit("handover.assistant", "max_output_tokens")
     big = [SimpleNamespace(parts=[SimpleNamespace(text="x" * 300_000)])]
     with pytest.raises(core.Refused):
-        executor_agent.gateway_check(ctx, SimpleNamespace(model=settings.flash_model, config=config, contents=big))
+        executor_agent.gateway_check(ctx, SimpleNamespace(model=core.primary_model("saathi.chat"), config=config, contents=big))
 
 
 def test_live_call_ends_at_its_time_limit(monkeypatch):
@@ -158,19 +157,19 @@ def test_live_call_records_its_tokens_once_per_reply(monkeypatch):
 # ---- Thinking and cut-off answers (#129) -------------------------------------------------
 
 
-def test_the_thinking_level_comes_from_the_registry(monkeypatch):
+def test_the_thinking_level_comes_from_the_policy(monkeypatch):
     calls = []
     fake_client(monkeypatch, calls)
-    asyncio.run(gemini.generate_json(model=settings.research_model, schema=DocumentCheck, prompt="p",
+    asyncio.run(gemini.generate_json(model=core.primary_model("fraud.researcher"), schema=DocumentCheck, prompt="p",
                                      agent="fraud.researcher"))
-    asyncio.run(gemini.generate_json(model=settings.flash_model, schema=DocumentCheck, prompt="p",
+    asyncio.run(gemini.generate_json(model=core.primary_model("saathi.chat"), schema=DocumentCheck, prompt="p",
                                      agent="activation.checker"))
     assert calls[0]["config"].thinking_config.thinking_level == "LOW"
     assert calls[1]["config"].thinking_config is None  # not set: the model's own default
 
 
-def test_every_thinking_level_in_the_registry_is_valid():
-    levels = {a["id"]: a["thinking"] for a in core.registry() if "thinking" in a}
+def test_every_thinking_level_in_the_policies_is_valid():
+    levels = {p["agent"]: p["models"]["thinking"] for p in core.policies() if "thinking" in p["models"]}
     assert levels and set(levels.values()) <= gemini.THINKING_LEVELS
 
 
@@ -184,7 +183,7 @@ def test_an_answer_cut_off_at_the_output_limit_says_so(monkeypatch):
 
     monkeypatch.setattr(gemini, "client", lambda: SimpleNamespace(aio=SimpleNamespace(models=FakeModels())))
     with pytest.raises(gemini.CutOff, match="cut off at fraud.researcher's output limit"):
-        asyncio.run(gemini.generate_json(model=settings.research_model, schema=DocumentCheck, prompt="p",
+        asyncio.run(gemini.generate_json(model=core.primary_model("fraud.researcher"), schema=DocumentCheck, prompt="p",
                                          agent="fraud.researcher"))
 
 
@@ -195,7 +194,7 @@ def test_both_models_busy_is_said_plainly(monkeypatch):
 
     monkeypatch.setattr(gemini, "client", lambda: SimpleNamespace(aio=SimpleNamespace(models=FakeModels())))
     with pytest.raises(gemini.ModelBusy, match="busy or out of quota"):
-        asyncio.run(gemini.generate_json(model=settings.research_model, schema=DocumentCheck, prompt="p",
+        asyncio.run(gemini.generate_json(model=core.primary_model("fraud.researcher"), schema=DocumentCheck, prompt="p",
                                          agent="fraud.researcher"))
     day = store.list("usage_days")[0]  # the fallback's failed call is in the ledger
     assert day["agents"]["fraud.researcher"]["errors"] == 1 and "gemini-3.5-flash-lite" in day["model_use"]
