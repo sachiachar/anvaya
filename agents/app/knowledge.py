@@ -272,6 +272,8 @@ def concept(collection: str, item: dict, owner_id: str, *, at: float,
     record = {k: v if k in UNMASKED else mask(v) for k, v in item.items() if k not in WORKFLOW_FIELDS}
     if collection == "moments" and record.get("kind") == "wish":
         record.setdefault("wish_state", "kept")  # a kept wish starts here (PR-13.1); PR-13.2 moves it on
+    else:
+        record.pop("wish_state", None)  # only a wish has a wish state
     okf_type, _ = kind_of(collection, record)
     title, description = _title(collection, record), _description(collection, record)
     sources = [{"resource": "anvaya:conversation", "title": "Conversation with Saathi"}]

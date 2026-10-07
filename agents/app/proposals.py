@@ -93,34 +93,44 @@ def known(owner_id: str) -> dict:
 
 def save_moment(owner_id: str, moment: dict, source: dict[str, Any]) -> dict | None:
     """Returns the card to show, or None if it adds nothing new."""
+    said_kind = moment.get("kind")
     if is_wish(moment.get("statements")):
         moment = {**moment, "kind": "wish"}  # something the owner wants is a wish, decided in code (PR-13.1)
     for existing in _all("moments", owner_id):
         if _similar(existing["quote"], moment["quote"]) or _similar(existing["summary"], moment["summary"], 0.85):
             if existing["status"] == "pending":
-                return store.update("moments", existing["id"], {**moment, "quote": existing["quote"]})
+                statements = _statements(existing, moment)
+                return store.update("moments", existing["id"], {**moment, "quote": existing["quote"],
+                                                                "statements": statements,
+                                                                "kind": _kind(existing, moment, statements)})
             return None  # already kept
         if _norm(existing["title"]) == _norm(moment["title"]):
             quote = existing["quote"] if _norm(moment["quote"]) in _norm(existing["quote"]) \
                 else f"{existing['quote']} … {moment['quote']}"
+            statements = _statements(existing, moment)
             merged = {**moment, "quote": quote, "summary": _combine(existing["summary"], moment["summary"]),
                       "people": sorted(set(existing.get("people", [])) | set(moment.get("people", []))),
                       "places": sorted(set(existing.get("places", [])) | set(moment.get("places", []))),
                       "year": moment.get("year") or existing.get("year"),
-                      "statements": _statements(existing, moment)}
+                      "statements": statements, "kind": _kind(existing, moment, statements)}
             if existing["status"] == "pending":
                 return store.update("moments", existing["id"], merged)
             return _pending("moments", owner_id, merged, updates=existing["id"], **source)
-    like = lookalike(owner_id, moment)
+    like = lookalike(owner_id, moment, also=said_kind)
     extra = {"looks_like": {"id": like["id"], "title": like["title"]}} if like else {}
     return _pending("moments", owner_id, moment, **extra, **source)
+
+
+def _kind(existing: dict, new: dict, statements: list[dict]) -> str:
+    """A follow-up never turns a wish back into a story: the merged statements decide."""
+    return "wish" if is_wish(statements) or existing.get("kind") == "wish" else new.get("kind", "story")
 
 
 def _statements(old: dict, new: dict) -> list[dict]:
     """A follow-up adds statements; the same statement said again is kept once."""
     out, seen = [], set()
     for s in [*(old.get("statements") or []), *(new.get("statements") or [])]:
-        key = tuple(_norm(s.get(f)) for f in ("subject", "predicate", "object", "recipient"))
+        key = tuple(_norm(s.get(f)) for f in ("subject", "predicate", "object", "recipient", "words"))
         if key not in seen:
             seen.add(key)
             out.append(s)
@@ -131,12 +141,14 @@ def _people_of(m: dict) -> set[str]:
     return {re.sub(r"^(?:my|his|her) ", "", _norm(p)) for p in m.get("people") or [] if _norm(p)}
 
 
-def lookalike(owner_id: str, moment: dict) -> dict | None:
+def lookalike(owner_id: str, moment: dict, also: str | None = None) -> dict | None:
     """A kept story or wish this new card may be a reworded update of: the same kind, and the same
     people or a close title or summary. The owner decides on the card ("Replace it" or "Keep
-    both"); nothing is merged silently."""
+    both"); nothing is merged silently. `also`: the kind the model gave, when code made the card a
+    wish, so a wish once kept as a story is still found."""
     best, best_score = None, 0.0
-    for kept in knowledge.items(owner_id, "moments", kind=moment.get("kind")):
+    kinds = dict.fromkeys(k for k in (moment.get("kind"), also) if k)
+    for kept in [m for k in kinds for m in knowledge.items(owner_id, "moments", kind=k)]:
         title_words, kept_words = set(_norm(moment.get("title")).split()), set(_norm(kept.get("title")).split())
         title = len(title_words & kept_words) / len(title_words | kept_words) if title_words | kept_words else 0
         summary_a, summary_b = set(_norm(moment.get("summary")).split()), set(_norm(kept.get("summary")).split())

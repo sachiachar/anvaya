@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from app import knowledge, live, loops, main, proposals
 from app.schemas import ConversationTurn, Extraction, Moment, Statement
+from app.store import new_id
 from tests.test_knowledge import OWNER
 
 FLAT = {"kind": "story", "title": "The Mysore flat for Sunita", "people": ["Sunita"], "places": ["Mysore"],
@@ -95,3 +96,41 @@ def test_typed_chat_and_live_calls_both_return_statements(client, monkeypatch):
     assert spoken["kind"] == "wish" and spoken["statements"][0]["predicate"] == "wants_to_do"
     kept = {m["title"] for m in knowledge.items(OWNER, "moments")}
     assert not kept & {FLAT["title"], "Kashi with Sunita"}  # still nothing kept without Keep
+
+
+def test_a_follow_up_never_turns_a_wish_back_into_a_story(client):
+    proposals.save_moment(OWNER, Moment(**FLAT).model_dump(), {})
+    plain = {**FLAT, "kind": "story", "summary": "The flat has a mango tree.", "quote": "It has a mango tree.",
+             "statements": [{"subject": "the Mysore flat", "predicate": "other", "object": "a mango tree",
+                             "words": "has"}]}
+    card = proposals.save_moment(OWNER, Moment(**plain).model_dump(), {})  # same title: merged
+    assert card["kind"] == "wish" and [s["predicate"] for s in card["statements"]] == ["wants_to_give", "other"]
+    again = proposals.save_moment(OWNER, Moment(**{**FLAT, "kind": "story", "statements": []}).model_dump(), {})
+    assert again["kind"] == "wish" and again["statements"]  # a near-identical repeat keeps the wish too
+
+
+def test_different_other_statements_are_both_kept(client):
+    one = {**FLAT, "statements": [{"subject": "owner", "predicate": "other", "object": "Mysore", "words": "grew up in"}]}
+    two = {**one, "summary": "He also taught at a school in Mysore.", "quote": "I taught in Mysore.",
+           "statements": [{"subject": "owner", "predicate": "other", "object": "Mysore", "words": "taught in"}]}
+    proposals.save_moment(OWNER, Moment(**one).model_dump(), {})
+    card = proposals.save_moment(OWNER, Moment(**two).model_dump(), {})
+    assert [s["words"] for s in card["statements"]] == ["grew up in", "taught in"]
+
+
+def test_a_wish_kept_earlier_as_a_story_is_still_offered_as_replace_or_keep_both(client):
+    old = proposals.approve("moments", proposals.save_moment(OWNER, {**FLAT, "statements": [],
+                                                                     "title": "Flat for Sunita"}, {}))
+    assert old["kind"] == "story"
+    reworded = {**FLAT, "title": "Sunita gets the Mysore flat", "quote": "Sunita gets the flat in Mysore.",
+                "summary": "Sunita should get the flat in Mysore."}
+    card = proposals.save_moment(OWNER, Moment(**reworded).model_dump(), {})
+    assert card["kind"] == "wish" and card["looks_like"]["id"] == old["id"]
+
+
+def test_only_a_wish_has_a_wish_state(client):
+    kept = proposals.approve("moments", proposals.save_moment(OWNER, Moment(**FLAT).model_dump(), {}))
+    story = knowledge.commit("moments", {**kept, "id": new_id("m"), "kind": "story", "statements": []}, OWNER,
+                             replaces=kept["id"])
+    entry = knowledge.catalog(OWNER)["concepts"][story["id"]]
+    assert "wish_state" not in entry["record"] and "wish_state" not in entry["graph"]
