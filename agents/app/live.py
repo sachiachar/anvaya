@@ -26,7 +26,7 @@ from typing import Callable
 from fastapi import WebSocket, WebSocketDisconnect
 from google.genai import types
 
-from . import gaps, loops, proposals
+from . import gaps, grounding, loops, proposals
 from .config import settings
 from .gemini import client_for
 from .governance import core as governance
@@ -219,6 +219,11 @@ async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expa
     try:
         known, last_said = await asyncio.to_thread(_known_and_last_gap, owner_id)
         found = await loops.extract_from_exchange(owner, heard, said, known)
+        # Cards say only what was said: checked against the owner's words and the question they answered.
+        # That question is Saathi's turn stored just before this one; owners.last_said can still be the
+        # one before it, while the previous exchange is saving.
+        question = await asyncio.to_thread(_question_before, owner_id, owner_turn["at"])
+        found = grounding.ground(found, owner_words=heard, saathi_words=question, known=known)
         moments, inventory, people = found.moments, found.inventory, found.people
     except Exception:
         log.exception("extraction failed; saving the exchange without proposals")
@@ -244,6 +249,12 @@ def _start_exchange(owner_id: str, heard: str, said: str) -> tuple[dict, dict]:
                                   "role": "assistant", "text": said, "language": None, "saving": True,
                                   "proposals": {"moments": [], "inventory": [], "people": []}})
     return owner_turn, ai_turn
+
+
+def _question_before(owner_id: str, at: float) -> str:
+    """What Saathi said last before the owner spoke: the question a short answer ("Yes") confirms."""
+    earlier = [t for t in store.list("turns", owner_id=owner_id) if t.get("role") == "assistant" and t["at"] < at]
+    return (max(earlier, key=lambda t: t["at"]).get("text") or "") if earlier else ""
 
 
 def _known_and_last_gap(owner_id: str) -> tuple[dict, dict | None]:

@@ -54,8 +54,8 @@ class Moment(BaseModel):
     title: str = Field(description="Short title, max 8 words. To add detail to a saved moment, reuse its exact title.")
     summary: str = Field(
         description="One or two sentences in English that make sense on their own, without the "
-        "conversation (e.g. 'Original papers are in the blue folder in the bedroom steel cupboard; "
-        "Priya is responsible for them.' not 'That would be Priya.')"
+        "conversation: name the thing and the people instead of writing 'that' or 'he'. Use only what "
+        "the owner said; add no detail they didn't give."
     )
     quote: str = Field(description="The owner's own words, verbatim, in the original language")
     people: list[str] = []
@@ -96,7 +96,8 @@ class InventoryItem(BaseModel):
     institution: str
     product: str = Field(description="e.g. 'Term life policy', 'Savings account'")
     account_hint: str = Field(
-        description="Last 4 characters only, e.g. '••4821'. Never output a full account or policy number."
+        description="Only the last 4 characters the owner said or the document shows, after two dots. Empty if "
+        "nobody gave them. Never output a full account or policy number."
     )
     holder_name: str | None = None
     nominee_or_beneficiary: str | None = Field(
@@ -105,7 +106,7 @@ class InventoryItem(BaseModel):
     approximate_value: str | None = None
     institution_contact: str | None = None
     papers_at: str | None = Field(
-        default=None, description="Where the owner keeps this item's papers, if they said, e.g. 'blue folder, bedroom cupboard'"
+        default=None, description="Where the owner said they keep this item's papers, in their words. Null if they didn't say."
     )
     intended_for: str | None = Field(
         default=None, description="For property: who the owner wants it to go to, if they said (a name)"

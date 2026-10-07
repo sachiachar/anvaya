@@ -19,7 +19,7 @@ from google.auth.exceptions import DefaultCredentialsError
 from google.genai import errors as genai_errors
 from pydantic import BaseModel, Field, ValidationError
 
-from . import (auth, demo, escrow, fraud_guides, gaps, knowledge, knowledge_map, live, loops, media, model_access,
+from . import (auth, demo, escrow, fraud_guides, gaps, grounding, knowledge, knowledge_map, live, loops, media, model_access,
                proposals, release, speech, step_guard, tasks, tone)
 from .config import settings
 from .executor_agent import UnknownSession, ask
@@ -134,6 +134,7 @@ async def capture_audio(owner_id: str, audio: UploadFile = File(...)) -> dict:
     mime = (audio.content_type or "audio/webm").split(";")[0]
     recording = media.save(owner_id, f"{new_id('rec')}.{mime.split('/')[-1]}", data, mime)
     result = await loops.capture_audio(data, mime, owner)
+    result = grounding.ground(result, owner_words=result.transcript)  # cards say only what was said
     proposals = []
     for moment in result.moments:
         doc = {"id": new_id("m"), "owner_id": owner_id, "status": "pending",
@@ -204,6 +205,11 @@ async def converse(owner_id: str, text: str | None = Form(None), file: UploadFil
     last_said = gaps.recent(owner.get("last_said"))
     known = await asyncio.to_thread(_known_and_last_gap, owner_id, last_said)
     result = await loops.converse(owner, last_said, text, upload, known)
+    # Cards say only what was said: the owner's words (typed, or heard in a voice note), checked in code.
+    voice = bool(attachment and attachment["kind"] == "voice")
+    result = grounding.ground(result, owner_words=" ".join(filter(None, [text, result.heard if voice else ""])),
+                              saathi_words=(last_said or {}).get("text") or "", known=known,
+                              from_document=bool(attachment) and not voice)
     return await asyncio.to_thread(_save_turn, owner_id, text, result, attachment, path, source, last_said)
 
 

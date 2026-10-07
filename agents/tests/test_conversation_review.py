@@ -133,9 +133,10 @@ def test_a_call_exchange_is_marked_saving_until_its_cards_are_ready(client, monk
 
     monkeypatch.setattr(live.loops, "extract_from_exchange", extract)
     ws = _WS()
-    asyncio.run(live._save_exchange(ws, {"id": OWNER, "name": "Vikram Rao"}, "My first job...", "How lovely.", main._expand))
+    heard = "My first job was at the mill in Mysore. I gave my whole first salary to my mother."  # the card's quote
+    asyncio.run(live._save_exchange(ws, {"id": OWNER, "name": "Vikram Rao"}, heard, "How lovely.", main._expand))
     assert {t["role"] for t in seen_while_reading} == {"owner", "assistant"}  # stored, and marked, before the cards
-    turns = [t for t in store.list("turns", owner_id=OWNER) if t.get("text") in ("My first job...", "How lovely.")]
+    turns = [t for t in store.list("turns", owner_id=OWNER) if t.get("text") in (heard, "How lovely.")]
     assert len(turns) == 2 and not any(t["saving"] for t in turns)
     assert ws.sent[-1]["type"] == "turn" and ws.sent[-1]["assistant_turn"]["proposals"][0]["title"] == STORY["title"]
 
