@@ -42,7 +42,7 @@ Each exchange (typed chat or a live call) returns statements next to today's car
 - **Wishes (intents):** wants to give, wants done, wants the family to know, wants to change, wants to do (a wish for their own life, such as visiting Varanasi with Sunita), promised to.
 - **Feelings:** worries about, is proud of.
 
-Statements are cards like any other: nothing is kept until the owner taps Keep (AGENTS.md rule 3). A kept statement becomes links in the kept-knowledge graph. `intended_for` already exists; the new predicates add `wants`, `promised_to` and `worries_about` links.
+Statements ride on the card they came from, so the owner keeps one card, not one per statement (the feedback from #94). Nothing is kept until the owner taps Keep (AGENTS.md rule 3). A wish predicate makes the card a wish, decided in code, and a follow-up never turns a wish back into a story. A kept statement becomes links in the kept-knowledge graph. `intended_for` already exists; the new predicates add `wants`, `promised_to` and `worries_about` links.
 
 ## 4. Wishes and follow-ups
 
