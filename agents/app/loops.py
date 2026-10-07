@@ -13,6 +13,7 @@ import re
 
 from .config import settings
 from .fraud_guides import Guide, signs_for_check
+from . import step_guard
 from .gemini import generate_json
 from .tone import ALIVE_RULES, about_their_death, step_problems
 from .schemas import (
@@ -137,6 +138,9 @@ def reply_problems(owner_message: str, reply: str) -> list[str]:
     if _FALSE_CLAIMS.search(reply):
         problems.append("Don't say you noted or saved anything: it is only added to their list "
                         "to review until they tap Keep.")
+    if step_guard.reply_problem(reply):
+        problems.append("Never help with a risky route: don't ask for or pass on an OTP, password or PIN, and "
+                        "don't help pay anyone who asked for money. Say there's a safer way and name it.")
     if about_their_death(reply):
         problems.append("Don't talk about their death or 'final wishes': they are alive and talking about "
                         "their life. Talk about the family knowing things instead.")

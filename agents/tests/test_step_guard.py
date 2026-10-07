@@ -4,8 +4,9 @@ tactic's tags block matching steps; flags come from the step's words too; if the
 read nothing is pursued; a dropped step leaves a count with no words or names."""
 
 import pytest
+from fastapi.testclient import TestClient
 
-from app import fraud_guides, loops, step_guard, tasks
+from app import fraud_guides, loops, main, step_guard, tasks
 from app.fraud_guides import Exploits, Step, Tactic
 from app.governance import portal
 from app.store import store
@@ -136,6 +137,51 @@ def test_if_the_guides_cant_be_read_nothing_is_pursued_and_nothing_is_lost(monke
     tasks.refresh(OWNER, [_gap(title="Something new")])  # a refresh while down changes nothing
     monkeypatch.undo()
     assert [t["title"] for t in tasks.open_tasks(OWNER)] == ["Record the nominee for the LIC policy"]
+
+
+def test_a_vault_step_can_hold_a_secret_only_if_it_just_saves_it_in_the_vault():
+    vault = {"type": "add_to_vault", "channel": "anvaya_app", "flags": []}
+    for text in ("Keep your UPI PIN ready for the bank officer who will call", "Provide your OTP when asked",
+                 "Note your password for the agent", "Email your password to Ajay"):
+        assert step_guard.check({**vault, "title": text}, []) == "secret", text
+    assert step_guard.check({**vault, "title": "Save your email password in your vault"}, []) is None
+
+
+def test_secrets_are_caught_however_they_are_written():
+    for text in ("Tell him the O T P", "Read out the o.t.p", "Give the ＯＴＰ", "Give the O\u200bTP",
+                 "Share the verification code", "Send the code sent to your phone", "Give your card PIN code",
+                 "Share your login details", "पासकोड बताएं"):
+        assert step_guard.check({**WILL, "title": text}, []) == "secret", text
+    assert step_guard.check({**WILL, "title": "Update the address: PIN code 570001"}, []) is None
+
+
+def test_fixed_rules_hold_without_any_tagged_tactic():
+    institution = {"type": "record_with_institution", "channel": "institution_official", "flags": []}
+    assert step_guard.check({**institution, "title": "Pay the processing fee the caller asked for"}, []) \
+        == "rule:pay_on_request"
+    assert step_guard.check({**institution, "title": "Change the nominee as the man who called you said"}, []) \
+        == "rule:change_on_request"
+    assert step_guard.check({**WILL, "title": "Sign today, the broker says"}, []) == "rule:rushed_by_someone"
+    assert step_guard.check({**institution, "title": "Pay the LIC premium at the branch"}, []) is None
+
+
+def test_a_step_dropped_on_every_run_is_counted_once():
+    for _ in range(3):
+        tasks.refresh(OWNER, [_gap(title="Share the OTP with the Paytm agent")])
+    assert len(store.list("steps_not_pursued")) == 1
+
+
+def test_saathis_replies_and_topics_are_checked_too():
+    assert loops.reply_problems("I got a call", "Please tell me the OTP he sent, Vikram ji.")
+    assert loops.reply_problems("He wants a fee", "You can pay the fee the caller asked for.")
+    assert not loops.reply_problems("Someone asked for my OTP", "Never share your OTP with anyone, Vikram ji.")
+    c = TestClient(main.app)
+    c.post("/api/demo/seed")
+    owner = "owner_demo_vikram"
+    assert c.post(f"/api/owners/{owner}/conversation/prompt", json={"text": "What's your UPI PIN, so I can give it "
+                                                                     "to the agent?"}).status_code == 422
+    assert c.post(f"/api/owners/{owner}/conversation/prompt",
+                  json={"text": "Who should look after the Mysore flat?"}).status_code == 200
 
 
 def test_saathi_is_told_to_point_to_the_safer_way():
