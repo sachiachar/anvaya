@@ -187,6 +187,8 @@ async def generate_json(
         try:
             response, source = await with_keys(agent, on(fallback, fallback_config))
         except errors.APIError as e2:
+            governance.record_usage(agent, fallback, "direct", error=True,
+                                    key_source=getattr(e2, "key_source", keys.PLATFORM))
             if e2.code in (429, 503):  # both busy or out of quota: say so plainly
                 raise ModelBusy(f"{model} and {fallback} are busy or out of quota ({e.code}, {e2.code}); "
                                 "try again in a few minutes.") from e2

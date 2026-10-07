@@ -197,3 +197,5 @@ def test_both_models_busy_is_said_plainly(monkeypatch):
     with pytest.raises(gemini.ModelBusy, match="busy or out of quota"):
         asyncio.run(gemini.generate_json(model=settings.research_model, schema=DocumentCheck, prompt="p",
                                          agent="fraud.researcher"))
+    day = store.list("usage_days")[0]  # the fallback's failed call is in the ledger
+    assert day["agents"]["fraud.researcher"]["errors"] == 1 and "gemini-3.5-flash-lite" in day["model_use"]

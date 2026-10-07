@@ -29,6 +29,7 @@ import re
 import time
 from typing import Literal
 
+from google.genai import errors as genai_errors
 from pydantic import BaseModel, Field
 
 from . import fraud_cues, fraud_guides
@@ -277,7 +278,11 @@ _RUN_LEVEL = (Stopped, NotSetUp, governance.Refused)
 
 
 def _reason(e: Exception) -> str:
-    return str(e) if isinstance(e, _PLAIN) else type(e).__name__
+    if isinstance(e, _PLAIN):
+        return str(e)
+    if isinstance(e, genai_errors.APIError):  # the code only: the message can carry model or page text
+        return f"Gemini error {e.code}"
+    return type(e).__name__
 
 
 def _finish(run: dict, counts: dict, error: str | None = None, stopped: str | None = None) -> dict:
@@ -404,6 +409,7 @@ async def dream(run: dict) -> dict:
         guard.say("imagine", f"Starting points from kept knowledge: {len(cues)} common gap(s) across owners "
                           "(counted, never read)" + "".join(f"; {c['owners']} owners: {c['means']}" for c in cues[:3]))
         failed: list[str] = []
+        worked = 0  # model steps that succeeded; the run fails only if failures left nothing that worked
 
         def not_checked(what: str, e: Exception, **detail) -> None:
             failed.append(_reason(e))
@@ -423,6 +429,7 @@ async def dream(run: dict) -> dict:
                 log.exception("fraud dreaming run %s: imagining failed", run["id"])
                 not_checked(f"imagine from “{tactic.name}”", e)
                 continue
+            worked += 1
             counts["imagined"] += len(imagined)
             guard.progress(counts)
             picked = _pick(imagined, existing)
@@ -444,6 +451,7 @@ async def dream(run: dict) -> dict:
                     log.exception("fraud dreaming run %s: checking a scenario failed", run["id"])
                     not_checked(f"check “{scenario.title}”", e, title=scenario.title)
                     continue
+                worked += 1
                 store.put("fraud_scenarios", {
                     "id": new_id("scn"), "at": time.time(), "run_id": run["id"], "guide_key": guide.key,
                     "sequence_id": tactic.id, "scenario": scenario.title, "steps": scenario.steps,
@@ -464,7 +472,7 @@ async def dream(run: dict) -> dict:
                           + (" (only sometimes)" if coverage == "partly" else "")
                           + ("; waiting for a reviewer" if evidence.confirmed else "; added as unconfirmed"),
                           title=scenario.title, coverage=coverage)
-        if failed and not counts["kept"]:
+        if failed and not worked:
             return _finish(run, counts, f"Nothing could be checked: {failed[-1]}")
         return _finish(run, counts)
     except Stopped as e:  # what was checked so far is kept
@@ -514,6 +522,8 @@ async def research(run: dict) -> dict:
                     f"Safeguards: {list(SAFEGUARDS)}"),
         )
         cap = int(governance.limit(RESEARCHER, "max_new_patterns_per_run", 2))
+        failed: list[str] = []
+        checked = 0
         for tactic in structured.tactics[:cap]:
             if any(_similar(tactic.name, k) for k in known):
                 guard.say("skip", f"Already in the guide: “{tactic.name}”")
@@ -531,7 +541,9 @@ async def research(run: dict) -> dict:
                 guard.progress(counts)
                 guard.say("skip", f"Couldn't check “{tactic.name}”: {_reason(e)}. It can come up again in a later "
                                   "run.", title=tactic.name)
+                failed.append(_reason(e))
                 continue
+            checked += 1
             if not evidence.confirmed:
                 counts["unconfirmed"] += 1
                 guard.say("skip", f"No source confirms “{tactic.name}”; not kept", title=tactic.name)
@@ -549,6 +561,8 @@ async def research(run: dict) -> dict:
                 "label": "derived", "sources": evidence.sources, "source_note": evidence.summary, "review": "pending",
             })
             guard.progress(counts)
+        if failed and not checked:
+            return _finish(run, counts, f"Nothing could be checked: {failed[-1]}")
         return _finish(run, counts)
     except Stopped as e:
         return _finish(run, counts, stopped=str(e))
