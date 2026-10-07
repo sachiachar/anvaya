@@ -147,6 +147,11 @@ def reply_problems(owner_message: str, reply: str) -> list[str]:
     return problems
 
 
+# Field descriptions in the schemas give formats, not values to copy. Code checks cards too (grounding.py).
+NO_INVENTED = ("Fill a field only with what was said. Never copy an example from these instructions, and "
+               "leave a field empty if they didn't say it. ")
+
+
 async def converse(owner: dict, last_said: dict | None, text: str | None,
                    media: tuple[bytes, str] | None, known: dict) -> ConversationTurn:
     """Conversation loop: one turn of the owner's single chat, whatever they send.
@@ -199,7 +204,7 @@ async def _converse_once(owner: dict, prompt: str, media: tuple[bytes, str] | No
             "that moment again with its exact saved title and a summary that includes the new "
             "detail. Every summary must make sense on its own. Keep quotes verbatim. Give each moment its "
             "statements (subject, predicate, object), with predicates only from the list; anything they "
-            "want, plan or promised is a wish statement. " + PRIVACY_RULES
+            "want, plan or promised is a wish statement. " + NO_INVENTED + PRIVACY_RULES
         ),
         prompt=prompt,
     )
@@ -242,7 +247,7 @@ async def extract_from_exchange(owner: dict, heard: str, said: str, known: dict)
             "predicates only from the list; anything they want, plan or promised is a wish statement. "
             "Return empty lists if nothing new. Also say which of open_gaps the "
             "assistant asked about (asked_gap), and how the owner answered last_gap_asked "
-            "(gap_outcome). " + PRIVACY_RULES
+            "(gap_outcome). " + NO_INVENTED + PRIVACY_RULES
         ),
         prompt=json.dumps({"owner": owner["name"], "owner_said": heard, "assistant_said": said,
                            "already_saved": {k: v for k, v in known.items() if k != "last_gap_asked"},

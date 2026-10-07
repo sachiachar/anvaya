@@ -26,7 +26,7 @@ from typing import Callable
 from fastapi import WebSocket, WebSocketDisconnect
 from google.genai import types
 
-from . import gaps, loops, proposals
+from . import gaps, grounding, loops, proposals
 from .config import settings
 from .gemini import client_for
 from .governance import core as governance
@@ -218,6 +218,9 @@ async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expa
     try:
         known, last_said = await asyncio.to_thread(_known_and_last_gap, owner_id)
         found = await loops.extract_from_exchange(owner, heard, said, known)
+        # Cards say only what was said: checked against the owner's words and the question they answered.
+        found = grounding.ground(found, owner_words=heard, saathi_words=(last_said or {}).get("text") or "",
+                                 known=known)
         moments, inventory, people = found.moments, found.inventory, found.people
     except Exception:
         log.exception("extraction failed; saving the exchange without proposals")

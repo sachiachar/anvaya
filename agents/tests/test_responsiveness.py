@@ -105,8 +105,11 @@ def test_two_exchanges_saved_at_once_make_one_card(client, monkeypatch):
 
     async def run() -> None:
         owner = {"id": OWNER, "name": "Vikram Rao"}
-        await asyncio.gather(live._save_exchange(_WS(), owner, "My first job...", "How lovely.", main._expand),
-                             live._save_exchange(_WS(), owner, "At the mill...", "Tell me more.", main._expand))
+        # Both exchanges say the card's quote, so both make the same card at the same moment.
+        await asyncio.gather(live._save_exchange(_WS(), owner, "My first job... I gave my whole first salary to my "
+                                                 "mother.", "How lovely.", main._expand),
+                             live._save_exchange(_WS(), owner, "At the mill... I gave my whole first salary to my "
+                                                 "mother.", "Tell me more.", main._expand))
 
     asyncio.run(run())
     assert len([m for m in store.list("moments", owner_id=OWNER) if m.get("title") == STORY["title"]]) == 1
