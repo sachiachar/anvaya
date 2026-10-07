@@ -67,7 +67,7 @@ flowchart LR
 | --- | --- | --- | --- | --- |
 | O1 | Talk live | Taps **Talk to Saathi** and talks naturally. Interrupts at any time | Replies out loud in ~1.5 s. Shows the conversation as it happens. At the end, sums it up and marks everything it picked up to save | ✅ |
 | O2 | Type or share | Types, or shares a 📷 photo or 📄 document | Reads it. For a policy or statement, creates an account card. The card masks numbers and shows missing fields (for example "nominee") | ✅ |
-| O3 | Keep what matters | Taps Keep, Not now, or Keep all | Saves only kept items. A repeat adds nothing. A follow-up becomes an **Update** card that adds to the saved text | ✅ |
+| O3 | Keep what matters | Taps Keep, Not now, or Keep all | Saves only kept items. A repeat adds nothing. A follow-up becomes an **Update** card that adds to the saved text. Each card holds only what was said. A detail nobody said stays empty, and Saathi asks about it later | ✅ |
 | O4 | Build the family list | Says "My wife is Meena…" and keeps the family cards | Creates family cards. Asks "Who is Ajay?" when a new name comes up | ✅ |
 | O5 | Record money matters | Mentions a policy or account, then gives details later ("make Ajay the nominee") | Updates the same card (same institution and last 4 digits). Reminds the owner to submit nominee changes to the institution | ✅ |
 | O6 | Record wishes | "The flat should go to Meena, then both children" | Saves it as a wish card. Flags that it needs a will | ✅ |
@@ -150,7 +150,7 @@ flowchart LR
 | Loop | Measure |
 | --- | --- |
 | Conversation | Share of suggested cards the owner keeps. Replies with no rule breaks |
-| Curation | Duplicate and fragment cards per session (target: none) |
+| Curation | Duplicate and fragment cards per session (target: none). Card details nobody said, cleared by the server check (target: none reach the owner) |
 | Next steps | Steps completed. Readiness score over time |
 | Planning | Share of flagged legal needs turned into signed documents |
 | Vault | Owners with an approved recipient and a sealed vault |
