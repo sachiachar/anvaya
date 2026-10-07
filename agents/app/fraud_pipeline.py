@@ -12,6 +12,9 @@ Rules in code, each with a test:
     has been reported, and that answer repeats the claim's own words; a mention isn't enough.
   - Nothing confirmed here changes a guide by itself: confirmed scenarios and tactics wait for a
     reviewer. Unconfirmed scenarios fade after 3 runs.
+  - One failed model call costs one item, not the run: the item is logged as not checked and the
+    run goes on. A run fails only if nothing could be checked, or for a reason that stops every
+    item (no search key, refused by the gateway, stopped).
   - Limits per run come from the registry: 2 sequences, 3 scenarios each (2 close, 1 far-fetched),
     2 new tactics per guide, and a cap on model calls per agent. One run at a time. A reviewer
     can stop a run; it stops before its next model call and keeps what was checked so far.
@@ -26,12 +29,13 @@ import re
 import time
 from typing import Literal
 
+from google.genai import errors as genai_errors
 from pydantic import BaseModel, Field
 
 from . import fraud_cues, fraud_guides
 from .config import settings
 from .fraud_guides import CHECKABLE, Guide
-from .gemini import ModelBusy, generate_json
+from .gemini import CutOff, ModelBusy, generate_json
 from .governance import core as governance
 from .store import new_id, store
 from .web_search import NotSetUp, answer_from_web
@@ -268,11 +272,17 @@ def request_stop(run_id: str) -> dict:
 
 # Our own errors carry a plain message a reviewer can act on; anything else shows only its type,
 # so no page text or model output reaches the portal.
-_PLAIN = (ModelBusy, NotSetUp, governance.Refused)
+_PLAIN = (ModelBusy, CutOff, NotSetUp, governance.Refused)
+# Reasons that stop every item, so the run stops; any other failure costs only the item in hand.
+_RUN_LEVEL = (Stopped, NotSetUp, governance.Refused)
 
 
 def _reason(e: Exception) -> str:
-    return str(e) if isinstance(e, _PLAIN) else type(e).__name__
+    if isinstance(e, _PLAIN):
+        return str(e)
+    if isinstance(e, genai_errors.APIError):  # the code only: the message can carry model or page text
+        return f"Gemini error {e.code}"
+    return type(e).__name__
 
 
 def _finish(run: dict, counts: dict, error: str | None = None, stopped: str | None = None) -> dict:
@@ -398,11 +408,28 @@ async def dream(run: dict) -> dict:
         guard = Guard(run)
         guard.say("imagine", f"Starting points from kept knowledge: {len(cues)} common gap(s) across owners "
                           "(counted, never read)" + "".join(f"; {c['owners']} owners: {c['means']}" for c in cues[:3]))
+        failed: list[str] = []
+        worked = 0  # model steps that succeeded; the run fails only if failures left nothing that worked
+
+        def not_checked(what: str, e: Exception, **detail) -> None:
+            failed.append(_reason(e))
+            counts["not_checked"] = counts.get("not_checked", 0) + 1
+            guard.progress(counts)
+            guard.say("skip", f"Couldn't {what}: {_reason(e)}. It can come up again in a later run.", **detail)
+
         for tactic in _seeds(guide):
             counts["sequences"] += 1
             guard.call(DREAMER)
             guard.say("imagine", f"Imagining new ways around the safeguards, starting from “{tactic.name}”")
-            imagined = await _imagine(guide, tactic, events, ruled_out, cues)
+            try:
+                imagined = await _imagine(guide, tactic, events, ruled_out, cues)
+            except _RUN_LEVEL:
+                raise
+            except Exception as e:  # one sequence lost; the next may still work
+                log.exception("fraud dreaming run %s: imagining failed", run["id"])
+                not_checked(f"imagine from “{tactic.name}”", e)
+                continue
+            worked += 1
             counts["imagined"] += len(imagined)
             guard.progress(counts)
             picked = _pick(imagined, existing)
@@ -411,12 +438,20 @@ async def dream(run: dict) -> dict:
             for scenario in picked:
                 guard.call(RESEARCHER)
                 guard.say("check", f"Searching the web for evidence: “{scenario.claim}”", title=scenario.title)
-                evidence = await check_claim(scenario.claim)
-                guard.say("check", f"Confirmed by {len(evidence.sources)} cited source(s)" if evidence.confirmed
-                          else "No source confirms it yet", title=scenario.title, confirmed=evidence.confirmed)
-                guard.call(DREAMER, finishing=True)
-                guard.say("map", f"Which safeguard would catch “{scenario.title}”?", title=scenario.title)
-                caught_by, coverage, reason = await _map(scenario)
+                try:
+                    evidence = await check_claim(scenario.claim)
+                    guard.say("check", f"Confirmed by {len(evidence.sources)} cited source(s)" if evidence.confirmed
+                              else "No source confirms it yet", title=scenario.title, confirmed=evidence.confirmed)
+                    guard.call(DREAMER, finishing=True)
+                    guard.say("map", f"Which safeguard would catch “{scenario.title}”?", title=scenario.title)
+                    caught_by, coverage, reason = await _map(scenario)
+                except _RUN_LEVEL:
+                    raise
+                except Exception as e:  # this scenario isn't saved; the run goes on to the next
+                    log.exception("fraud dreaming run %s: checking a scenario failed", run["id"])
+                    not_checked(f"check “{scenario.title}”", e, title=scenario.title)
+                    continue
+                worked += 1
                 store.put("fraud_scenarios", {
                     "id": new_id("scn"), "at": time.time(), "run_id": run["id"], "guide_key": guide.key,
                     "sequence_id": tactic.id, "scenario": scenario.title, "steps": scenario.steps,
@@ -437,6 +472,8 @@ async def dream(run: dict) -> dict:
                           + (" (only sometimes)" if coverage == "partly" else "")
                           + ("; waiting for a reviewer" if evidence.confirmed else "; added as unconfirmed"),
                           title=scenario.title, coverage=coverage)
+        if failed and not worked:
+            return _finish(run, counts, f"Nothing could be checked: {failed[-1]}")
         return _finish(run, counts)
     except Stopped as e:  # what was checked so far is kept
         return _finish(run, counts, stopped=str(e))
@@ -485,6 +522,8 @@ async def research(run: dict) -> dict:
                     f"Safeguards: {list(SAFEGUARDS)}"),
         )
         cap = int(governance.limit(RESEARCHER, "max_new_patterns_per_run", 2))
+        failed: list[str] = []
+        checked = 0
         for tactic in structured.tactics[:cap]:
             if any(_similar(tactic.name, k) for k in known):
                 guard.say("skip", f"Already in the guide: “{tactic.name}”")
@@ -492,7 +531,19 @@ async def research(run: dict) -> dict:
             counts["found"] += 1
             guard.call(RESEARCHER)
             guard.say("check", f"Checking “{tactic.name}” against cited sources", title=tactic.name)
-            evidence = await check_claim(tactic.claim)
+            try:
+                evidence = await check_claim(tactic.claim)
+            except _RUN_LEVEL:
+                raise
+            except Exception as e:  # this tactic isn't kept; the run goes on to the next
+                log.exception("fraud research run %s: checking a tactic failed", run["id"])
+                counts["not_checked"] = counts.get("not_checked", 0) + 1
+                guard.progress(counts)
+                guard.say("skip", f"Couldn't check “{tactic.name}”: {_reason(e)}. It can come up again in a later "
+                                  "run.", title=tactic.name)
+                failed.append(_reason(e))
+                continue
+            checked += 1
             if not evidence.confirmed:
                 counts["unconfirmed"] += 1
                 guard.say("skip", f"No source confirms “{tactic.name}”; not kept", title=tactic.name)
@@ -510,6 +561,8 @@ async def research(run: dict) -> dict:
                 "label": "derived", "sources": evidence.sources, "source_note": evidence.summary, "review": "pending",
             })
             guard.progress(counts)
+        if failed and not checked:
+            return _finish(run, counts, f"Nothing could be checked: {failed[-1]}")
         return _finish(run, counts)
     except Stopped as e:
         return _finish(run, counts, stopped=str(e))

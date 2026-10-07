@@ -9,6 +9,9 @@
 #   max_call_minutes         length of one live call
 #   max_characters           length of one spoken reply
 #
+# thinking (optional, beside limits): how much the model may think, minimal, low, medium or high.
+# Thinking counts toward max_output_tokens, so an agent whose answers are long thinks less.
+#
 # The platform admin portal (PR-12) shows this file. The agent gateway (PR-10.1) will
 # enforce it: a call with a model or tool not listed here is refused and recorded.
 # Design: docs/proposals/agent-governance.md §2.
@@ -141,6 +144,7 @@ agents:
     autonomy: propose
     models: {primary: gemini-3.8-flash, fallback: [gemini-3.5-flash-lite]}
     tools: [web_search]      # the only agent with web access (Exa, web_search.py); saving drafts is our own code
+    thinking: low            # it reads pages and copies sentences; thinking had used up its output cap (#129)
     limits: {max_input_tokens: 8000, max_output_tokens: 2000, max_new_patterns_per_run: 2, max_model_calls_per_run: 6, max_retries: 1}
     budget_class: platform
     safety_critical: false
@@ -150,6 +154,7 @@ agents:
     autonomy: propose
     models: {primary: gemini-3.8-flash, fallback: [gemini-3.5-flash-lite]}
     tools: []                # no web access: it imagines from our own guide, safeguards and events
+    thinking: low            # its answers are long lists of scenarios; leave the output cap for them (#129)
     limits: {max_input_tokens: 12000, max_output_tokens: 4000, max_scenarios_per_sequence: 3, max_sequences_per_run: 2,
              max_model_calls_per_run: 8, max_retries: 1}
     budget_class: platform
