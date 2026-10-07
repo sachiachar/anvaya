@@ -52,6 +52,22 @@ class Step(BaseModel):
     caught_by: str           # a Sign id, or a safeguard such as "owner alert"
 
 
+class Exploits(BaseModel):
+    """Which next steps a tactic exploits (PR-13.3): step types, channels and flags from the closed
+    lists in step_guard.py. A step matches when every list given here has its value in it."""
+    types: list[str] = []
+    channels: list[str] = []
+    flags: list[str] = []
+
+    def empty(self) -> bool:
+        return not (self.types or self.channels or self.flags)
+
+    def matches(self, step_type: str, channel: str, flags: set[str]) -> bool:
+        return (not self.empty() and (not self.types or step_type in self.types)
+                and (not self.channels or channel in self.channels)
+                and (not self.flags or bool(flags & set(self.flags))))
+
+
 class Tactic(BaseModel):
     """A known way of forging or misusing the document, step by step."""
     id: str
@@ -60,6 +76,7 @@ class Tactic(BaseModel):
     label: Label
     trust: Trust
     sources: list[str] = []
+    exploits: Exploits | None = None  # set by a reviewer (PR-13.6); Saathi never pursues a matching step
 
 
 class Guide(BaseModel):
@@ -93,6 +110,15 @@ def _latest_stored(key: str) -> Guide | None:
         return None
     latest = max(versions, key=lambda v: v["version"])
     return Guide.model_validate({k: v for k, v in latest.items() if k != "id"})
+
+
+def keys() -> list[str]:
+    """Every guide: the built-in ones and any saved ones."""
+    try:
+        saved = {v["key"] for v in store.list("fraud_guide_versions")}
+    except Exception:  # Firestore unavailable: the built-in guides still count
+        saved = set()
+    return sorted(set(BUILT_IN) | saved)
 
 
 def current(key: str) -> Guide | None:

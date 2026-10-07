@@ -61,6 +61,10 @@ def overview(*, fresh: bool = False, who: Actor | None = None) -> dict:
                                   if who is None or who.role != "demo_admin" or r.get("copy_id") == who.key]),
         "open_interventions": len(store.list("guardian_events", status="open")),
         "blocked_30d": len([b for b in store.list("gateway_blocked") if b["at"] > time.time() - 30 * 86400]),
+        # Next steps Saathi never pursued (PR-13.3): counts only, no words or names. A demo admin
+        # sees their own copy's.
+        "steps_not_pursued_30d": len([s for s in store.list("steps_not_pursued") if s["at"] > time.time() - 30 * 86400
+                                      and (who is None or who.role != "demo_admin" or s.get("user_key") == who.key)]),
     }
 
 

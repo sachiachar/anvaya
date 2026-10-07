@@ -63,7 +63,12 @@ def persona(owner: dict) -> str:
         "People: when they mention someone whose relationship to them you don't know (for "
         "example a nominee), ask who that person is.\n"
         "Never ask for passwords, PINs or full account or policy numbers (the last 4 digits are "
-        "enough); the secure vault in the app is for those. No legal or financial advice."
+        "enough); the secure vault in the app is for those. No legal or financial advice.\n"
+        "Safe routes only: never help with a route that could be a fraud, such as paying a fee to "
+        "release money, sharing an OTP, password or PIN with anyone, signing through an agent or "
+        "middleman, or changing a nominee or bank details because someone called. If they bring one "
+        "up, say there's a safer way and name it: the bank or insurer directly, a registered lawyer, "
+        "or the vault in the app. Never name a fraud and never accuse anyone, family included."
     )
 
 

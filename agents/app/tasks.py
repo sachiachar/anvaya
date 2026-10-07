@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 import time
 
+from . import step_guard
 from .store import new_id, store
 from .tone import step_problems
 
@@ -56,7 +57,8 @@ def refresh(owner_id: str, gaps: list[dict]) -> None:
         if any(_same(gap, c) for c in closed) or any(_same(gap, k) for k in new_list):
             continue
         new_list.append(gap)
-    new_list = new_list[:MAX_OPEN]
+    # Never pursue a step that could be part of a fraud (PR-13.3): it's dropped before it's stored.
+    new_list = step_guard.pursue(owner_id, [step_guard.typed(g) for g in new_list])[:MAX_OPEN]
 
     # Keep ids stable for steps that are still there; drop the ones that no longer apply.
     for task in open_now:
@@ -74,5 +76,8 @@ def refresh(owner_id: str, gaps: list[dict]) -> None:
 
 def open_tasks(owner_id: str) -> list[dict]:
     # Steps saved before the tone check (or that slipped past it) never reach the owner.
-    tasks = [t for t in store.list("tasks", owner_id=owner_id, status="open") if not step_problems(t)]
+    # A step stored before a tactic was approved is checked again on every read (PR-13.3).
+    tactics = step_guard.approved_tactics()
+    tasks = [t for t in store.list("tasks", owner_id=owner_id, status="open")
+             if not step_problems(t) and step_guard.check(step_guard.typed(t), tactics) is None]
     return sorted(tasks, key=lambda t: (SEVERITY_ORDER.get(t["severity"], 3), t["created_at"]))

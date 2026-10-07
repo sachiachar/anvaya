@@ -51,6 +51,7 @@
 - Demo copies made before this change start again once, from the beginning, the next time they're opened.
 
 **Next steps**
+- A next step that could be part of a fraud never reaches Vikram: nothing that involves sharing an OTP, a password or a PIN (except adding it to his own vault), nothing of an unknown kind, and nothing that matches a fraud tactic a reviewer approved. If he brings up a risky route himself, Saathi says there's a safer way and names it, without naming a fraud or accusing anyone. The admin portal shows how many steps were held back, as a count only.
 - Readiness, legal needs and the claims checklist are worked out again only when the owner's information has changed; otherwise the last result comes back straight away.
 
 **Access**
