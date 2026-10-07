@@ -434,12 +434,12 @@ const RUN_KIND = { dream: "Dreaming", research: "Research" } as const;
 const PIPELINE = {
   dream: [
     { key: "imagine", label: "Imagine", hint: "fraud.dreamer, no web access", count: (c: Record<string, number>) => c.imagined ?? 0, unit: "imagined" },
-    { key: "check", label: "Check sources", hint: "fraud.researcher, Google Search", count: (c: Record<string, number>) => c.confirmed ?? 0, unit: "confirmed" },
+    { key: "check", label: "Check sources", hint: "fraud.researcher, Exa web search", count: (c: Record<string, number>) => c.confirmed ?? 0, unit: "confirmed" },
     { key: "map", label: "Map to safeguards", hint: "Which one catches it?", count: (c: Record<string, number>) => c.kept ?? 0, unit: "mapped" },
     { key: "save", label: "Review", hint: "A person decides", count: (c: Record<string, number>) => c.confirmed ?? 0, unit: "waiting" },
   ],
   research: [
-    { key: "research", label: "Search", hint: "fraud.researcher, Google Search", count: (c: Record<string, number>) => c.found ?? 0, unit: "new tactics" },
+    { key: "research", label: "Search", hint: "fraud.researcher, Exa web search", count: (c: Record<string, number>) => c.found ?? 0, unit: "new tactics" },
     { key: "check", label: "Check sources", hint: "A source must confirm it", count: (c: Record<string, number>) => c.confirmed ?? 0, unit: "confirmed" },
     { key: "skip", label: "Not kept", hint: "Known, or no source", count: (c: Record<string, number>) => c.unconfirmed ?? 0, unit: "dropped" },
     { key: "save", label: "Review", hint: "A person decides", count: (c: Record<string, number>) => c.confirmed ?? 0, unit: "waiting" },
@@ -477,6 +477,7 @@ function LiveRun({ run, reviewer, onStop }: { run: Run; reviewer: boolean; onSto
           {calls.length === 0 ? <span>No model calls yet</span> : calls.map(([agent, used]) => (
             <span key={agent}>{agent}: <b>{used}</b> of {run.limits?.[`${agent}.max_model_calls_per_run`] ?? "?"} calls</span>
           ))}
+          {(run.counts?.not_checked ?? 0) > 0 && <span>Couldn't check: <b>{run.counts.not_checked}</b> (see below)</span>}
           {run.stopped_reason && <span>Stopped: {run.stopped_reason}</span>}
           {run.error && <span>Failed: {run.error}</span>}
         </p>

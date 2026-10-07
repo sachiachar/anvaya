@@ -153,3 +153,47 @@ def test_live_call_records_its_tokens_once_per_reply(monkeypatch):
     assert after["calls"] - before["calls"] == 1
     assert after["tokens_in"] - before["tokens_in"] == 100 + 120 + 150
     assert after["tokens_out"] - before["tokens_out"] == 400 + 250 + 300
+
+
+# ---- Thinking and cut-off answers (#129) -------------------------------------------------
+
+
+def test_the_thinking_level_comes_from_the_registry(monkeypatch):
+    calls = []
+    fake_client(monkeypatch, calls)
+    asyncio.run(gemini.generate_json(model=settings.research_model, schema=DocumentCheck, prompt="p",
+                                     agent="fraud.researcher"))
+    asyncio.run(gemini.generate_json(model=settings.flash_model, schema=DocumentCheck, prompt="p",
+                                     agent="activation.checker"))
+    assert calls[0]["config"].thinking_config.thinking_level == "LOW"
+    assert calls[1]["config"].thinking_config is None  # not set: the model's own default
+
+
+def test_every_thinking_level_in_the_registry_is_valid():
+    levels = {a["id"]: a["thinking"] for a in core.registry() if "thinking" in a}
+    assert levels and set(levels.values()) <= gemini.THINKING_LEVELS
+
+
+def test_an_answer_cut_off_at_the_output_limit_says_so(monkeypatch):
+    from google.genai import types
+
+    class FakeModels:
+        async def generate_content(self, **kwargs):
+            return SimpleNamespace(parsed=None, text='{"document_type": "death cert', usage_metadata=None,
+                                   candidates=[SimpleNamespace(finish_reason=types.FinishReason.MAX_TOKENS)])
+
+    monkeypatch.setattr(gemini, "client", lambda: SimpleNamespace(aio=SimpleNamespace(models=FakeModels())))
+    with pytest.raises(gemini.CutOff, match="cut off at fraud.researcher's output limit"):
+        asyncio.run(gemini.generate_json(model=settings.research_model, schema=DocumentCheck, prompt="p",
+                                         agent="fraud.researcher"))
+
+
+def test_both_models_busy_is_said_plainly(monkeypatch):
+    class FakeModels:
+        async def generate_content(self, **kwargs):
+            raise errors.APIError(429, {"error": {"message": "quota", "status": "RESOURCE_EXHAUSTED"}})
+
+    monkeypatch.setattr(gemini, "client", lambda: SimpleNamespace(aio=SimpleNamespace(models=FakeModels())))
+    with pytest.raises(gemini.ModelBusy, match="busy or out of quota"):
+        asyncio.run(gemini.generate_json(model=settings.research_model, schema=DocumentCheck, prompt="p",
+                                         agent="fraud.researcher"))

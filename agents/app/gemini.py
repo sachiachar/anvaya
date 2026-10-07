@@ -36,7 +36,15 @@ RETRY = types.HttpRetryOptions(
 
 
 class ModelBusy(RuntimeError):
-    """The model stayed unavailable (overloaded or out of quota) and the agent has no fallback."""
+    """The model stayed unavailable (overloaded or out of quota), and so did the agent's fallback."""
+
+
+class CutOff(RuntimeError):
+    """The answer stopped at the agent's output limit, so it can't be read. Thinking counts
+    toward that limit, which is why the registry can set each agent's thinking level."""
+
+
+THINKING_LEVELS = {"minimal", "low", "medium", "high"}
 
 
 def retry_for(agent: str, attempts: int | None = None) -> types.HttpRetryOptions:
@@ -143,6 +151,9 @@ async def generate_json(
         # at its max_retries.
         max_output_tokens=governance.limit(agent, "max_output_tokens"),
         http_options=types.HttpOptions(retry_options=retry_for(agent)),
+        # How much the model may think, from the registry. Thinking counts toward the output cap,
+        # so an agent with long answers thinks less. Not set: the model's own default.
+        thinking_config=types.ThinkingConfig(thinking_level=level.upper()) if (level := thinking_for(agent)) else None,
     )
     contents = [types.Content(role="user", parts=parts)]
 
@@ -173,7 +184,13 @@ async def generate_json(
         used = fallback
         # One attempt on the fallback model; its retries already ran on the primary.
         fallback_config = config.model_copy(update={"http_options": types.HttpOptions(retry_options=retry_for(agent, 1))})
-        response, source = await with_keys(agent, on(fallback, fallback_config))
+        try:
+            response, source = await with_keys(agent, on(fallback, fallback_config))
+        except errors.APIError as e2:
+            if e2.code in (429, 503):  # both busy or out of quota: say so plainly
+                raise ModelBusy(f"{model} and {fallback} are busy or out of quota ({e.code}, {e2.code}); "
+                                "try again in a few minutes.") from e2
+            raise
     usage = response.usage_metadata
     t_in = (usage.prompt_token_count or 0) if usage else 0
     t_out = ((usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)) if usage else 0
@@ -181,4 +198,13 @@ async def generate_json(
 
     if isinstance(response.parsed, schema):
         return response.parsed
+    candidates = getattr(response, "candidates", None) or []
+    if candidates and getattr(candidates[0], "finish_reason", None) == types.FinishReason.MAX_TOKENS:
+        raise CutOff(f"The answer was cut off at {agent}'s output limit "
+                     f"({governance.limit(agent, 'max_output_tokens')} tokens, thinking included).")
     return schema.model_validate_json(response.text or "{}")
+
+
+def thinking_for(agent: str) -> str | None:
+    """The agent's thinking level from the registry, if it sets one."""
+    return (governance.agent_entry(agent) or {}).get("thinking")

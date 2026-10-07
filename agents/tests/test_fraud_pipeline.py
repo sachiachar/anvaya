@@ -244,7 +244,8 @@ def test_a_failure_is_recorded_on_the_run_without_its_content(monkeypatch):
 
     monkeypatch.setattr(fraud_pipeline, "generate_json", boom)
     run = dream()
-    assert run["status"] == "failed" and run["error"] == "ValueError"
+    # Every item failed, so the run fails, naming only the kind of error (never the content).
+    assert run["status"] == "failed" and run["error"] == "Nothing could be checked: ValueError"
 
 
 # ---- Live view and cost control ------------------------------------------------------
@@ -574,3 +575,49 @@ def test_portal_approves_a_researched_draft(client, stub):  # noqa: F811
     assert r.status_code == 200
     assert fraud_guides.current(KEY).tactics[-1].name == "Registrar office insider kilo"
     assert store.get("fraud_guides", KEY)["status"] == "current"
+
+
+# ---- One failed call costs one item, not the run (#129) ---------------------------------
+
+
+def test_one_failed_check_doesnt_stop_a_dreaming_run(stub, monkeypatch):
+    calls = {"n": 0}
+    real = stub.answer_from_web
+
+    async def flaky(**kw):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise gemini.CutOff("The answer was cut off at fraud.researcher's output limit")
+        return await real(**kw)
+
+    monkeypatch.setattr(fraud_pipeline, "answer_from_web", flaky)
+    run = dream()
+    assert run["status"] == "done" and run["counts"]["not_checked"] == 1
+    assert run["counts"]["kept"] == 5  # 2 sequences × 3 scenarios, less the one that failed
+    assert any(s["line"].startswith("Couldn't check") and "cut off" in s["line"] for s in run["steps"])
+
+
+def test_one_failed_check_doesnt_stop_a_research_run(stub, monkeypatch):
+    stub.tactics = [NewTactic(name=f"Tactic {w}", steps=[NewStep(text="x", caught_by="two reviewers")], claim=CLAIM)
+                    for w in ("kilo lima", "mike november")]
+    calls = {"n": 0}
+    real = stub.answer_from_web
+
+    async def flaky(**kw):
+        calls["n"] += 1
+        if calls["n"] == 2:  # the first call finds the tactics; the second checks the first tactic
+            raise gemini.ModelBusy("gemini-3.8-flash and gemini-3.5-flash-lite are busy or out of quota")
+        return await real(**kw)
+
+    monkeypatch.setattr(fraud_pipeline, "answer_from_web", flaky)
+    run = research()
+    assert run["status"] == "done" and run["counts"]["not_checked"] == 1 and run["counts"]["confirmed"] == 1
+
+
+def test_a_reason_that_stops_every_item_still_stops_the_run(stub, monkeypatch):
+    async def refused(**kw):
+        raise core.Refused("This feature is paused right now. Please try again later.")
+
+    monkeypatch.setattr(fraud_pipeline, "answer_from_web", refused)
+    run = dream()
+    assert run["status"] == "failed" and "paused" in run["error"] and "not_checked" not in run["counts"]

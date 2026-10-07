@@ -359,7 +359,8 @@ Automated tests (`agents/tests/`), with Gemini stubbed so they run without crede
 - governance: server-side roles, approvals, the kill switch, and a portal that never returns conversation text or names;
 - the deploy identity: only `deploy.yml` signs in to Google, every such job uses environment `production`, Google trusts only that workflow on `main` by repository id, and the deployer has no broad project-wide roles (`test_ci_identity.py`);
 - the gateway: every file that calls Gemini goes through it, every agent named in code is registered, and every call is recorded in the ledger;
-- limits per request: output caps, retries, input size, call length and reply length.
+- limits per request: output caps, retries, input size, call length and reply length; each agent's thinking level from the registry; an answer cut off at its output limit, or both models busy, gives a plain error;
+- fraud runs: one failed model call costs one item, not the run; a reason that stops every item (no search key, refused by the gateway, stopped) still stops it.
 - no API answer, found or not, is kept by a cache;
 - responsiveness: Google's sign-in certificates are fetched once until they expire, a slow store doesn't hold up a live call, and two exchanges saved at once make one card.
 - people's own model keys: two people at once each use only their own key; ours is only the failover, never tried first, and a server error doesn't move on; safety checks, the handover assistant, the live call and fraud runs fail over too; a key is tested before it's saved and a test stores nothing; a stored key never decrypts for anyone else; and a key never reaches a response, log record, the ledger, the store in plain text or the audit log. Platform admins see everyone's usage but no key; a demo user sees only their own.
