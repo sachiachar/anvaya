@@ -37,10 +37,12 @@ _STOP = frozenset(
 _DEVANAGARI = re.compile(r"[ऀ-ॿ]")
 _LATIN = re.compile(r"[A-Za-z]")
 _DIGIT_GAPS = re.compile(r"(?<=\d)[\s\-–.]+(?=\d)")  # "1 2 3 4" and "12-34" are "1234"
+# A word, with its vowel signs and other combining marks: Python's \w alone splits "प्रिया" into "प", "र", "य".
+_WORD = re.compile(r"(?:[^\W_]|[\u0300-\u036F\u0900-\u0963\u0966-\u097F])+")
 
 
 def _words(text: str | None) -> list[str]:
-    return re.findall(r"\w+", unicodedata.normalize("NFC", text or "").casefold())
+    return _WORD.findall(unicodedata.normalize("NFC", text or "").casefold())
 
 
 def _digits(text: str | None) -> str:
@@ -159,7 +161,11 @@ def ground(result, *, owner_words: str, saathi_words: str = "", known: dict | No
         update["inventory"] = items
 
     if hasattr(result, "people"):
-        update["people"] = [p for p in result.people if _check_text(p.name, support, counts)]
+        # A person named on a shared document (its nominee or holder) may get a card from it.
+        named = [getattr(i, f) or "" for i in getattr(result, "inventory", []) if from_document
+                 for f in ("nominee_or_beneficiary", "holder_name")]
+        people_support = _Support(support.text + " \n" + " ".join(named), owner_words) if any(named) else support
+        update["people"] = [p for p in result.people if _check_text(p.name, people_support, counts)]
 
     if counts.dropped or counts.cleared or counts.unchecked:
         log.info("grounding: dropped %d cards with a quote the owner didn't say, cleared %d values nobody said, "

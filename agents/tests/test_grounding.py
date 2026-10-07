@@ -123,3 +123,40 @@ def test_a_live_call_card_is_checked_too_and_no_words_are_logged(client, monkeyp
     lic = [i for i in proposals.store.list("inventory", owner_id=OWNER) if i.get("institution") == "LIC"]
     assert lic and not any("folder" in str(i.get("papers_at") or "") for i in lic)
     assert "cleared 1" in caplog.text and "folder" not in caplog.text and "bedroom" not in caplog.text
+
+
+def test_a_hindi_detail_nobody_said_is_cleared():
+    heard = "मेरी एलआईसी पॉलिसी के कागज़ बेडरूम की अलमारी में हैं।"
+    item = InventoryItem(**{**LIC, "nominee_or_beneficiary": "सुनीता देवी", "papers_at": "नीली फ़ाइल"})
+    found = grounding.ground(Extraction(inventory=[item]), owner_words=heard,
+                             known={"inventory": ["LIC Life insurance policy ••1234"]})
+    assert not found.inventory[0].nominee_or_beneficiary and not found.inventory[0].papers_at
+    said_place = InventoryItem(**{**LIC, "papers_at": "बेडरूम की अलमारी"})
+    assert grounding.ground(Extraction(inventory=[said_place]), owner_words=heard,
+                            known={"inventory": ["LIC ••1234"]}).inventory[0].papers_at == "बेडरूम की अलमारी"
+
+
+def test_a_person_named_on_a_shared_document_gets_a_card():
+    item = InventoryItem(category="insurance", institution="HDFC Life", product="Term life policy",
+                         account_hint="••7781", nominee_or_beneficiary="Anjana Rao")
+    found = grounding.ground(_turn(inventory=[item], people=[Person(name="Anjana Rao", relationship="wife")]),
+                             owner_words="", from_document=True)
+    assert [p.name for p in found.people] == ["Anjana Rao"]
+
+
+def test_a_quick_yes_in_a_call_is_checked_against_the_question_just_asked(client, monkeypatch):
+    question = "Are the LIC papers in the bedroom steel cupboard?"
+    proposals.store.put("turns", {"id": "turn_q", "owner_id": OWNER, "at": 1.0, "role": "assistant", "text": question})
+    proposals.store.update("owners", OWNER, {"last_said": {"text": "Tell me about your work.", "at": 0.5}})  # not yet updated
+
+    async def extract(owner, heard, said, known):
+        return Extraction(inventory=[InventoryItem(**LIC, papers_at="bedroom steel cupboard")])
+
+    class WS:
+        async def send_json(self, data):
+            pass
+
+    monkeypatch.setattr(live.loops, "extract_from_exchange", extract)
+    asyncio.run(live._save_exchange(WS(), {"id": OWNER, "name": "Vikram Rao"}, "Yes.", "Thank you.", main._expand))
+    lic = [i for i in proposals.store.list("inventory", owner_id=OWNER) if i.get("institution") == "LIC"]
+    assert any(i.get("papers_at") == "bedroom steel cupboard" for i in lic)
