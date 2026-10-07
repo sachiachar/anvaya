@@ -1,6 +1,6 @@
 # Saathi listens: from what people say to safe next steps
 
-**Status:** agreed 7 October 2026; PR-13.1 in review · **Issues:** PR-13 (#146), PR-13.1 to PR-13.6 (#140 to #145) · **Owner review:** governance, the registry, the fraud guides, the admin portal · **Builds on:** kept knowledge (PR-7, `knowledge.py`), the gap check (PR-7.10, `gaps.py`), fraud foresight ([fraud-foresight.md](fraud-foresight.md))
+**Status:** agreed 7 October 2026. Built: PR-13.1 (#148) and PR-13.3 (#150), except pressure in a wish (PR-13.3.7) · **Issues:** PR-13 (#146), PR-13.1 to PR-13.6 (#140 to #145) · **Owner review:** governance, the registry, the fraud guides, the admin portal · **Builds on:** kept knowledge (PR-7, `knowledge.py`), the gap check (PR-7.10, `gaps.py`), fraud foresight ([fraud-foresight.md](fraud-foresight.md))
 
 ## 1. In short
 
@@ -90,7 +90,7 @@ stateDiagram-v2
 
 ## 5. Finding out what a wish needs
 
-A new registered agent, **`wish.planner`** (autonomy: propose; tool: `web_search`), looks into one kept wish at a time.
+A new agent, **`wish.planner`**, looks into one kept wish at a time. It has an entry in the agent registry and a policy (section 10).
 
 - **What it returns:** next steps. Each step is **typed** (section 6) and has its sources. Each step also says in plain words why it helps.
 - **What it searches with:** code builds the search from typed fields only: the predicate, the asset type and the country. An example is "transfer residential property to spouse India will". The search never uses names, numbers or the person's words.
@@ -115,22 +115,29 @@ Coverage replaces the single model call of the readiness planner, and that plann
 - **Channel:** the institution's official channel, a registered professional, a family member the owner named, the owner themselves, or the Anvaya app.
 - **Flags:** involves a payment, involves a secret (an OTP, a password or a PIN), started by someone else, has a deadline.
 
-**The check, in this order:**
+**The check, in this order.** `step_guard.py` (#150) does the check. Code works out the flags from the step's fields and from its words. So the check doesn't depend on the model to set them.
 
 ```mermaid
 flowchart TD
-    S[Next step] --> A{Unknown type or channel?}
-    A -- yes --> N[Not pursued]
-    A -- no --> B{Involves a secret?}
-    B -- yes --> N
-    B -- no --> C{Matches an approved tactic?}
+    S[Next step] --> A{Type, channel and flags from the closed lists?}
+    A -- no --> N[Not pursued]
+    A -- yes --> B{Involves a secret?}
+    B -- "yes, and not only saved in the owner's own vault" --> N
+    B -- no --> C{"Fixed rule: paid, changed or rushed because someone else asked?"}
     C -- yes --> N
-    C -- no --> P[Can be proposed]
+    C -- no --> D{Matches an approved tactic?}
+    D -- yes --> N
+    D -- no --> P[Can be proposed]
+    N --> R["Count: rule, hashed key, time"]
 ```
 
-1. **A step of an unknown type or channel is not pursued.** When unsure, the answer is no.
-2. **A step that involves a secret is never pursued.** Nobody needs an OTP or a password to fulfil a wish.
-3. **A step that matches an approved tactic is not pursued.** Each approved tactic in the fraud guides also lists the step types, channels and flags that it exploits. A reviewer tags these in the portal when they approve the tactic. Examples:
+1. **A step of an unknown type, channel or flag is not pursued.** When unsure, the answer is no.
+2. **A step that involves a secret is never pursued.** Nobody needs an OTP or a password to fulfil a wish. There is one exception: a step that only saves the secret in the owner's own vault and names nobody else.
+3. **Fixed rules apply before any tactic is tagged.** A step is not pursued in these cases:
+   - someone else asked for a payment;
+   - someone else asked for a change with an institution;
+   - someone else is rushing the person.
+4. **A step that matches an approved tactic is not pursued.** Each approved tactic in the fraud guides also lists the step types, channels and flags that it exploits. A reviewer tags these in the portal when they approve the tactic. Examples:
    - paying a fee to "release" a claim;
    - signing through an agent;
    - changing a nominee or bank details through someone who called;
@@ -146,7 +153,13 @@ flowchart TD
 
 Then Saathi doesn't pursue any step for that wish, and doesn't take sides. Saathi gently suggests talking to someone they trust, or the official route. Code records a count only (section 7).
 
-**A record for oversight.** Each step that isn't pursued leaves a guardian event with no words and no names. The event holds the rule or tactic that stopped the step, the owner's hashed key, and the time. The portal shows these events as counts, so the team can see that the check works.
+**A record for oversight.** Each step that isn't pursued leaves a record in `steps_not_pursued`. The record has no words and no names. It holds the rule or tactic that stopped the step, the copy's hashed key, and the time.
+
+- The same step is counted once, even if the check drops it again on a later run.
+- The portal overview shows the count for the last 30 days, so the team can see that the check works.
+- If the fraud guides can't be read, no step is pursued.
+
+**Saathi's own words.** Saathi's typed replies get the same check, and so does the topic that starts a conversation. A live call can't be rewritten, so in a live call the rule is in Saathi's instructions only.
 
 ## 7. Fraud cues from wishes
 
@@ -174,15 +187,25 @@ Each rule has a test.
 
 1. Predicates, step types, channels and flags come from closed lists in code. Anything else is `other`, and nothing acts on it.
 2. Nothing is kept without the owner's Keep. A wish is planned only after it's kept.
-3. These steps never reach the owner, Saathi's instructions or the suggested topic: a step of an unknown type, a step with a secret, or a step that matches an approved tactic.
+3. These steps never reach the owner, Saathi's instructions or the suggested topic: a step of an unknown type, a step with a secret, a step that breaks a fixed rule, or a step that matches an approved tactic.
 4. Searches are built from typed fields only, with no names, numbers or the person's words.
 5. Fraud steps get counts only, at or above the minimum, rounded down.
-6. Guardian events about steps carry no words and no names.
+6. Records of steps not pursued carry no words and no names.
 7. Nothing Saathi says to the owner talks about the owner's death (`tone.py`, #139).
 
 ## 10. Privacy and governance
 
-- **Registry:** `wish.planner` is new (propose, `web_search`, with limits on calls per wish and per day). `capture.extractor` and `saathi.chat` return statements, with the same models. Both need rows in [agent-governance.md](agent-governance.md).
+- **Agent registry and policies.** PR-10.11 (#154) split them into two files ([agent-security.md](agent-security.md)). `wish.planner` goes into both files in PR-13.4:
+  - **`agents/registry.yaml`, what the agent is:** purpose "Finds out what fulfilling one kept wish takes, with sources", kind `model_step`, status `active`, and its model order.
+  - **`agents/policies.yaml`, what the agent may do:** autonomy `propose`; tool `web_search` with scope `external`; limits per call and per run; the owner pool for each person's daily allowance.
+  - **Later fields:** the prompt and the output schema (`WishPlan`) come with PR-10.14. Who may start it (`invoked_by: [owner]`) and a daily cap for the agent come with PR-10.12, which enforces them.
+  - `capture.extractor` and `saathi.chat` keep their models. They only return more (statements), so their entries don't change.
+- **"Never" rules from this plan.** Code enforces two rules for every agent that writes to the owner (`saathi.chat`, `capture.extractor`, `readiness.planner` and later `wish.planner`):
+  - never help with a step that could be part of a fraud (`step_guard`);
+  - never talk about the owner's own death (`tone`).
+
+  `saathi.voice` has these rules in its instructions only, because live audio can't be rewritten. PR-10.14 tags them `prompt`, and the portal lists them as a known gap.
+- **Records:** a step not pursued is a refusal with a rule id (`unknown`, `secret`, `rule:…` or `tactic:…`) and no content. These records join the decision log when PR-10.12 builds it.
 - **Cost:** research runs per kept wish, not per conversation, and is cached. Allowances, the gateway and the kill switch apply as today.
 - **The portal** gets three things: the step tags on tactics (section 6), the protective step on approved scenarios (section 8), and the count of steps not pursued.
 - **Overlap with the fraud review (#137):** this work changes `fraud_cues.py` and `fraud_guides.py`. FRD-1 to FRD-8 also change these files.
