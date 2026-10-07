@@ -1,6 +1,6 @@
 # Saathi listens: from what people say to safe next steps
 
-**Status:** agreed 7 October 2026; not built yet · **Issues:** PR-13 (parent), PR-13.1 to PR-13.6 · **Owner review:** governance, the registry, the fraud guides, the admin portal · **Builds on:** kept knowledge (PR-7, `knowledge.py`), the gap check (PR-7.10, `gaps.py`), fraud foresight ([fraud-foresight.md](fraud-foresight.md))
+**Status:** agreed 7 October 2026; PR-13.1 in review · **Issues:** PR-13 (#146), PR-13.1 to PR-13.6 (#140 to #145) · **Owner review:** governance, the registry, the fraud guides, the admin portal · **Builds on:** kept knowledge (PR-7, `knowledge.py`), the gap check (PR-7.10, `gaps.py`), fraud foresight ([fraud-foresight.md](fraud-foresight.md))
 
 ## 1. In short
 
