@@ -35,6 +35,7 @@ import yaml
 
 from . import media
 from .config import settings
+from .schemas import PREDICATES, WISH_PREDICATES
 from .store import store
 
 ROOT = "kept"
@@ -141,7 +142,11 @@ def _description(collection: str, item: dict) -> str:
 # A full name must match a kept person; a single word ("Ajay") matches a first name only if
 # exactly one kept person has it. Unmatched names stay in the card, just without a link.
 
-LINK_LABELS = {"nominee": "Nominee", "holder": "Holder", "intended_for": "Meant for", "people": "Mentions"}
+LINK_LABELS = {"nominee": "Nominee", "holder": "Holder", "intended_for": "Meant for", "people": "Mentions",
+               "wants": "Wants", "promised_to": "Promised to", "worries_about": "Worries about"}
+# Statements (PR-13.1) that link a kept wish or worry to the people in it, by predicate.
+STATEMENT_LINKS = {**{p: "wants" for p in WISH_PREDICATES if p != "promised_to"},
+                   "promised_to": "promised_to", "worries_about": "worries_about"}
 # Fields whose presence (never their value) the graph records, for the gap check (PR-7.10).
 HAS_FIELDS = ("nominee_or_beneficiary", "holder_name", "intended_for", "papers_at", "relationship")
 # Answers that mean "not known": the same as the gap check's (gaps.UNKNOWN; a test keeps them equal).
@@ -201,7 +206,32 @@ def links_for(collection: str, record: dict, cat: dict) -> dict[str, list[str]]:
         paths = sorted({p for n in _names(record.get(field_name)) if (p := _resolve(n, people))})
         if paths:
             links[link] = paths
+    if collection == "moments":
+        for s in record.get("statements") or []:
+            if link := STATEMENT_LINKS.get(s.get("predicate")):
+                found = {p for n in _names([s.get("recipient"), s.get("object")]) if (p := _resolve(n, people))}
+                if found:
+                    links[link] = sorted(set(links.get(link, [])) | found)
     return links
+
+
+WISH_STATES = ("kept", "understood", "planned", "done", "changed", "dropped")
+
+
+def _wish_parts(record: dict) -> dict:
+    """What the graph part adds for statements: the predicates used and a wish's state. Closed
+    values only, so a fixed-code reader (fraud cues, PR-13.5) never sees what was said."""
+    parts: dict = {}
+    if predicates := _predicates(record):
+        parts["predicates"] = predicates
+    if record.get("wish_state") in WISH_STATES:
+        parts["wish_state"] = record["wish_state"]
+    return parts
+
+
+def _predicates(record: dict) -> list[str]:
+    """Which predicates a kept item's statements use: closed-list values only, never the words."""
+    return sorted({p for s in record.get("statements") or [] if (p := s.get("predicate")) in PREDICATES})
 
 
 def _link_lines(links: dict[str, list[str]], cat: dict | None) -> list[str]:
@@ -240,6 +270,10 @@ def concept(collection: str, item: dict, owner_id: str, *, at: float,
         raise NotKnowledge("only knowledge the owner confirmed can be kept")
     # Content is masked; ids and file paths (which can contain long digit runs) are not.
     record = {k: v if k in UNMASKED else mask(v) for k, v in item.items() if k not in WORKFLOW_FIELDS}
+    if collection == "moments" and record.get("kind") == "wish":
+        record.setdefault("wish_state", "kept")  # a kept wish starts here (PR-13.1); PR-13.2 moves it on
+    else:
+        record.pop("wish_state", None)  # only a wish has a wish state
     okf_type, _ = kind_of(collection, record)
     title, description = _title(collection, record), _description(collection, record)
     sources = [{"resource": "anvaya:conversation", "title": "Conversation with Saathi"}]
@@ -288,7 +322,7 @@ def _entry(front: dict, path: str) -> dict:
         # The graph part: what a fixed-code reader may use (gap check, fraud cues). Types, status,
         # links between kept items, and which key fields are present; never names, text or sources.
         "graph": {"type": front["type"], "status": front.get("status", "stable"), "links": front.get("links", {}),
-                  "has": _has(front.get("record") or {})},
+                  "has": _has(front.get("record") or {}), **_wish_parts(front.get("record") or {})},
         "collection": front["collection"],
         "title": front.get("title", ""),
         "description": front.get("description", ""),
@@ -585,7 +619,7 @@ def rebuild(owner_id: str) -> dict:
 # List fields a card always has; a kept item has them too (empty when there's nothing), so the
 # screens never meet a card without one. missing_fields itself stays out of the bundle: it's
 # workflow, not knowledge.
-CARD_LISTS = {"inventory": ("missing_fields",), "moments": ("people", "places", "intended_for")}
+CARD_LISTS = {"inventory": ("missing_fields",), "moments": ("people", "places", "intended_for", "statements")}
 
 
 def as_item(cid: str, entry: dict, owner_id: str) -> dict:
@@ -655,7 +689,8 @@ def graph_parts(owner_id: str) -> list[dict]:
         if entry["graph"]["status"] != "stable":
             continue
         out.append({"path": f"/{entry['path']}", "type": entry["graph"]["type"], "status": "stable",
-                    "links": links_for(entry["collection"], entry["record"], cat), "has": _has(entry["record"])})
+                    "links": links_for(entry["collection"], entry["record"], cat), "has": _has(entry["record"]),
+                    **_wish_parts(entry["record"])})
     return out
 
 
