@@ -6,6 +6,8 @@
 
 Every agent in Anvaya should be **identifiable**, have **one specific role**, and be **authorised to use only specific tools and models**. Every model call should count against **token budgets**, from the platform as a whole down to the agent, the tenant, the user and the single request. **One user must not be able to use up shared capacity**, and **safety-critical agents must keep working even when budgets run out**. Cost overruns are stopped by layered limits, ending in a hard cap at the Google Cloud level. **Any extra budget goes through an approval.**
 
+**Next step:** [agent-security.md](agent-security.md) splits the registry into an agent registry (what each agent is) and agent policies (what it may do), enforced by one decision point at the AI gateway and the tool gateway.
+
 **Governance dashboards** give our team a view of the whole platform, and give each bank or insurer a view of its own customers (§6.1).
 
 The proposal adds one control point, an **agent gateway**, that every model call must pass through. It sits next to the guardian (§4.1): the guardian watches *what* agents do for fraud, and the gateway controls *who* may use *which* model and tools, and *how much*.
@@ -225,7 +227,7 @@ Google Cloud has two products that cover parts of this proposal. Neither covers 
 | Model allow-list per agent | Our gateway check | Gateway check plus IAM |
 | Token quotas per tenant and app | Our ledger (G-4) | **Apigee LLMTokenQuota**, one API product per bank |
 | Per-user allowances, protected safety pool, graceful messages | Our ledger (G-4) | Our ledger; Apigee quotas keyed on the user as a backstop |
-| Prompt injection and sensitive-data screening | **Model Armor, adopted now** (G-8) | Model Armor through Apigee or Agent Gateway |
+| Prompt injection and sensitive-data screening | Our own checks in code; Model Armor not now (G-8, decided 8 October 2026) | Model Armor through Apigee or Agent Gateway |
 | Budget approvals with two people | Ours (G-6) | Ours: no Google product provides it |
 | Dashboards | Ours (G-7) | Ours, plus Apigee analytics for tenant traffic |
 | Platform alarm and hard cap | Cloud Billing budgets and Gemini quotas (G-5) | The same, plus the Pub/Sub kill switch |
@@ -247,13 +249,13 @@ Status on 3 October 2026 is in the last column; [#24](https://github.com/sachiac
 | G-5 | **Backstops:** Google Cloud budget with alerts; lower Gemini quotas as a hard cap; a simple kill-switch flag read by the gateway | 11 | Kill switch built; budget alerts and quotas need a person (PR-10.5) |
 | G-6 | **Approvals, minimal version:** "request more" for judges and users; approve or reject in the team console, time-limited and logged; two-person approval for agent budgets | — | Portal approvals built; "ask for more" in the app to come (PR-10.6) |
 | G-7 | **Governance dashboards** (§6.1): the platform dashboard in a separate **platform admin portal** (PR-12) and a tenant Governance view for the Bank role, covering spend and budget, agents, approvals, guardian and outcomes, with seeded data for the demo. The tenant audit export follows after the deadline. | — | Platform portal built with real data only (PR-12); tenant view comes with the Bank role |
-| G-8 | **Model Armor:** screen the owner's messages, uploaded documents and tool responses for hidden instructions (PR-2.3.6, PR-2.8.4) and sensitive data (helps PR-6.5), through the gateway | — | Not started (PR-10.8) |
+| G-8 | **Model Armor:** screen the owner's messages, uploaded documents and tool responses for hidden instructions (PR-2.3.6, PR-2.8.4) and sensitive data (helps PR-6.5), through the gateway | — | Not now (decided 8 October 2026): our own checks in code instead ([agent-security.md](agent-security.md) §8) |
 
 ### 7.2 After the deadline (finale and pilot)
 
 - Move to **Vertex AI** in-region, with separate service accounts and quotas for the safety and fraud agents. This also closes India data residency.
 - Put **Apigee in front of Vertex AI** for tenant token quotas (an API product per bank), semantic caching, Model Armor and analytics. First check whether it can proxy live-call WebSockets.
-- Move the handover and guardian agents to **Agent Runtime behind Agent Gateway**, for SPIFFE identities and default-deny access to tools and MCP servers, with Agent Registry replacing our own registry.
+- Move the handover and guardian agents to **Agent Runtime behind Agent Gateway**, for SPIFFE identities and default-deny access to tools and MCP servers. Our registry and policies stay the reviewed source and are exported to Agent Registry and Agent Gateway ([agent-security.md](agent-security.md) §6).
 - Tenant budgets and a bank admin approval page.
 - Pub/Sub-driven automatic kill switch.
 - Per-agent dashboards.
