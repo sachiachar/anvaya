@@ -33,6 +33,7 @@
 - A new **Model keys** page in the admin portal shows whose key answered each call, failovers, and each person's key status. Platform admins can turn the feature off or limit the kinds of key, for everyone or one person, test a saved key again, or remove it, with a reason that's logged. They never see a key.
 
 **Talking to Saathi (owner)**
+- Saathi and the suggested topics talk about life and the family, never about the owner's death: no "final wishes" or "after you're gone". This is checked on the server; a next step worded that way is written again or left out. Saathi can still talk about loved ones who have left us.
 - **Saathi remembers only what Vikram kept.** It no longer reads back earlier conversations, so something he discarded or never kept can't come up again. Within a conversation it still knows what it just asked, so a short answer ("Yes, Priya") makes sense.
 - **Saathi asks about what families most often can't find:** whether there's a will and where it is, where the papers for a property or policy are, any loans or debts, who to call first, and email and online accounts. Once Vikram mentions one, even to say there's none, it isn't asked again.
 - **Making sure:** if Vikram wasn't sure of something ("I think the nominee is Meena"), Saathi checks with him about two weeks later. Nominees, where papers are and the will come up once a year, in case they've changed. Once he says it's still right, Saathi stops asking.

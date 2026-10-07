@@ -12,6 +12,7 @@ import re
 import time
 
 from .store import new_id, store
+from .tone import step_problems
 
 MAX_OPEN = 5
 SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
@@ -72,5 +73,6 @@ def refresh(owner_id: str, gaps: list[dict]) -> None:
 
 
 def open_tasks(owner_id: str) -> list[dict]:
-    tasks = store.list("tasks", owner_id=owner_id, status="open")
+    # Steps saved before the tone check (or that slipped past it) never reach the owner.
+    tasks = [t for t in store.list("tasks", owner_id=owner_id, status="open") if not step_problems(t)]
     return sorted(tasks, key=lambda t: (SEVERITY_ORDER.get(t["severity"], 3), t["created_at"]))
