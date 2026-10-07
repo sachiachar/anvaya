@@ -42,6 +42,7 @@ export type Overview = {
   quota: { rpm_limit: number; rpm_peak: number; tpm_limit: number; tpm_peak: number } | null;
   pending_approvals: number;
   open_interventions: number;
+  steps_not_pursued_30d: number;
   blocked_30d: number;
 };
 

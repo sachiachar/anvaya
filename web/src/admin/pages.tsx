@@ -216,6 +216,7 @@ export function OverviewPage({ me, fresh }: { me: Me; fresh: boolean }) {
         <a className="pa-kpi" href="#/approvals"><span>Budget requests waiting</span><strong>{o.pending_approvals}</strong><em>Review in Approvals</em></a>
         <a className="pa-kpi" href="#/guardian"><span>Open interventions</span><strong>{o.open_interventions}</strong><em>Review in Guardian</em></a>
         <a className="pa-kpi" href="#/agents"><span>Blocked calls, 30 days</span><strong>{o.blocked_30d}</strong><em>Not allowed by the registry or a limit</em></a>
+        <div className="pa-kpi"><span>Next steps not pursued, 30 days</span><strong>{o.steps_not_pursued_30d}</strong><em>Could be part of a fraud; counts only</em></div>
       </div>
 
       <Section title="Kill switch" aside={<Status value={o.kill_switch} />}>

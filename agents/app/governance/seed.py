@@ -16,7 +16,7 @@ from .core import platform_settings
 DATA_VERSION = 5
 # Collections that held seeded documents (each marked seeded=True). Real ones are kept.
 CLEARED = ("usage_days", "gateway_blocked", "budget_requests", "guardian_events",
-           "fraud_scenarios", "fraud_guides", "demo_copies")
+           "fraud_scenarios", "fraud_guides", "demo_copies", "steps_not_pursued")
 
 
 def clear_samples() -> None:

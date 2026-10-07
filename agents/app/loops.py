@@ -13,6 +13,7 @@ import re
 
 from .config import settings
 from .fraud_guides import Guide, signs_for_check
+from . import step_guard
 from .gemini import generate_json
 from .tone import ALIVE_RULES, about_their_death, step_problems
 from .schemas import (
@@ -63,7 +64,12 @@ def persona(owner: dict) -> str:
         "People: when they mention someone whose relationship to them you don't know (for "
         "example a nominee), ask who that person is.\n"
         "Never ask for passwords, PINs or full account or policy numbers (the last 4 digits are "
-        "enough); the secure vault in the app is for those. No legal or financial advice."
+        "enough); the secure vault in the app is for those. No legal or financial advice.\n"
+        "Safe routes only: never help with a route that could be a fraud, such as paying a fee to "
+        "release money, sharing an OTP, password or PIN with anyone, signing through an agent or "
+        "middleman, or changing a nominee or bank details because someone called. If they bring one "
+        "up, say there's a safer way and name it: the bank or insurer directly, a registered lawyer, "
+        "or the vault in the app. Never name a fraud and never accuse anyone, family included."
     )
 
 
@@ -132,6 +138,9 @@ def reply_problems(owner_message: str, reply: str) -> list[str]:
     if _FALSE_CLAIMS.search(reply):
         problems.append("Don't say you noted or saved anything: it is only added to their list "
                         "to review until they tap Keep.")
+    if step_guard.reply_problem(reply):
+        problems.append("Never help with a risky route: don't ask for or pass on an OTP, password or PIN, and "
+                        "don't help pay anyone who asked for money. Say there's a safer way and name it.")
     if about_their_death(reply):
         problems.append("Don't talk about their death or 'final wishes': they are alive and talking about "
                         "their life. Talk about the family knowing things instead.")

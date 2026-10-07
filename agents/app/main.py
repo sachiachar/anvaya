@@ -20,7 +20,7 @@ from google.genai import errors as genai_errors
 from pydantic import BaseModel, Field, ValidationError
 
 from . import (auth, demo, escrow, fraud_guides, gaps, knowledge, knowledge_map, live, loops, media, model_access,
-               proposals, release, speech, tasks)
+               proposals, release, speech, step_guard, tasks, tone)
 from .config import settings
 from .executor_agent import UnknownSession, ask
 from .governance import core as governance_core
@@ -497,8 +497,11 @@ class Prompt(BaseModel):
 @api.post("/owners/{owner_id}/conversation/prompt", dependencies=[Depends(demo.only("owner"))])
 def companion_asks(owner_id: str, body: Prompt) -> dict:
     """Start a topic from a next step: the companion's question appears in the chat,
-    and the next typed message or live call carries on from it."""
+    and the next typed message or live call carries on from it. The text comes from the app, so it
+    gets the same checks as a next step (PR-13.3) and as anything Saathi says (no death words)."""
     owner_or_404(owner_id)
+    if step_guard.reply_problem(body.text) or tone.about_their_death(body.text):
+        raise HTTPException(422, "Saathi can't start with that.")
     turn = store.put("turns", {"id": new_id("turn"), "owner_id": owner_id, "at": time.time(),
                                "role": "assistant", "text": body.text, "language": None})
     store.update("owners", owner_id, {"last_said": {"text": body.text, "turn_id": turn["id"], "at": turn["at"], "gap": None}})

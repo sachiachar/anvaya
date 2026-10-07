@@ -68,6 +68,11 @@ def current() -> str:
     return copy_id
 
 
+def current_or_none() -> str | None:
+    """The caller's copy, or None outside a signed-in request."""
+    return _copy.get()
+
+
 def owner_id() -> str:
     """The owner in the caller's own copy."""
     return owner_id_for(current())
