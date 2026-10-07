@@ -308,6 +308,8 @@ export function AgentsPage() {
                 <td className="pa-mono">
                   {a.models.primary}
                   {a.models.fallback.map((m) => <div key={m} className="pa-sub">{m}</div>)}
+                  {a.allowed_models.filter((m) => m !== a.models.primary && !a.models.fallback.includes(m))
+                    .map((m) => <div key={m} className="pa-sub">{m} (allowed, not tried)</div>)}
                 </td>
                 <td className="pa-mono">{a.tools.length ? a.tools.map((x) => <div key={x}>{x}</div>) : <span className="pa-muted">none</span>}</td>
                 <td className="num">{fmt.num(a.usage_30d.calls)}</td>

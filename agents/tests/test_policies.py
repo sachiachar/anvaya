@@ -109,6 +109,12 @@ def test_the_gateway_follows_the_policy_not_the_registry(monkeypatch):
     assert any(b["agent"] == "saathi.chat" and b["kind"] == "agent" for b in store.list("gateway_blocked"))
 
 
+def test_an_unknown_agent_is_refused_and_recorded_not_a_crash():
+    with pytest.raises(core.Refused):
+        asyncio.run(gemini.generate_json(schema=DocumentCheck, prompt="p", agent="saathi.typo"))
+    assert any(b["agent"] == "saathi.typo" and b["kind"] == "agent" for b in store.list("gateway_blocked"))
+
+
 def test_an_agent_that_isnt_active_may_not_call_a_model():
     assert core.agent_entry("guardian.detectors")["status"] == "planned"
     with pytest.raises(core.Refused, match="not active"):

@@ -161,8 +161,13 @@ def policy(agent: str) -> dict | None:
 
 
 def models_in_order(agent: str) -> list[str]:
-    """The models the agent tries, primary first (registry.yaml); never an environment variable."""
-    models = agent_entry(agent)["models"]
+    """The models the agent tries, primary first (registry.yaml); never an environment variable.
+    An agent that isn't registered is refused and recorded, as check_call would."""
+    entry = agent_entry(agent)
+    if entry is None:
+        record_blocked(agent, "agent", agent, "Agent not in the registry or without a policy")
+        raise Refused(f"{agent} is not a registered agent.")
+    models = entry["models"]
     return [models["primary"], *models.get("fallback", [])]
 
 
