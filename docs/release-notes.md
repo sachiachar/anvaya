@@ -127,6 +127,9 @@
 **Documents**
 - New concept document and two pitches: one for people and families, one for banks and insurers. They cite figures for India and Asia, and regulatory deadlines. Branded PDFs are included.
 - A business model with costs and margins, a brand guide, a proposal for governing the agents, a proposal for finding fraud before it happens ("fraud foresight"), and the guardian layer and storage design in the architecture document.
+- **Easier to read:** the README, the contribution guide, the architecture document, the four proposals, the use cases, the business model, the brand guide, the demo script and the list of dependencies now use short sentences, with one idea in each. No facts changed.
+- About 10 new diagrams show how things work, for example the fraud foresight steps, the handover in the demo and the states of a wish. GitHub draws them on the page.
+- The concept document and the pitches keep their warm style.
 
 ### Known limitations
 - One signed-in person plays everyone in their demo copy through the switcher; in a real service each person would sign in separately. The admin portal has its own roles.

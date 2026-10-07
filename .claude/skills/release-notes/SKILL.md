@@ -30,7 +30,7 @@ Keep only what a person would notice: owners, families, reviewers, the governanc
 Copy the voice of the existing entries:
 
 - One bullet per feature. Start with what the person can now do or see, not with the code.
-- Use plain words and short sentences. Don't use marketing words like "seamless", "powerful" or "robust".
+- Follow the writing rule in `AGENTS.md` ("Docs and writing"): plain words, about 80% of the way to ASD-STE100. Keep sentences short, with one idea each, in the active voice. Don't use marketing words like "seamless", "powerful" or "robust".
 - Give concrete numbers and limits where they exist (for example "Live calls end at 20 minutes").
 - Mention a safeguard where it matters ("checked on the server", "numbers masked").
 - Use no file names, class names or roadmap numbers. Those belong in commits.
