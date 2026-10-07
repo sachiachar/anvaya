@@ -423,7 +423,7 @@ Automated tests (`agents/tests/`) stub Gemini, so they run without credentials. 
 - the deploy identity (`test_ci_identity.py`): only `deploy.yml` signs in to Google, and every such job uses environment `production`. Google trusts only that workflow on `main`, by repository id. The deployer has no broad project-wide roles;
 - the gateway: every file that calls Gemini goes through it, every agent named in code is registered, and every call is recorded in the ledger;
 - limits per request: output caps, retries, input size, call length and reply length. Each agent's thinking level comes from its policy. An answer cut off at its output limit, or both models busy, gives a plain error;
-- fraud runs: one failed model call costs one item, not the run. A reason that stops every item (no search key, refused by the gateway, stopped) still stops the run;
+- fraud runs: one failed model call costs one item, not the run. A run that tried checks and got none to work fails, and so does a run where no imagining worked. Imagining that finds nothing new is still a finished run. A reason that stops every item (no search key, refused by the gateway, stopped) still stops the run;
 - no API answer, found or not, is kept by a cache;
 - responsiveness: Google's sign-in certificates are fetched once until they expire. A slow store doesn't hold up a live call. Two exchanges saved at once make one card;
 - people's own model keys:

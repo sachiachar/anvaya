@@ -13,8 +13,8 @@ Rules in code, each with a test:
   - Nothing confirmed here changes a guide by itself: confirmed scenarios and tactics wait for a
     reviewer. Unconfirmed scenarios fade after 3 runs.
   - One failed model call costs one item, not the run: the item is logged as not checked and the
-    run goes on. A run fails only if nothing could be checked, or for a reason that stops every
-    item (no search key, refused by the gateway, stopped).
+    run goes on. A run fails if it tried checks and none worked, if no imagining worked, or for a
+    reason that stops every item (no search key, refused by the gateway, stopped).
   - Limits per run come from the registry: 2 sequences, 3 scenarios each (2 close, 1 far-fetched),
     2 new tactics per guide, and a cap on model calls per agent. One run at a time. A reviewer
     can stop a run; it stops before its next model call and keeps what was checked so far.
@@ -407,7 +407,9 @@ async def dream(run: dict) -> dict:
         guard.say("imagine", f"Starting points from kept knowledge: {len(cues)} common gap(s) across owners "
                           "(counted, never read)" + "".join(f"; {c['owners']} owners: {c['means']}" for c in cues[:3]))
         failed: list[str] = []
-        worked = 0  # model steps that succeeded; the run fails only if failures left nothing that worked
+        # The run fails if it tried checks and none worked, or if no imagining worked. Imagining
+        # that finds nothing new is a real outcome, but it never counts as a check.
+        imagined_ok = checks_ok = checks_failed = 0
 
         def not_checked(what: str, e: Exception, **detail) -> None:
             failed.append(_reason(e))
@@ -427,7 +429,7 @@ async def dream(run: dict) -> dict:
                 log.exception("fraud dreaming run %s: imagining failed", run["id"])
                 not_checked(f"imagine from “{tactic.name}”", e)
                 continue
-            worked += 1
+            imagined_ok += 1
             counts["imagined"] += len(imagined)
             guard.progress(counts)
             picked = _pick(imagined, existing)
@@ -448,8 +450,9 @@ async def dream(run: dict) -> dict:
                 except Exception as e:  # this scenario isn't saved; the run goes on to the next
                     log.exception("fraud dreaming run %s: checking a scenario failed", run["id"])
                     not_checked(f"check “{scenario.title}”", e, title=scenario.title)
+                    checks_failed += 1
                     continue
-                worked += 1
+                checks_ok += 1
                 store.put("fraud_scenarios", {
                     "id": new_id("scn"), "at": time.time(), "run_id": run["id"], "guide_key": guide.key,
                     "sequence_id": tactic.id, "scenario": scenario.title, "steps": scenario.steps,
@@ -470,7 +473,7 @@ async def dream(run: dict) -> dict:
                           + (" (only sometimes)" if coverage == "partly" else "")
                           + ("; waiting for a reviewer" if evidence.confirmed else "; added as unconfirmed"),
                           title=scenario.title, coverage=coverage)
-        if failed and not worked:
+        if failed and not checks_ok and (checks_failed or not imagined_ok):
             return _finish(run, counts, f"Nothing could be checked: {failed[-1]}")
         return _finish(run, counts)
     except Stopped as e:  # what was checked so far is kept
