@@ -1,6 +1,6 @@
 # Proposal: agent registry, agent policies and gateways
 
-*Team Saathi · Proposed, not built · 7 October 2026 · builds on [agent-governance.md](agent-governance.md) (parent issue #43) and [architecture.md](../architecture.md) §4.1 and §8*
+*Team Saathi · Agreed 8 October 2026 (decisions in §8), not built yet · builds on [agent-governance.md](agent-governance.md) (parent issue #43) and [architecture.md](../architecture.md) §4.1 and §8*
 
 ## Summary
 
@@ -162,7 +162,7 @@ What each part means:
 | Before a model call | Agent registered, active and not paused; the person may invoke it; the model is allowed | Decision point (code) |
 | | Estimated input within `max_input_tokens`; media within size and type | Decision point (code) |
 | | Allowance left for the agent and the person | Ledger (code) |
-| | Prompt injection and sensitive data in documents, pages, the owner's words and tool results | Model Armor (G-8, needs approval). Until then: a code check for instruction-shaped text in documents and pages, and "never" rules in the prompt |
+| | Prompt injection and sensitive data in documents, pages, the owner's words and tool results | Our own code check for instruction-shaped text in documents, pages and tool results (PR-10.12), and "never" rules in the prompt. Model Armor (G-8) is not adopted for now (§8) |
 | | The policy's "never" rules added to the system prompt | Gateway builds the prompt (code); the model follows it (prompt) |
 | After a model call | Output matches the schema | Schema validation (code), already built |
 | | No full numbers, passwords or PINs | Masking check on output (code); `redact` |
@@ -171,7 +171,7 @@ What each part means:
 | Before a tool call | The tool is allowed and in scope; arguments are bound to the right owner | Tool gateway (code) |
 | | Run limits: tool calls and model calls per run | Tool gateway (code) |
 | | Write and external tools need what the policy says, such as the owner's consent or a person's approval | Tool gateway (code); people decide (rule 3) |
-| After a tool call | The result is treated as untrusted data, screened, and never as instructions | Model Armor or our check (code) |
+| After a tool call | The result is treated as untrusted data, screened, and never as instructions | Our check (code) |
 | Always | No vault secrets anywhere; no conversation text or names in logs | Architecture and tests (code), already built |
 
 The rule from AGENTS.md still holds: if a model must always or never do something, it's enforced in code, with a test. A "never" rule tagged `prompt` is a known gap, shown on the portal, not a solution.
@@ -249,7 +249,7 @@ The rule from AGENTS.md still holds: if a model must always or never do somethin
 | Agent identity on the network | Cloud Run service accounts | SPIFFE identity and mutual TLS through Agent Gateway | — |
 | Token quotas per tenant | Our ledger | Apigee LLMTokenQuota, one API product per bank | — |
 | Allowances per person, safety pool, autonomy, people's approvals | Ours | Ours | ✔ |
-| Input and output screening | Model Armor through our gateway (G-8) | Model Armor through Apigee or Agent Gateway | Our "never" rules and output checks |
+| Input and output screening | Our own checks in code (Model Armor not adopted for now) | Decide again: Model Armor through Apigee or Agent Gateway | Our "never" rules and output checks |
 
 **When to switch:** when Agent Registry and Agent Gateway are generally available, we're on Vertex AI (planned after the deadline, agent-governance.md §7.2), and the handover and guardian agents have moved to Agent Runtime. Check Google's status again at that point; this section reflects what we knew on 7 October 2026.
 
@@ -262,18 +262,18 @@ Each item is its own pull request from `main`. All of them change governance fil
 | ID | Item | How we check it |
 | --- | --- | --- |
 | PR-10.11 | **Split the registry and the policies.** Add `policies.yaml` and strict schemas for both files. Move allowed models, tools, limits, thinking and allowances into policies; rename `role` to `purpose`; the primary model comes from the registry, and the model environment variables go. Behaviour doesn't change. Update `docs/dependencies.md` only if something is added. | Tests: every agent has exactly one policy and the reverse; every ordered model is allowed; no app code reads a model name from settings; a broken file stops start-up. All existing tests pass unchanged. |
-| PR-10.12 | **AI gateway through the decision point.** `governance/policy.py`; every model call path asks it; agent caps per day; `invoked_by`; input checks, output masking and claim checks for every agent; the decision log; the portal shows policies and decisions. | Tests: a model, a person or a size not allowed is refused, with the rule id logged; a full number in output is redacted; the log holds no content; each model call path is covered. |
+| PR-10.12 | **AI gateway through the decision point.** `governance/policy.py`; every model call path asks it; agent caps per day; `invoked_by`; input checks (size, type, and instruction-shaped text in documents, pages and tool results), output masking and claim checks for every agent; the decision log; the portal shows policies and decisions. | Tests: a model, a person or a size not allowed is refused, with the rule id logged; a full number in output is redacted; the log holds no content; each model call path is covered. |
 | PR-10.13 | **Tool gateway.** ADK `before_tool_callback` and web search ask the decision point; `bound_to` is set from the sign-in; run limits on tool calls; ready for MCP `tools/call`. | Tests: a tool not in the policy is refused; a tool asked for another owner's data gets the released owner's only; run limits stop a looping agent. |
 | PR-10.14 | **"Never" rules for every agent.** The gateway adds the defaults and each policy's own rules to every system prompt; each rule tagged `code` has a check and a test. Agents that can't take a system prompt (`saathi.speech`, `access.tester`) are marked as exempt, with the reason. | Tests: every agent's prompt carries the default rules; each `code` rule catches a bad output; the portal lists `prompt`-only rules. |
-| G-8 (PR-10.8) | **Model Armor**, already planned. Needs approval to add the service. | As in PR-10.8. |
+| G-8 (PR-10.8) | **Model Armor**: not now (decided 8 October 2026). Our own input and output checks in PR-10.12 cover the prototype. Decide again for the bank pilot. | — |
 
 ---
 
-## 8. Decisions needed
+## 8. Decisions (agreed 8 October 2026)
 
-1. **Autonomy is set in the policy, not the registry.** Recommended: yes. Then the guardian lowering autonomy is a policy override.
-2. **Policies list which people may start each agent (`invoked_by`).** Recommended: yes, so the gateway checks the agent and the person together.
-3. **A daily cap for each agent across all people.** Recommended: yes. Starting values come from two weeks of ledger data, with headroom.
-4. **Model Armor (G-8).** It's a new Google service, so it needs approval. Until then, our own checks run in code.
-5. **Who owns `policies.yaml` in CODEOWNERS.** Recommended: the governance code owner, separate from the people who own the agents.
-6. **Order.** Recommended: PR-10.11, then 10.12 and 10.14, then 10.13. PR-10.11 changes no behaviour and removes the model drift risk now.
+1. **Autonomy is set in the policy, not the registry.** Agreed. The guardian lowering autonomy is a policy override that can only tighten.
+2. **Policies list which people may start each agent (`invoked_by`).** Agreed. The gateway checks the agent and the person together.
+3. **A daily cap for each agent across all people.** Agreed. Starting values come from two weeks of ledger data, with headroom.
+4. **Model Armor (G-8).** Not now. Our own input and output checks run in code (PR-10.12). Decide again for the bank pilot.
+5. **`policies.yaml` gets its own line in CODEOWNERS, owned by the governance code owner** (today @sachiachar, as for `agents/app/governance/` and `registry.yaml`). Agreed; added in PR-10.11.
+6. **Order:** PR-10.11, then 10.12 and 10.14, then 10.13. PR-10.11 changes no behaviour and removes the model drift risk first.
