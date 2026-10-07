@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import re
 
-from .config import settings
 from .fraud_guides import Guide, signs_for_check
 from . import step_guard
 from .gemini import generate_json
@@ -83,7 +82,6 @@ async def capture_audio(audio: bytes, mime_type: str, owner: dict) -> CaptureRes
     """Capture loop: a voice recording becomes a transcript plus candidate moments."""
     return await generate_json(
         agent="capture.extractor",
-        model=settings.flash_model,
         schema=CaptureResult,
         media=[(audio, mime_type)],
         system=(
@@ -179,7 +177,6 @@ async def converse(owner: dict, last_said: dict | None, text: str | None,
 async def _converse_once(owner: dict, prompt: str, media: tuple[bytes, str] | None) -> ConversationTurn:
     return await generate_json(
         agent="saathi.chat",
-        model=settings.flash_model,
         schema=ConversationTurn,
         media=[media] if media else None,
         system=(
@@ -229,7 +226,6 @@ async def extract_from_exchange(owner: dict, heard: str, said: str, known: dict)
     """After each exchange in a live call: what is worth keeping (the owner approves later)."""
     return await generate_json(
         agent="capture.extractor",
-        model=settings.flash_model,
         schema=Extraction,
         system=(
             "From one exchange of a voice call, pull out what the owner said that is worth "
@@ -257,7 +253,6 @@ async def summarize_conversation(owner: dict, turns: list[dict]) -> Conversation
              for t in turns if t.get("text")]
     return await generate_json(
         agent="saathi.summary",
-        model=settings.flash_model,
         schema=ConversationSummary,
         system=(
             "Sum up this conversation for the person who had it, in two or three short, warm "
@@ -274,7 +269,6 @@ async def extract_document(image: bytes, mime_type: str, owner: dict) -> Invento
     """Capture loop: a photo of a policy or statement becomes a financial inventory entry."""
     return await generate_json(
         agent="documents.reader",
-        model=settings.flash_model,
         schema=InventoryItem,
         media=[(image, mime_type)],
         system=(
@@ -317,13 +311,13 @@ async def assess_readiness(owner: dict, inventory: list[dict], moments: list[dic
         "why_it_matters and question_for_owner, so use no death words in them at all. " + ALIVE_RULES
     )
     prompt = json.dumps(context, ensure_ascii=False)
-    result = await generate_json(agent="readiness.planner", model=settings.pro_model, schema=Readiness,
+    result = await generate_json(agent="readiness.planner", schema=Readiness,
                                  system=system, prompt=prompt)
     # Checked in code (rule 8): a step that talks about death is written again once, then left out.
     problems = [p for g in result.gaps for p in step_problems(g.model_dump())]
     if problems:
         result = await generate_json(
-            agent="readiness.planner", model=settings.pro_model, schema=Readiness, system=system,
+            agent="readiness.planner", schema=Readiness, system=system,
             prompt=prompt + "\n\nYour previous steps talked about death; write them again without it:\n- "
             + "\n- ".join(problems))
     result.gaps = [g for g in result.gaps if not step_problems(g.model_dump())]
@@ -341,7 +335,6 @@ async def find_legal_needs(owner: dict, wishes: list[dict], inventory: list[dict
     }
     return await generate_json(
         agent="legal.needs",
-        model=settings.pro_model,
         schema=LegalNeeds,
         system=(
             "You flag informal wishes that will not take effect without a legal document, "
@@ -376,7 +369,6 @@ async def check_document(image: bytes, mime_type: str, expected: str, person: st
         prompt += "\n\n" + _guide_prompt(guide)
     return await generate_json(
         agent="activation.checker",
-        model=settings.pro_model,
         schema=DocumentCheck,
         media=[(image, mime_type)],
         system=(
@@ -444,7 +436,6 @@ async def plan_settlement(owner: dict, inventory: list[dict], moments: list[dict
     }
     return await generate_json(
         agent="settlement.planner",
-        model=settings.pro_model,
         schema=Settlement,
         system=(
             "You help an executor settle an estate. For each inventory item, give the next "

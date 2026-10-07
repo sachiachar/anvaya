@@ -48,9 +48,10 @@ SAVING_EXPIRES_SECONDS = 120
 
 async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> None:
     await ws.accept()
+    model = governance.primary_model(AGENT)  # from the registry, never an environment variable
     try:
-        # The gateway checks the agent's registry entry and the kill switch before connecting.
-        governance.check_call(AGENT, settings.live_model)
+        # The gateway checks the agent's registry entry, its policy and the kill switch before connecting.
+        governance.check_call(AGENT, model)
     except governance.Refused as e:
         await ws.send_json({"type": "error", "detail": str(e)})
         await ws.close()
@@ -81,7 +82,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
                     governance.check_allowance_now(AGENT)  # their key failed: our key counts again
                 try:
                     session = await stack.enter_async_context(
-                        client_for(kind, key).aio.live.connect(model=settings.live_model, config=config))
+                        client_for(kind, key).aio.live.connect(model=model, config=config))
                     break
                 except Exception as e:  # only a refused or exhausted key moves on, as for every call
                     if i == len(links) - 1 or not keys.fails_over(e):
@@ -130,7 +131,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
             governance.release(AGENT, reserved)
         if started is not None:  # record the call's minutes and tokens in the usage ledger
             minutes = (time.time() - started) / 60
-            governance.record_usage(AGENT, settings.live_model, "direct", minutes=minutes,
+            governance.record_usage(AGENT, model, "direct", minutes=minutes,
                                     tokens_in=sum(t[0] for t in reply_tokens.values()),
                                     tokens_out=sum(t[1] for t in reply_tokens.values()), key_source=source)
         try:

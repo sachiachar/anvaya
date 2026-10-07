@@ -34,7 +34,7 @@ from typing import Any
 import yaml
 
 from . import media
-from .config import settings
+from .governance import core as governance
 from .schemas import PREDICATES, WISH_PREDICATES
 from .store import store
 
@@ -286,7 +286,7 @@ def concept(collection: str, item: dict, owner_id: str, *, at: float,
         "description": description,
         "tags": [collection, record.get("kind") or record.get("category") or "person"],
         "sources": sources,
-        "generated": {"by": generated_by or f"saathi/{settings.flash_model}", "at": _iso(at)},
+        "generated": {"by": generated_by or f"saathi/{governance.primary_model('capture.extractor')}", "at": _iso(at)},
         "status": "stable",
         "id": record["id"],
         "collection": collection,

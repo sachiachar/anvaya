@@ -11,23 +11,10 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Settings:
-    # Fast model for extraction and bulk work; reasoning model for judgement-heavy steps.
-    flash_model: str = os.getenv("GEMINI_FLASH_MODEL", "gemini-3.1-flash-lite")
-    pro_model: str = os.getenv("GEMINI_PRO_MODEL", "gemini-3.1-flash-lite")
-    # Used when the main model is overloaded (429/5xx) after retries.
-    fallback_model: str = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite")
-    # Voice for spoken replies (the assistant's own voice, never a clone of anyone).
-    # Tried in order; each has its own quota. GEMINI_TTS_MODEL (one model) still works.
-    tts_models: list[str] = field(default_factory=lambda: [m.strip() for m in os.getenv(
-        "GEMINI_TTS_MODELS",
-        os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-lite-tts") + ",gemini-3.8-flash-tts,gemini-3.1-flash-tts-preview",
-    ).split(",") if m.strip()])
+    # Which model each agent uses is in registry.yaml, and which it may use is in policies.yaml,
+    # never in environment variables (docs/proposals/agent-security.md, PR-10.11).
+    # Voice for spoken replies and live calls (the assistant's own voice, never a clone of anyone).
     tts_voice: str = os.getenv("GEMINI_TTS_VOICE", "Sulafat")
-    # Live, two-way voice calls (Gemini Live API). Uses the same voice.
-    live_model: str = os.getenv("GEMINI_LIVE_MODEL", "gemini-3.8-live")
-    # The fraud pipeline (imagine, then check with Google Search). Must be in the registry
-    # for fraud.dreamer and fraud.researcher.
-    research_model: str = os.getenv("GEMINI_RESEARCH_MODEL", "gemini-3.8-flash")
     # Web search for the fraud research agent (Exa, exa.ai; web_search.py). Empty: research and
     # scenario checks stop with "web search isn't set up yet".
     exa_api_key: str = os.getenv("EXA_API_KEY", "")

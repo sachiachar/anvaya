@@ -124,9 +124,9 @@ def test_the_input_limit_counts_the_instructions():
         executor_agent.gateway_check(SimpleNamespace(state={}), request)
 
 
-def test_the_registry_lists_the_assistants_real_tools():
-    entry = core.agent_entry("handover.assistant")
-    assert sorted(entry["tools"]) == sorted(t.__name__ for t in executor_agent.build_agent().tools)
+def test_the_policy_lists_the_assistants_real_tools():
+    granted = [g["tool"] for g in core.policy("handover.assistant")["tools"]]
+    assert sorted(granted) == sorted(t.__name__ for t in executor_agent.build_agent().tools)
 
 
 def test_sources_are_real_kept_items_with_their_titles(monkeypatch):

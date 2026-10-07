@@ -84,7 +84,7 @@ def test_voice_minutes_left_today_cap_the_next_call():
     assert core.remaining("saathi.voice") == pytest.approx(2)
     use("owner", "voice_minutes", 30)
     with pytest.raises(core.Refused):
-        core.check_call("saathi.voice", settings.live_model)
+        core.check_call("saathi.voice", core.primary_model("saathi.voice"))
 
 
 def test_no_person_means_no_personal_allowance():
@@ -111,7 +111,7 @@ def test_a_running_call_holds_its_minutes_so_a_second_call_cannot_double_them():
     left = core.remaining("saathi.voice")
     core.reserve("saathi.voice", left)  # first call holds all 30 minutes
     with pytest.raises(core.Refused):  # a second call at the same time is refused
-        core.check_call("saathi.voice", settings.live_model)
+        core.check_call("saathi.voice", core.primary_model("saathi.voice"))
     core.release("saathi.voice", left)  # first call ends after 4 minutes
     core.count_for_user("saathi.voice", minutes=4)
     assert core.remaining("saathi.voice") == pytest.approx(left - 4)

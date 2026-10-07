@@ -9,7 +9,7 @@ Anvaya is an app with an AI companion, Saathi, for capturing a person's stories,
 | Area | Path |
 | --- | --- |
 | API, loops, live call (Python 3.14, FastAPI, Gemini) | `agents/app/` |
-| Governance layer: registry, gateway checks, ledger, guardian events, roles, audit, admin API | `agents/app/governance/`, `agents/registry.yaml` |
+| Governance layer: registry, policies, gateway checks, ledger, guardian events, roles, audit, admin API | `agents/app/governance/`, `agents/registry.yaml`, `agents/policies.yaml` |
 | Customer web app (React 19, TypeScript, Vite) | `web/src/` (`index.html`) |
 | Platform admin portal | `web/src/admin/` (`admin.html`, built to `web/dist-admin/`, served as `anvaya-admin`) |
 | Tests | `agents/tests/` |
@@ -50,7 +50,7 @@ The linters look for bugs, not style, and there's no formatter, so don't reforma
 
 These protect users and the budget. Tests enforce several of them, so don't weaken a test to get past one.
 
-1. **Every Gemini call goes through the governance gateway** (`check_call(…)` in `agents/app/governance/core.py`). It names its agent (`agent="…"`), which must be in `agents/registry.yaml` with its role, autonomy, allowed models and tools, and limits. A new agent or model needs a registry entry in the same PR.
+1. **Every Gemini call goes through the governance gateway** (`check_call(…)` in `agents/app/governance/core.py`). It names its agent (`agent="…"`), which must be in `agents/registry.yaml` (what the agent is, and the models it tries in order) and have one policy in `agents/policies.yaml` (its autonomy, allowed models and tools, and limits). The model comes from the registry, never from an environment variable. A new agent, model or tool needs a registry entry and a policy in the same PR.
 2. **The server never sees vault secrets.** Encryption happens on the device (`web/src/vaultCrypto.ts`). Don't add a server path, log line or agent tool that could read them.
 3. **People decide.** The AI proposes. Nothing approves a release, saves to the archive without the owner's Keep, or shares with a partner without consent. Death and legal checks only assist. Keep the two-reviewer rule, override reasons and the waiting period.
 4. **No conversation text or names** in the platform admin portal or in logs. Users appear only as hashed keys. The one exception: a nickname a visitor chooses for their own demo copy, which is optional, shown only to platform admins, and never logged.

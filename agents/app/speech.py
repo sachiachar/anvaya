@@ -64,7 +64,7 @@ async def speak(text: str) -> bytes:
         raise governance.Refused(f"Spoken replies are limited to {cap} characters.")
     last_error: errors.APIError | None = None
     refused: governance.Refused | None = None
-    for model in settings.tts_models:
+    for model in governance.models_in_order(AGENT):
         try:
             governance.check_call(AGENT, model)
         except governance.Refused as e:

@@ -17,12 +17,14 @@ from fastapi import APIRouter, HTTPException
 from google.genai import errors, types
 from pydantic import BaseModel
 
-from .config import settings
 from .gemini import make_client
 from .governance import core as governance
 from .governance import keys
 
 AGENT = "access.tester"
+# The agents behind "typing, photos and documents": their primary models are tested as one feature.
+CHAT_AGENTS = ("saathi.chat", "capture.extractor", "saathi.summary", "documents.reader", "readiness.planner",
+               "legal.needs", "activation.checker", "settlement.planner")
 PROBE_SECONDS = 20  # each model's test call gives up after this
 ONE_TRY = types.HttpOptions(retry_options=types.HttpRetryOptions(attempts=1))
 NO_TOOLS = types.AutomaticFunctionCallingConfig(disable=True)  # no tools are passed; silences an SDK warning
@@ -31,12 +33,13 @@ NO_TOOLS = types.AutomaticFunctionCallingConfig(disable=True)  # no tools are pa
 def features() -> list[tuple[str, str, list[str], str]]:
     """(id, label, models, need): what the app does with a key, and the models each needs.
     "all": every model must work; "any": one is enough (spoken replies try several)."""
+    first = governance.primary_model
     return [
-        ("chat", "Typing, photos and documents", sorted({settings.flash_model, settings.pro_model}), "all"),
-        ("handover", "The family's questions", [settings.flash_model], "all"),
-        ("voice", "Voice call", [settings.live_model], "all"),
-        ("speech", "Spoken replies", list(settings.tts_models), "any"),
-        ("fraud", "Fraud research (platform admins)", [settings.research_model], "all"),
+        ("chat", "Typing, photos and documents", sorted({first(a) for a in CHAT_AGENTS}), "all"),
+        ("handover", "The family's questions", [first("handover.assistant")], "all"),
+        ("voice", "Voice call", [first("saathi.voice")], "all"),
+        ("speech", "Spoken replies", governance.models_in_order("saathi.speech"), "any"),
+        ("fraud", "Fraud research (platform admins)", sorted({first("fraud.researcher"), first("fraud.dreamer")}), "all"),
     ]
 
 
@@ -57,11 +60,11 @@ def _result(e: Exception) -> str:
 async def _try_model(client, model: str) -> tuple[str, int, int]:
     """One tiny call on one model: (result, tokens in, tokens out)."""
     governance.check_call(AGENT, model)
-    if model == settings.live_model:
+    if governance.model_kind(model) == "live":
         async with client.aio.live.connect(model=model, config=types.LiveConnectConfig(response_modalities=["AUDIO"])):
             pass  # connected: the key reaches the live model; nothing is said
         return "works", 0, 0
-    if model in settings.tts_models:
+    if governance.model_kind(model) == "speech":
         config = types.GenerateContentConfig(response_modalities=["AUDIO"], http_options=ONE_TRY,
                                              automatic_function_calling=NO_TOOLS)
         response = await client.aio.models.generate_content(model=model, contents="Hi", config=config)

@@ -8,6 +8,7 @@
 
 /agents/app/governance/         @sachiachar
 /agents/registry.yaml           @sachiachar
+/agents/policies.yaml           @sachiachar
 /agents/app/release.py          @sachiachar
 /agents/app/escrow.py           @sachiachar
 /agents/app/auth.py             @sachiachar
