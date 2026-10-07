@@ -104,7 +104,14 @@ Update docs in the same PR as the code:
 
 How to write:
 
-- **Docs** use plain English: short sentences, active voice, no jargon and no marketing words.
+- **Docs** use plain English, about 80% of the way to ASD-STE100 (Simplified Technical English):
+  - short sentences: about 20 words at most for descriptions, 15 for instructions;
+  - one idea per sentence, active voice, simple present or past tense;
+  - one word for one meaning, used the same way every time;
+  - instructions start with the verb ("Run the tests");
+  - no idioms, jargon, filler or marketing words. Code terms and product names are fine.
+- **Diagrams** come first when a doc or explanation is about structure, flow, sequence or states. Use Mermaid in Markdown files, so GitHub draws them.
+- **Long explanations** for a reviewer or judge can be an HTML page instead of a long Markdown file, when steps, comparisons or interaction make it clearer. Keep the source in the repo only if the page must stay in sync with the code.
 - **Pitches for people and institutions** (`docs/concept.md`, `docs/pitch-*.md`) are warm and talk about a service, not technology:
   - they never use the word "AI";
   - they never say someone "died": use "left us", "no longer here" or "when the time comes".
