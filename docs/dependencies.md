@@ -1,8 +1,11 @@
 # Anvaya: Libraries, Licences and Google Services
 
-Everything Anvaya is built on, with each item's version, licence and purpose. Versions are as of 3 October 2026. The lockfiles (`agents/uv.lock`, `web/package-lock.json`) are the source of truth for exact versions.
+This page lists everything that Anvaya is built on, with the version, licence and purpose of each item. Versions are as of 3 October 2026. The lockfiles (`agents/uv.lock`, `web/package-lock.json`) are the source of truth for exact versions.
 
-**Rule:** use the latest stable release of everything, with permissive licences only. See [AGENTS.md](../AGENTS.md#dependencies-and-versions). Update this page in the same pull request as any dependency change. A test fails if a direct dependency is missing from this page, or if any installed package has a licence outside the allowed list.
+**Rule:** use the latest stable release of everything. Use permissive licences only. See [AGENTS.md](../AGENTS.md#dependencies-and-versions). Update this page in the same pull request as any dependency change. A test fails in two cases:
+
+- a direct dependency is missing from this page;
+- an installed package has a licence outside the allowed list.
 
 ## Runtimes and tools
 
@@ -39,9 +42,9 @@ Everything Anvaya is built on, with each item's version, licence and purpose. Ve
 | httpx2 | 2.13.1 | BSD-3-Clause | HTTP client used by FastAPI's test client |
 | ruff | 0.16.10 | MIT | Lint |
 
-**Held back by an upstream limit.** These indirect packages aren't at their latest release, because `google-adk` 2.11.0 (its latest release) caps them. They move when ADK raises its limits, and Dependabot opens that pull request.
+**Held back by an upstream limit.** These indirect packages aren't at their latest release. The cause is that `google-adk` 2.11.0 (its latest release) caps them. They move when ADK raises its limits. Dependabot opens that pull request.
 
-Dependabot skips FastAPI 0.142 and later (`ignore` in `.github/dependabot.yml`), because otherwise its weekly update fails on this conflict. When an ADK update lifts the OpenTelemetry cap, a test (`test_dependabot_ignores_only_what_is_still_held_back`) fails: remove the ignore rule in that pull request, so FastAPI updates again.
+Dependabot skips FastAPI 0.142 and later (`ignore` in `.github/dependabot.yml`). Without this rule, its weekly update fails on this conflict. When an ADK update lifts the OpenTelemetry cap, a test (`test_dependabot_ignores_only_what_is_still_held_back`) fails. Then remove the ignore rule in that pull request, so that FastAPI updates again.
 
 | Package | Locked | Latest | Held back by |
 | --- | --- | --- | --- |
@@ -51,7 +54,7 @@ Dependabot skips FastAPI 0.142 and later (`ignore` in `.github/dependabot.yml`),
 | google-api-core | 2.34.0 | 2.40.0 | 2.40 needs OpenTelemetry 1.44 or newer (see above) |
 | pydantic-core | 2.46.5 | 2.49.0 | `pydantic` 2.13.5 (latest) pins this exact version |
 
-**Indirect packages** are MIT, Apache-2.0, BSD, PSF-2.0 or MIT-0, except `certifi` (MPL-2.0), which supplies the trusted certificate list. MPL-2.0 applies file by file, and we use `certifi` unmodified, so it puts no conditions on our code.
+**Indirect packages** are MIT, Apache-2.0, BSD, PSF-2.0 or MIT-0. The one exception is `certifi` (MPL-2.0), which supplies the trusted certificate list. MPL-2.0 applies file by file, and we use `certifi` unmodified. So it puts no conditions on our code.
 
 ## Web libraries (`web/`)
 
@@ -71,11 +74,11 @@ Dependabot skips FastAPI 0.142 and later (`ignore` in `.github/dependabot.yml`),
 | @types/react, @types/react-dom | 19.3.0 | MIT | Type definitions for React |
 | @biomejs/biome | 2.5.15 | MIT OR Apache-2.0 | Lint |
 
-**Indirect packages** are MIT, Apache-2.0, BSD-3-Clause, ISC or 0BSD, except `lightningcss` (MPL-2.0). It's a CSS tool Vite uses during the build, and none of its code ships to users.
+**Indirect packages** are MIT, Apache-2.0, BSD-3-Clause, ISC or 0BSD. The one exception is `lightningcss` (MPL-2.0). It's a CSS tool that Vite uses during the build. None of its code ships to users.
 
 ## Fonts (`web/public/fonts/`)
 
-The brand typefaces, served from our own site, so no visitor's address goes to a font service. The app loads them; the admin portal doesn't. They come from the Fontsource builds of the Google Fonts releases, as woff2 files.
+These are the brand typefaces. Our own site serves them, so no visitor's address goes to a font service. The app loads them. The admin portal doesn't. They come from the Fontsource builds of the Google Fonts releases, as woff2 files.
 
 | Font | Version | Licence | Purpose |
 | --- | --- | --- | --- |
@@ -83,7 +86,12 @@ The brand typefaces, served from our own site, so no visitor's address goes to a
 | inter | 5.3.0 (Fontsource) | OFL-1.1 | The interface: the brand's sans-serif. Latin and Latin Extended |
 | mukta | 5.3.0 (Fontsource) | OFL-1.1 | Hindi, Marathi and other Devanagari text, regular and semibold |
 
-**Licence exception, for font files only:** the SIL Open Font License 1.1 lets anyone use, embed and share the fonts, including in commercial products. The only conditions are that the licence travels with the font files and that the fonts aren't sold on their own. Each font's folder has its `OFL.txt`, and a test checks that every font folder has one and a row in this table. OFL is not allowed for code.
+**Licence exception, for font files only:** the SIL Open Font License 1.1 lets anyone use, embed and share the fonts, also in commercial products. It has two conditions:
+
+- the licence travels with the font files;
+- nobody sells the fonts on their own.
+
+Each font's folder has its `OFL.txt`. A test checks that every font folder has one, and a row in this table. OFL is not allowed for code.
 
 ## GitHub Actions
 
@@ -97,7 +105,7 @@ The brand typefaces, served from our own site, so no visitor's address goes to a
 
 ## Google services
 
-All of these are Google's proprietary managed services, used under the Google Cloud and Firebase terms of service. They are billed pay-as-you-go, with free usage tiers. Nothing is licensed or installed. Everything runs in the project's own Google Cloud account, in `asia-southeast1` (Singapore) where a region applies.
+All of these are Google's proprietary managed services. We use them under the Google Cloud and Firebase terms of service. Google bills them pay-as-you-go, with free usage tiers. Nothing is licensed or installed. Everything runs in the project's own Google Cloud account. Where a region applies, it is `asia-southeast1` (Singapore).
 
 | Service | Purpose | Where in the code |
 | --- | --- | --- |
@@ -117,10 +125,10 @@ All of these are Google's proprietary managed services, used under the Google Cl
 
 ## Outside services
 
-Services from other companies. Each needs the product owner's agreement before it's added.
+These are services from other companies. Each one needs the product owner's agreement before we add it.
 
 | Service | Purpose | What's sent | Key | Where in the code |
 | --- | --- | --- | --- | --- |
 | **Exa** (exa.ai), search API | Web search for the fraud research agent: finds pages that report fraud tactics, so a scenario or tactic can be checked against a quoted source. Replaced Google Search grounding on 3 October 2026, whose quota the free tier didn't cover. Paid per search, with free starting credit. | Fraud research queries only: a document type, a country, a claimed tactic. Never owner data (a test checks this). | `EXA_API_KEY`: the GitHub secret of that name (environment "production"), set on Cloud Run with each API deploy | `agents/app/web_search.py` |
 
-**Data use.** On the Gemini API's free tier, Google may use prompts and responses to improve its products. On the paid tier it doesn't. Keep billing on for any environment that handles more than synthetic demo data.
+**Data use.** On the Gemini API's free tier, Google may use prompts and responses to improve its products. On the paid tier, it doesn't. Keep billing on for any environment that handles more than synthetic demo data.
