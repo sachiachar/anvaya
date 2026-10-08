@@ -6,6 +6,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from app import auth, main
 from app.config import Settings, settings
+from app.governance import core as governance
 from app.store import store
 
 TOKENS = {
@@ -109,5 +110,21 @@ def test_with_open_sign_in_the_portal_shows_a_new_account_only_its_own_records(c
     assert client.get("/api/platform/me", headers=as_new).json()["role"] == "demo_admin"
     assert client.get("/api/platform/audit", headers=as_new).json()["entries"] == []
     events = client.get("/api/platform/guardian", headers=as_new).json()["events"]
-    assert events and all("decided_by" not in e and "decision_reason" not in e for e in events)
+    team_event = next(e for e in events if e["id"] == "gev_team")
+    assert team_event["decided_by"] == "Anvaya team" and "decision_reason" not in team_event
     assert client.get("/api/platform/agents", headers=as_new).json()["blocked"] == []
+
+
+def test_a_demo_admin_sees_who_decided_their_request_only_as_the_team(client, monkeypatch):
+    monkeypatch.setattr(settings, "open_sign_in", True)
+    monkeypatch.setattr(settings, "allowed_emails", [])
+    mine = governance.user_key(TOKENS["stranger"]["sub"])
+    for rid, by in (("req_team", "team@example.com"), ("req_self", "someone@gmail.com")):
+        store.put("budget_requests", {"id": rid, "at": 1.0, "tenant": "direct", "user_key": mine, "copy_id": mine,
+                                      "kind": "voice_minutes", "amount": 10, "hours": 24, "reason": "test",
+                                      "status": "rejected", "decided_by": by, "decision_reason": f"{rid} reason"})
+    history = client.get("/api/platform/approvals", headers={"Authorization": "Bearer stranger"}).json()["history"]
+    by_id = {r["id"]: r for r in history}
+    assert by_id["req_team"]["decided_by"] == "Anvaya team" and "decision_reason" not in by_id["req_team"]
+    assert by_id["req_self"]["decided_by"] == "someone@gmail.com"  # their own decision stays as it was
+    assert by_id["req_self"]["decision_reason"] == "req_self reason"

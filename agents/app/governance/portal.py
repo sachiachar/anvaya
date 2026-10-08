@@ -119,12 +119,22 @@ def get_agents(who: Actor = Depends(actor)) -> dict:
     return {"agents": agents_view(), "blocked": sorted(blocked, key=lambda b: -b["at"])}
 
 
+def _hide_deciders(rows: list[dict], who: Actor) -> list[dict]:
+    """For a demo admin: a decision someone else made shows "Anvaya team", never their email or
+    written reason (with open sign-in, anyone can be a demo admin, PR-15.2). Their own stay."""
+    def hide(r: dict) -> dict:
+        if not r.get("decided_by") or r["decided_by"] == who.email:
+            return r
+        return {k: v for k, v in r.items() if k != "decision_reason"} | {"decided_by": "Anvaya team"}
+    return [hide(r) for r in rows]
+
+
 @router.get("/approvals")
 def get_approvals(who: Actor = Depends(actor)) -> dict:
     ensure_current()
     reqs = sorted(store.list("budget_requests"), key=lambda r: -r["at"])
     if who.role == "demo_admin":  # only their own demo copy's requests
-        reqs = [r for r in reqs if r.get("copy_id") == who.key]
+        reqs = _hide_deciders([r for r in reqs if r.get("copy_id") == who.key], who)
     now = time.time()
     return {"pending": [r for r in reqs if r["status"] == "pending"],
             "active": [r for r in reqs if r["status"] == "approved" and r.get("expires_at", 0) > now],
@@ -163,8 +173,8 @@ def decide_approval(request_id: str, body: Decision, who: Actor = Depends(need("
 def get_guardian(who: Actor = Depends(actor)) -> dict:
     ensure_current()
     events = sorted(store.list("guardian_events"), key=lambda e: -e["at"])
-    if who.role == "demo_admin":  # never the reviewers' emails or their written reasons
-        events = [{k: v for k, v in e.items() if k not in ("decided_by", "decision_reason")} for e in events]
+    if who.role == "demo_admin":
+        events = _hide_deciders(events, who)
     decided = [e for e in events if e["status"] != "open"]
     reversed_ = [e for e in decided if e["status"] == "reversed"]
     by_response: dict[str, int] = {}
