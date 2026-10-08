@@ -135,7 +135,7 @@ flowchart LR
 | Readiness → next steps | `loops.assess_readiness` + `tasks.refresh` | Archive, vault state, closed steps → score + up to 5 actionable steps | Act within limits | Owner acts, marks done or dismisses |
 | Planning | `loops.find_legal_needs` | Wishes + inventory → legal needs | Propose | Owner consent before `legal-handoff` |
 | Activation | `loops.check_document` + `loops.review_summary` | Certificate or proof image, with the fraud reference guide → verdict, likelihood genuine and a result for each warning sign | Assist | Two reviewers; override needs a reason |
-| Handover | `executor_agent.ask` (ADK) | Question → answer with cited sources | Act within limits | Only after release |
+| Handover | `executor_agent.ask` (ADK) | Question → answer with cited sources. The model cites kept items by id; the server lists only real kept items as sources, then removes only the citations from the answer text (`clean_answer`). A citation of an id that isn't a kept item becomes "(source not found)", so a made-up fact never reads like a supported one | Act within limits | Only after release |
 | Settlement | `loops.plan_settlement` | Inventory → checklist + draft letters | Propose | Executor reviews and sends |
 | Fraud foresight | `fraud_pipeline.dream` + `fraud_pipeline.research` | Guide, safeguards, guardian events → scenarios with sources and the safeguard that catches each; new tactics with sources | Propose | A risk reviewer approves before anything joins a guide; only source-confirmed items can be approved |
 

@@ -3,6 +3,7 @@ instructions while small, the index and read_concept above a limit; never the co
 another owner's bundle or a replaced version; and every source it shows is a real kept item."""
 
 import asyncio
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -129,10 +130,8 @@ def test_the_policy_lists_the_assistants_real_tools():
     assert sorted(granted) == sorted(t.__name__ for t in executor_agent.build_agent().tools)
 
 
-def test_sources_are_real_kept_items_with_their_titles(monkeypatch):
-    papers = _keep("moments", PAPERS)
-    answer = f"They're in the blue folder [{papers['id']}], and the gold is in the bank [m_0123456789ab]."
-
+def _answer(monkeypatch, answer: str) -> dict:
+    """ask() with the model's final answer stubbed."""
     class Event:
         content = SimpleNamespace(parts=[SimpleNamespace(text=answer)])
 
@@ -146,5 +145,48 @@ def test_sources_are_real_kept_items_with_their_titles(monkeypatch):
         yield Event()
 
     monkeypatch.setattr(executor_agent._runner, "run_async", fake_run)
-    result = asyncio.run(executor_agent.ask({"id": OWNER, "name": "Vikram Rao"}, "family:test", "Where are Papa's documents?"))
+    return asyncio.run(executor_agent.ask({"id": OWNER, "name": "Vikram Rao"}, "family:test", "Where are Papa's documents?"))
+
+
+ID_PATTERN = re.compile(r"\b(?:m|inv|p)_[0-9a-f]{12}\b")
+
+
+def test_sources_are_real_kept_items_with_their_titles(monkeypatch):
+    papers = _keep("moments", PAPERS)
+    result = _answer(monkeypatch, f"They're in the blue folder [{papers['id']}], and the gold is in the bank [m_0123456789ab].")
     assert result["sources"] == [{"id": papers["id"], "title": "Where the papers are"}]  # the invented id is dropped
+    # The family reads plain sentences (PR-15.9). A made-up citation never reads like a supported fact.
+    assert result["answer"] == "They're in the blue folder, and the gold is in the bank (source not found)."
+    assert not ID_PATTERN.search(result["answer"])
+
+
+def test_a_grouped_citation_still_lists_its_sources(monkeypatch):
+    papers, policy = _keep("moments", PAPERS), _keep("inventory", POLICY)
+    result = _answer(monkeypatch, f"The papers and the policy [{papers['id']}, {policy['id']}] are in the cupboard.")
+    assert {s["id"] for s in result["sources"]} == {papers["id"], policy["id"]}
+    assert result["answer"] == "The papers and the policy are in the cupboard."
+
+
+A, B = "m_0123456789ab", "inv_ba9876543210"
+SOURCES = [{"id": A, "title": "Where the papers are"}, {"id": B, "title": "LIC Term life policy"},
+           {"id": "p_00000000000a", "title": "Ajay"}]
+
+
+@pytest.mark.parametrize("raw, clean", [
+    (f"In the blue folder [{A}].", "In the blue folder."),
+    (f"Two policies [{A}, {B}]: LIC and HDFC.", "Two policies: LIC and HDFC."),
+    ("Ask Ajay (p_00000000000a) about it.", "Ask Ajay about it."),
+    (f"A fact [{A}], [{B}].", "A fact."),
+    (f"A fact [Source: {A} and {B}] here.", "A fact here."),
+    (f"A fact 【{A}】.", "A fact."),
+    ("He named p_00000000000a as nominee.", "He named Ajay as nominee."),  # an id used as a word
+    (f"Papers [{A}][{B}]\n\n    - And the gold [{A}].", "Papers\n\n    - And the gold."),  # lines and indents stay
+    ("Où sont les papiers ? Dans le dossier bleu !", "Où sont les papiers ? Dans le dossier bleu !"),  # untouched
+    ("Vikram Rao never recorded anything about that.", "Vikram Rao never recorded anything about that."),
+    ("Keep [this note] and m_short as they are.", "Keep [this note] and m_short as they are."),
+    ("Locker 12 [m_ffffffffffff].", "Locker 12 (source not found)."),  # not a kept item
+    (f"Locker 12 [{A}, m_ffffffffffff].", "Locker 12 (source not found)."),
+])
+def test_the_answer_loses_its_ids_and_keeps_its_words(raw, clean):
+    assert executor_agent.clean_answer(raw, SOURCES) == clean
+    assert not ID_PATTERN.search(executor_agent.clean_answer(raw, SOURCES))
