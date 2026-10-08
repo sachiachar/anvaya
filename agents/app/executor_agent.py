@@ -38,12 +38,14 @@ INDEX_LIMIT_CHARS = 40_000  # the index on its own, above the inline limit
 # Kept items are cited by their id: stories and facts (m_), accounts (inv_) and people (p_).
 # Any opening or closing "kept" tag inside kept text, whatever its capitals or spacing.
 _FENCE = re.compile(r"<\s*/?\s*kept", re.IGNORECASE)
-CITATION = re.compile(r"\[((?:m|inv|p)_[0-9a-f]{12})\]")
-# For the answer the family reads (PR-15.9): any kept-item id, and brackets or parentheses that
-# hold only ids, e.g. "[m_…]", "[m_…, inv_…]" or "(p_…)". The sources list names them instead.
 _ID = r"(?:m|inv|p)_[0-9a-f]{12}"
-_ID_GROUP = re.compile(rf"[ \t]*[\[(]\s*{_ID}(?:\s*[,;]\s*{_ID})*\s*[\])]")
-_BARE_ID = re.compile(rf"[ \t]*\b{_ID}\b")
+KEPT_ID = re.compile(rf"\b{_ID}\b")
+# A citation in the answer (PR-15.9): brackets holding only ids, e.g. "[m_…]", "[inv_…, inv_…]",
+# "(p_…)", "[Source: m_…]" or "【m_…】", and a run of them on one line ("[m_…], [m_…]"), with the
+# spaces before it. Only these spans are removed; the rest of the answer is left exactly as written.
+_GROUP = rf"[\[(【]\s*(?:sources?\s*:\s*)?{_ID}(?:\s*(?:[,;&]|and)\s*{_ID})*\s*[\])】]"
+CITATIONS = re.compile(rf"[ \t]*{_GROUP}(?:[ \t]*[,;]?[ \t]*{_GROUP})*", re.IGNORECASE)
+NOT_FOUND = "(source not found)"
 
 
 def _index_text(owner_id: str, name: str) -> str:
@@ -232,7 +234,7 @@ def _sources(owner_id: str, answer: str) -> list[dict]:
     """The kept items an answer cites, with their titles. Ids that aren't kept items (a model
     can invent one) are dropped, so every source shown is real."""
     out = []
-    for cid in sorted(set(CITATION.findall(answer))):
+    for cid in sorted(set(KEPT_ID.findall(answer))):
         item = knowledge.get(owner_id, cid)
         if item and item.get("okf_status") == "stable":  # only current kept items
             title = item.get("title") or item.get("name") or " ".join(
@@ -241,12 +243,20 @@ def _sources(owner_id: str, answer: str) -> list[dict]:
     return out
 
 
-def clean_answer(answer: str) -> str:
-    """The answer without the ids it cites, so the family reads plain sentences (PR-15.9). The ids
-    are used before this, to list the sources."""
-    text = _BARE_ID.sub("", _ID_GROUP.sub("", answer))
-    text = re.sub(r"[ \t]+([.,;:!?])", r"\1", text)  # no space left before punctuation
-    return re.sub(r"[ \t]{2,}", " ", text).strip()
+def clean_answer(answer: str, sources: list[dict]) -> str:
+    """The answer without the ids it cites, so the family reads plain sentences (PR-15.9); the
+    sources list (from _sources, real kept items only) names them instead.
+
+    A citation of real kept items is removed. One that names an id which isn't a kept item becomes
+    "(source not found)", so a made-up fact never reads like a supported one. An id used as a word
+    ("he named p_… as nominee") becomes the item's title or name."""
+    titles = {s["id"]: s["title"] for s in sources}
+
+    def citation(m: re.Match) -> str:
+        return "" if all(i in titles for i in KEPT_ID.findall(m.group())) else f" {NOT_FOUND}"
+
+    text = CITATIONS.sub(citation, answer)
+    return KEPT_ID.sub(lambda m: titles.get(m.group()) or NOT_FOUND, text).strip()
 
 
 class UnknownSession(LookupError):
@@ -279,9 +289,10 @@ async def ask(owner: dict, user_id: str, question: str, session_id: str | None =
             tools_used.append(call.name)
         if event.is_final_response() and event.content and event.content.parts:
             answer = "".join(p.text or "" for p in event.content.parts)
+    sources = _sources(owner["id"], answer)  # from the ids, before they're removed
     return {
-        "answer": clean_answer(answer),
-        "sources": _sources(owner["id"], answer),  # from the ids, before they're removed
+        "answer": clean_answer(answer, sources),
+        "sources": sources,
         "tools_used": tools_used,
         "session_id": session_id,
     }
