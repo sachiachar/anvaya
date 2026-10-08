@@ -30,10 +30,12 @@ export type Spend =
     }
   | { available: false; reason: "not_configured" | "no_data" | "error"; message: string };
 
-type CeilingUse = { used: number; limit: number; share: number };
-/** Today's use of the daily ceiling for the whole service (PR-15.1). Empty measures: no ceiling set. */
+export type CeilingState = "ok" | "optional_paused" | "paused";
+type CeilingUse = { used: number; limit: number; share: number; state: CeilingState };
+/** Today's use of the daily ceiling for the whole service (PR-15.1), per measure. Missing measures:
+ * no ceiling set. `state` is the worst of the measures. */
 export type ServiceCeiling = {
-  state: "ok" | "optional_paused" | "paused";
+  state: CeilingState;
   optional_pause_at: number | null;
   safety_reserve: number | null;
   tokens?: CeilingUse;

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Autonomy = Literal["assist", "propose", "act_within_limits"]
 Effect = Literal["read", "write", "external"]
@@ -124,6 +124,12 @@ class ServiceCeiling(Strict):
     voice_minutes_per_day: int = Field(gt=0)
     optional_pause_at: float = Field(gt=0, le=1)   # share where optional agents stop
     safety_reserve: float = Field(ge=0, lt=1)      # share kept for safety-critical agents
+
+    @model_validator(mode="after")
+    def _optional_stop_first(self) -> ServiceCeiling:
+        if self.optional_pause_at > 1 - self.safety_reserve:
+            raise ValueError("optional_pause_at must leave the safety reserve: optional agents stop first")
+        return self
 
 
 class Policies(Strict):

@@ -57,7 +57,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
         await ws.close()
         return
     started: float | None = None
-    reserved = 0.0
+    reserved, reserved_on = 0.0, None
     reply_tokens: dict[int, tuple[int, int]] = {}  # tokens in and out for each model reply
     saves: set[asyncio.Task] = set()  # exchanges still being saved (their cards worked out)
     config = types.LiveConnectConfig(
@@ -103,7 +103,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
             planned = service_left if by_ceiling else left if by_allowance else cap
             if source == keys.PLATFORM:
                 # Hold the planned minutes, so a second call at the same time sees what's really left.
-                governance.reserve(AGENT, planned)
+                reserved_on = governance.reserve(AGENT, planned)
                 reserved = planned
             done, pending = await asyncio.wait({upstream, downstream}, timeout=planned * 60,
                                                return_when=asyncio.FIRST_COMPLETED)
@@ -136,7 +136,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
             pass
     finally:
         if reserved:  # give back the held minutes; the actual minutes are counted below
-            governance.release(AGENT, reserved)
+            governance.release(AGENT, reserved, reserved_on)  # on the day it was held, even after midnight
         if started is not None:  # record the call's minutes and tokens in the usage ledger
             minutes = (time.time() - started) / 60
             governance.record_usage(AGENT, model, "direct", minutes=minutes,

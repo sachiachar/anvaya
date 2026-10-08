@@ -67,12 +67,31 @@ def test_calls_on_a_persons_own_key_dont_count():
     core.check_call("saathi.chat", "gemini-3.1-flash-lite")
 
 
-def test_voice_counts_minutes_on_its_own_measure():
-    core.record_usage("saathi.voice", "gemini-3.8-live", "direct", minutes=ceiling()["voice_minutes_per_day"])
+def test_voice_is_limited_by_minutes_and_its_tokens_still_count():
+    core.record_usage("saathi.voice", "gemini-3.8-live", "direct", minutes=ceiling()["voice_minutes_per_day"],
+                      tokens_in=4000, tokens_out=1000)
     with pytest.raises(core.Refused):
         core.check_call("saathi.voice", "gemini-3.8-live")
-    core.check_call("saathi.chat", "gemini-3.1-flash-lite")  # tokens are untouched
-    assert core.service_status()["voice_minutes"]["used"] == ceiling()["voice_minutes_per_day"]
+    core.check_call("saathi.chat", "gemini-3.1-flash-lite")     # tokens are far from the line
+    core.check_call("saathi.summary", "gemini-3.1-flash-lite")  # optional, but limited by tokens
+    status = core.service_status()
+    assert status["voice_minutes"]["used"] == ceiling()["voice_minutes_per_day"]
+    assert status["tokens"]["used"] == 5000  # our key paid for them
+    assert status["voice_minutes"]["state"] == "paused" and status["tokens"]["state"] == "ok"
+
+
+def test_testing_a_persons_own_key_is_never_refused_by_the_ceiling():
+    spend_tokens(1.5)
+    core.check_call("access.tester", "gemini-3.1-flash-lite")  # it calls only the key being tested
+
+
+def test_a_live_call_past_midnight_gives_back_its_minutes_on_the_day_it_held_them(monkeypatch):
+    monkeypatch.setattr(core, "_today", lambda: "2026-10-08")
+    held_on = core.reserve("saathi.voice", 20)
+    monkeypatch.setattr(core, "_today", lambda: "2026-10-09")
+    core.release("saathi.voice", 20, held_on)
+    assert store.get("service_usage", "2026-10-08")["voice_minutes"] == 0
+    assert store.get("service_usage", "2026-10-09") is None
 
 
 def test_a_live_call_holds_its_minutes_and_gives_them_back():
@@ -93,7 +112,8 @@ def test_a_wrong_ceiling_stops_start_up():
     reg = yaml.safe_load(core.REGISTRY_PATH.read_text())
     pol = yaml.safe_load(core.POLICIES_PATH.read_text())
     files.check(reg, pol)
-    for bad in ({"safety_reserve": 1.0}, {"optional_pause_at": 0}, {"tokens_per_day": "10000000"}, {"extra": 1}):
+    for bad in ({"safety_reserve": 1.0}, {"optional_pause_at": 0}, {"tokens_per_day": "10000000"}, {"extra": 1},
+                {"optional_pause_at": 0.95}):  # optional agents would run after everything else stopped
         broken = copy.deepcopy(pol)
         broken["service_ceiling"] |= bad
         with pytest.raises(ValueError):
