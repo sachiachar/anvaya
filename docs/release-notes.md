@@ -104,6 +104,7 @@
   - calls that were refused;
   - budget requests to approve or reject;
   - guardian interventions to confirm or reverse. The guardian now records four things: a next step Saathi didn't pursue because it could be part of a fraud, a reviewer going against a "not valid" check, a call stopped by a daily limit, and warning signs found on a certificate. Each says why in a few fixed words, with no names and nothing anyone said. Each judge sees their own demo's records and the ones for the whole demo;
+  - behind the scenes, a list of the AI's recent steps in your own demo: which helper ran, with which model, how many tokens it used, how much it may do on its own, and whether it finished, failed or was stopped. It never shows anything anyone said. The screen for it comes with the new design's agents panel;
   - the fraud coverage map and reference guides;
   - every private demo copy, with when it was last used and today's allowance used; your own is marked, and a platform admin can restore any copy to the start;
   - an audit log of every decision.

@@ -186,6 +186,12 @@ def model_kind(model: str) -> str | None:
     return next((m["kind"] for m in _files()[0]["models"] if m["id"] == model), None)
 
 
+def autonomy(agent: str) -> str:
+    """How much the agent may do on its own (assist, propose or act_within_limits), from its policy;
+    the label the app shows on each card, step and check (PR-15.7). Unknown agents only assist."""
+    return ((policy(agent) or {}).get("role") or {}).get("autonomy", "assist")
+
+
 def thinking(agent: str) -> str | None:
     """How much the agent may think, if its policy sets it."""
     return ((policy(agent) or {}).get("models") or {}).get("thinking")
@@ -527,10 +533,39 @@ def record_usage(agent: str, model: str, tenant: str, *, tokens_in: int = 0, tok
         store.increment("key_usage", f"{day_id}:{user}", {key_source: {
             "calls": 1, "tokens": tokens_in + tokens_out, "minutes": minutes, "errors": int(error)}},
             {"day": day_id, "user_key": user})
+        # A simple trace for the agents panel (PR-15.7): one line per call, never any text.
+        store.put("agent_steps", {"id": new_id("stp"), "at": time.time(), "user_key": user, "agent": agent,
+                                  "model": model, "tokens": tokens_in + tokens_out, "minutes": round(minutes, 2),
+                                  "result": "failed" if error else "done", "key_source": key_source})
     if key_source == "platform":  # everything our key spends, safety work included (PR-15.1)
         _add_service({"tokens": tokens_in + tokens_out, "voice_minutes": round(minutes, 2)})
     if not error and key_source == "platform":
         count_for_user(agent, tokens=tokens_in + tokens_out, minutes=minutes)
+
+
+STEPS_SHOWN = 50
+STEPS_HOURS = 24
+
+
+def agent_steps(user: str) -> dict:
+    """The agents panel (PR-15.7): one demo copy's recent AI steps, newest first: the calls that ran
+    (done or failed) and those the gateway stopped, with each agent's purpose and autonomy, and how
+    many next steps Saathi didn't pursue. Only this copy's, and never any text: only fixed words."""
+    since = time.time() - STEPS_HOURS * 3600
+    ran = [s for s in store.list("agent_steps", user_key=user) if s["at"] >= since]
+    stopped = [{"id": b["id"], "at": b["at"], "agent": b["agent"], "model": None, "tokens": 0, "minutes": 0.0,
+                "result": "stopped", "reason": b["reason"], "key_source": None}
+               for b in store.list("gateway_blocked", user_key=user) if b["at"] >= since]
+    steps = sorted(ran + stopped, key=lambda s: -s["at"])[:STEPS_SHOWN]
+    return {
+        "steps": [{"at": s["at"], "agent": s["agent"], "purpose": (agent_entry(s["agent"]) or {}).get("purpose"),
+                   "model": s["model"], "tokens": s["tokens"], "minutes": s["minutes"],
+                   "autonomy": autonomy(s["agent"]), "result": s["result"], "reason": s.get("reason"),
+                   "key": None if s["key_source"] is None else "ours" if s["key_source"] == "platform" else "yours"}
+                  for s in steps],
+        "steps_not_pursued_30d": sum(1 for s in store.list("steps_not_pursued", user_key=user)
+                                     if s["at"] > time.time() - 30 * 86400),
+    }
 
 
 def record_blocked(agent: str, kind: str, attempted: str, reason: str, user: str | None = None) -> None:

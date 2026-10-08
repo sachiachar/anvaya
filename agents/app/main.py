@@ -85,6 +85,8 @@ async def bad_model_output(_: Request, exc: ValidationError) -> JSONResponse:
         "detail": "Gemini returned output that did not match the expected format. Try again."})
 
 ASSIST, PROPOSE, ACT = "assist", "propose", "act_within_limits"
+# The agents behind each item the app shows; its autonomy label comes from their policy (PR-15.7).
+CARDS, STEPS = "capture.extractor", "readiness.planner"
 
 
 def owner_or_404(owner_id: str) -> dict:
@@ -166,7 +168,7 @@ def _expand(turn: dict) -> dict:
     if not ids:
         return turn
     # A draft is in Firestore; once kept it's in the owner's bundle, under the same id.
-    items = [{**doc, "collection": c} for c in ("people", "moments", "inventory")
+    items = [{**doc, "collection": c, "autonomy": governance_core.autonomy(CARDS)} for c in ("people", "moments", "inventory")
              for doc in (store.get(c, i) or knowledge.get(turn["owner_id"], i) for i in ids.get(c, [])) if doc]
     return {**turn, "proposals": items, "discarded": sum(len(v) for v in ids.values()) - len(items)}
 
@@ -323,9 +325,10 @@ def add_wish(owner_id: str, text: str = Form(...)) -> dict:
 
 @api.get("/owners/{owner_id}/review")
 def review_queue(owner_id: str) -> dict:
+    label = governance_core.autonomy(CARDS)
     return {
-        "moments": store.list("moments", owner_id=owner_id, status="pending"),
-        "inventory": store.list("inventory", owner_id=owner_id, status="pending"),
+        "moments": [{**d, "autonomy": label} for d in store.list("moments", owner_id=owner_id, status="pending")],
+        "inventory": [{**d, "autonomy": label} for d in store.list("inventory", owner_id=owner_id, status="pending")],
     }
 
 
@@ -484,7 +487,8 @@ async def readiness(owner_id: str) -> dict:
 @api.get("/owners/{owner_id}/tasks")
 def list_tasks(owner_id: str) -> dict:
     owner = owner_or_404(owner_id)
-    return {"score": owner.get("readiness_score"), "tasks": tasks.open_tasks(owner_id)}
+    label = governance_core.autonomy(STEPS)
+    return {"score": owner.get("readiness_score"), "tasks": [{**t, "autonomy": label} for t in tasks.open_tasks(owner_id)]}
 
 
 class TaskUpdate(BaseModel):
@@ -996,6 +1000,13 @@ def decide_access(request_id: str, body: AccessDecision) -> dict:
 @app.get("/api/healthz")
 def healthz() -> dict:
     return {"ok": True, "store": settings.store, "kms": bool(settings.kms_key_name), "auth": settings.auth_required}
+
+
+@api.get("/agents/steps")
+def my_agent_steps() -> dict:
+    """The agents panel (PR-15.7): the signed-in person's own recent AI steps, a simple trace with no
+    text. The copy comes from the verified sign-in, never from the request."""
+    return governance_core.agent_steps(governance_core.current_user())
 
 
 @api.get("/allowance")
