@@ -304,8 +304,10 @@ def _seeds(guide: Guide) -> list:
 
 
 def _recent_events(n: int = 10) -> list[dict]:
-    """What the guardian has seen lately: agent, response and reason only. Never case keys."""
-    events = sorted(store.list("guardian_events"), key=lambda e: -e.get("at", 0))[:n]
+    """What the guardian has seen lately: agent, response and reason only. Never case keys. Not the
+    daily-limit refusals (PR-15.6): they're routine, and would push out the signs worth learning from."""
+    events = sorted((e for e in store.list("guardian_events") if not e["id"].startswith(governance.LIMIT_EVENT_IDS)),
+                    key=lambda e: -e.get("at", 0))[:n]
     return [{"agent": e.get("agent"), "response": e.get("response"), "reason": e.get("reason")} for e in events]
 
 

@@ -122,8 +122,9 @@ def get_agents(who: Actor = Depends(actor)) -> dict:
 
 def _sees_event(who: Actor | None, event: dict) -> bool:
     """A demo admin sees the guardian's events for their own copy, and those for the whole service
-    (user_key None, e.g. the daily ceiling); the Anvaya team sees all (PR-15.6)."""
-    return who is None or who.role != "demo_admin" or event.get("user_key") in (who.key, None)
+    (e.g. the daily ceiling); the Anvaya team sees all (PR-15.6). An event with no key at all (from
+    before PR-15.6, or recorded with no one signed in) is the team's only."""
+    return who is None or who.role != "demo_admin" or event.get("user_key") in (who.key, core.SERVICE)
 
 
 def _hide_deciders(rows: list[dict], who: Actor) -> list[dict]:

@@ -103,6 +103,7 @@ def test_with_open_sign_in_the_portal_shows_a_new_account_only_its_own_records(c
                                  "reason": "a team reason", "detail": {}})
     store.put("guardian_events", {"id": "gev_team", "at": 1.0, "agent": "saathi.chat", "response": "add_check",
                                   "reason": "r", "case_key": None, "status": "confirmed",
+                                  "user_key": governance.user_key(TOKENS["stranger"]["sub"]),  # their own copy's
                                   "decided_by": "team@example.com", "decision_reason": "a team reason"})
     store.put("gateway_blocked", {"id": "blk_other", "at": 1.0, "agent": "saathi.chat", "kind": "allowance",
                                   "attempted": "owner.tokens", "reason": "r", "user_key": "u_someoneelse"})
