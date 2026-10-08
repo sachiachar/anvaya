@@ -65,8 +65,14 @@ def test_the_policy_file_turns_risk_into_a_response(monkeypatch):
 
 
 def test_a_rule_fixed_in_code_cant_be_loosened_by_the_file(monkeypatch):
-    with_policy(monkeypatch, next_step={"high": "continue"})
+    with_policy(monkeypatch, next_step={"high": "continue"}, review_confirmation={"medium": "continue"},
+                certificate_check={"medium": "continue"})
     assert guardian.decide("next_step", "readiness.planner", {"rule": "secret"}).response == "block"
+    # Overrides and warning signs always reach a reviewer, whatever the file says.
+    assert guardian.decide("review_confirmation", "activation.checker",
+                           {"override": True, "what": "death certificate"}).response == "add_check"
+    assert guardian.decide("certificate_check", "activation.checker",
+                           {"signs_found": ["s_qr"], "what": "certificate"}).response == "add_check"
 
 
 def test_a_new_detector_plugs_in_with_the_same_format(monkeypatch):

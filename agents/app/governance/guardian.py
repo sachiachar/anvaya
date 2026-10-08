@@ -134,7 +134,9 @@ def daily_limit(facts: dict) -> Finding | None:
 def review_override(facts: dict) -> Finding | None:
     """A reviewer confirmed although the AI's check said "not valid" (with a written reason)."""
     if facts.get("override"):
-        return Finding("review_override", "medium", f"A reviewer went against the AI's 'not valid' on the {facts['what']}")
+        # Always a reviewer's look at least: the policy file can raise this, never silence it.
+        return Finding("review_override", "medium", f"A reviewer went against the AI's 'not valid' on the {facts['what']}",
+                       floor="add_check")
     return None
 
 
@@ -148,7 +150,8 @@ def warning_signs(facts: dict) -> Finding | None:
         return None
     ids = ", ".join(found[:MAX_SIGN_IDS]) + (f" and {len(found) - MAX_SIGN_IDS} more" if len(found) > MAX_SIGN_IDS else "")
     return Finding("warning_signs", "medium",
-                   f"The {facts['what']} check found {len(found)} warning sign{'s' if len(found) > 1 else ''}: {ids}")
+                   f"The {facts['what']} check found {len(found)} warning sign{'s' if len(found) > 1 else ''}: {ids}",
+                   floor="add_check")  # always a reviewer's look at least
 
 
 # Which detectors watch which action. A new detector, fixed or a Gemini signal, is added here.
