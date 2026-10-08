@@ -36,6 +36,17 @@ user_allowances:
   owner: {tokens_per_day: 300000, voice_minutes_per_day: 30, spoken_replies_per_day: 50}
   family: {tokens_per_day: 200000}
 
+# One daily ceiling for the whole service, across every demo copy (PR-15.1). It counts what our
+# key spends (tokens in + out, and voice minutes); calls on a person's own key don't count.
+# Optional agents stop at optional_pause_at. Every other agent stops when only safety_reserve is
+# left. Safety-critical agents (certificate checks, the guardian) are never refused. It resets
+# at midnight UTC. A Google Cloud budget alert backs it up (infra/budget-alert.sh).
+service_ceiling:
+  tokens_per_day: 10000000
+  voice_minutes_per_day: 300
+  optional_pause_at: 0.8
+  safety_reserve: 0.1
+
 policies:
   - agent: saathi.chat
     role: {autonomy: act_within_limits}

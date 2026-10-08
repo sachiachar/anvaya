@@ -123,6 +123,7 @@
 - Near or at today's limit, "Ask for more" in the app sends a request with a reason (up to 300,000 more tokens, 60 voice minutes or 100 spoken replies, for up to 72 hours). The app shows when it's waiting and when it's approved.
 - Each judge is the platform admin of their own demo copy in the admin portal: they can approve or reject their own copy's requests, and see only their own copy and decisions. Everything else in the portal is read-only for them, and the kill switch and settings stay with the Anvaya team.
 - A live call ends when the person's voice minutes for the day run out. Two calls at the same time can't each use the full allowance.
+- The whole demo now has a daily limit too, shared by everyone: 10 million tokens and 300 voice minutes a day. Calls on your own model key don't count. As the day's use grows, live voice, spoken replies and conversation summaries pause first. Then everything else pauses, except checking a certificate, which always works. The app says the feature is paused for today, and it resets at midnight UTC. The admin portal's overview shows how much of the day's limit is used.
 - Live calls show their tokens in the admin portal, as well as their minutes. Before, every call showed 0 tokens.
 
 **Documents**
