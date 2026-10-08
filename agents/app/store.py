@@ -94,7 +94,8 @@ class FileStore(MemoryStore):
     def _save(self) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self._path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self._data, ensure_ascii=False))
+        # default=str: a date (e.g. agent_steps.expire_at, for Firestore's TTL) is kept as text locally.
+        tmp.write_text(json.dumps(self._data, ensure_ascii=False, default=str))
         tmp.replace(self._path)
 
     def put(self, collection, doc):

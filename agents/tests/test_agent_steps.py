@@ -65,7 +65,8 @@ def test_no_text_ever_and_a_persons_own_key_is_marked(client):
     [step] = client.get("/api/agents/steps").json()["steps"]
     assert step["key"] == "yours"
     stored = store.list("agent_steps", user_key=ME)[0]
-    assert set(stored) == {"id", "at", "user_key", "agent", "model", "tokens", "minutes", "result", "key_source"}
+    assert set(stored) == {"id", "at", "day", "user_key", "agent", "model", "tokens", "minutes", "result",
+                           "key_source", "expire_at"}
 
 
 def test_only_the_last_day_and_at_most_50(client):
@@ -83,11 +84,30 @@ def test_steps_not_pursued_are_counted_for_the_copy_only(client):
     assert client.get("/api/agents/steps").json()["steps_not_pursued_30d"] == 1
 
 
-def test_resetting_a_demo_deletes_its_trace(client):
+def test_resetting_a_demo_empties_its_panel_and_no_one_elses(client):
     call(ME, tokens_in=1)
     call(OTHER, tokens_in=1)
+    core.record_blocked("saathi.chat", "allowance", "owner.tokens", "Daily allowance reached", user=ME)
+    store.put("steps_not_pursued", {"id": "snp_1", "at": time.time(), "rule": "secret", "user_key": ME})
+    time.sleep(0.01)
     client.post("/api/demo/seed")
-    assert store.list("agent_steps", user_key=ME) == [] and store.list("agent_steps", user_key=OTHER)
+    body = client.get("/api/agents/steps").json()
+    assert body == {"steps": [], "steps_not_pursued_30d": 0}
+    assert store.list("agent_steps", user_key=OTHER)  # another copy keeps its trace
+    assert store.list("gateway_blocked", user_key=ME)  # the team's record of refused calls stays
+
+
+def test_a_refused_call_belongs_to_the_person_asking_and_a_key_fallback_isnt_stopped(client):
+    core.set_current_user(ME)
+    core.record_blocked("saathi.chat", "kill_switch", "all_paused", "Paused by the kill switch")  # no user given
+    core.record_blocked("saathi.chat", "key_fallback", "judge_studio", "Key failed (429); trying the next one")
+    [step] = client.get("/api/agents/steps").json()["steps"]
+    assert (step["result"], step["reason"]) == ("stopped", "Paused by the kill switch")
+
+
+def test_the_labels_come_from_registered_agents():
+    for agent in (main.CARDS, main.STEPS, loops.CHECKER):
+        assert core.policy(agent) is not None, agent  # a typo would quietly label everything "assist"
 
 
 def test_each_card_step_and_check_carries_its_autonomy_label(client):

@@ -168,7 +168,8 @@ def _expand(turn: dict) -> dict:
     if not ids:
         return turn
     # A draft is in Firestore; once kept it's in the owner's bundle, under the same id.
-    items = [{**doc, "collection": c, "autonomy": governance_core.autonomy(CARDS)} for c in ("people", "moments", "inventory")
+    label = governance_core.autonomy(CARDS)
+    items = [{**doc, "collection": c, "autonomy": label} for c in ("people", "moments", "inventory")
              for doc in (store.get(c, i) or knowledge.get(turn["owner_id"], i) for i in ids.get(c, [])) if doc]
     return {**turn, "proposals": items, "discarded": sum(len(v) for v in ids.values()) - len(items)}
 
@@ -474,21 +475,26 @@ async def readiness(owner_id: str) -> dict:
     """Readiness loop: score, plus next steps that stay on the owner's list until done."""
     owner, args = _readiness_inputs(owner_id)
     if (cached := _cached("readiness", owner_id, args)) is not None:
-        return {**cached, "tasks": tasks.open_tasks(owner_id), "cached": True}
+        return {**cached, "tasks": _labelled_steps(owner_id), "cached": True}
     result = await loops.assess_readiness(owner, *args[1:])
     tasks.refresh(owner_id, [g.model_dump() for g in result.gaps])
     store.update("owners", owner_id, {"readiness_score": result.score})
     # Running readiness updates the next steps, which are one of its own inputs, so remember
     # the inputs as they are now; an unchanged owner then gets the saved result next time.
     _remember("readiness", owner_id, _readiness_inputs(owner_id)[1], {"autonomy": ACT, "score": result.score})
-    return {"autonomy": ACT, "score": result.score, "tasks": tasks.open_tasks(owner_id)}
+    return {"autonomy": ACT, "score": result.score, "tasks": _labelled_steps(owner_id)}
+
+
+def _labelled_steps(owner_id: str) -> list[dict]:
+    """The owner's open next steps, each with its agent's autonomy label (PR-15.7)."""
+    label = governance_core.autonomy(STEPS)
+    return [{**t, "autonomy": label} for t in tasks.open_tasks(owner_id)]
 
 
 @api.get("/owners/{owner_id}/tasks")
 def list_tasks(owner_id: str) -> dict:
     owner = owner_or_404(owner_id)
-    label = governance_core.autonomy(STEPS)
-    return {"score": owner.get("readiness_score"), "tasks": [{**t, "autonomy": label} for t in tasks.open_tasks(owner_id)]}
+    return {"score": owner.get("readiness_score"), "tasks": _labelled_steps(owner_id)}
 
 
 class TaskUpdate(BaseModel):
@@ -786,7 +792,7 @@ async def report_death(owner_id: str, certificate: UploadFile = File(...)) -> di
 
 # The guardian's records about document checks (PR-15.6): fixed text from code, the case id and the
 # fraud guide's sign ids only; never what a document says, a reviewer's name or their written reason.
-CHECKER = "activation.checker"
+CHECKER = loops.CHECKER
 MAX_SIGN_IDS = 5  # a guide can grow; the reason stays short
 
 

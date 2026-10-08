@@ -21,7 +21,7 @@ import os
 import pathlib
 import time
 from contextvars import ContextVar
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 
 import yaml
@@ -534,9 +534,11 @@ def record_usage(agent: str, model: str, tenant: str, *, tokens_in: int = 0, tok
             "calls": 1, "tokens": tokens_in + tokens_out, "minutes": minutes, "errors": int(error)}},
             {"day": day_id, "user_key": user})
         # A simple trace for the agents panel (PR-15.7): one line per call, never any text.
-        store.put("agent_steps", {"id": new_id("stp"), "at": time.time(), "user_key": user, "agent": agent,
+        now = time.time()
+        store.put("agent_steps", {"id": new_id("stp"), "at": now, "day": day_id, "user_key": user, "agent": agent,
                                   "model": model, "tokens": tokens_in + tokens_out, "minutes": round(minutes, 2),
-                                  "result": "failed" if error else "done", "key_source": key_source})
+                                  "result": "failed" if error else "done", "key_source": key_source,
+                                  "expire_at": datetime.fromtimestamp(now + STEPS_KEPT_DAYS * 86400, timezone.utc)})
     if key_source == "platform":  # everything our key spends, safety work included (PR-15.1)
         _add_service({"tokens": tokens_in + tokens_out, "voice_minutes": round(minutes, 2)})
     if not error and key_source == "platform":
@@ -547,15 +549,34 @@ STEPS_SHOWN = 50
 STEPS_HOURS = 24
 
 
+STEPS_KEPT_DAYS = 2  # each line's expire_at; a Firestore TTL policy on it removes old lines (a person sets it)
+NOT_STOPPED = {"key_fallback"}  # recorded by the gateway, but the call went on with the next key
+
+
+def _recent_days() -> list[str]:
+    now = datetime.now(timezone.utc)
+    return [(now - timedelta(days=d)).strftime("%Y-%m-%d") for d in (0, 1)]
+
+
+def start_trace(user: str) -> None:
+    """A reset demo starts with an empty agents panel: older steps are no longer shown."""
+    store.put("trace_marks", {"id": user, "from": time.time()})
+
+
 def agent_steps(user: str) -> dict:
     """The agents panel (PR-15.7): one demo copy's recent AI steps, newest first: the calls that ran
     (done or failed) and those the gateway stopped, with each agent's purpose and autonomy, and how
-    many next steps Saathi didn't pursue. Only this copy's, and never any text: only fixed words."""
-    since = time.time() - STEPS_HOURS * 3600
-    ran = [s for s in store.list("agent_steps", user_key=user) if s["at"] >= since]
-    stopped = [{"id": b["id"], "at": b["at"], "agent": b["agent"], "model": None, "tokens": 0, "minutes": 0.0,
-                "result": "stopped", "reason": b["reason"], "key_source": None}
-               for b in store.list("gateway_blocked", user_key=user) if b["at"] >= since]
+    many next steps Saathi didn't pursue. Only this copy's, and never any text: only fixed words.
+    It reads only today's and yesterday's lines, never the whole history."""
+    trace_from = (store.get("trace_marks", user) or {}).get("from", 0)  # the last reset
+    since = max(time.time() - STEPS_HOURS * 3600, trace_from)
+    ran, stopped = [], []
+    for day in _recent_days():
+        ran += [s for s in store.list("agent_steps", user_key=user, day=day) if s["at"] >= since]
+        stopped += [{"id": b["id"], "at": b["at"], "agent": b["agent"], "model": None, "tokens": 0, "minutes": 0.0,
+                     "result": "stopped", "reason": b["reason"], "key_source": None}
+                    for b in store.list("gateway_blocked", user_key=user, day=day)
+                    if b["at"] >= since and b.get("kind") not in NOT_STOPPED]
     steps = sorted(ran + stopped, key=lambda s: -s["at"])[:STEPS_SHOWN]
     return {
         "steps": [{"at": s["at"], "agent": s["agent"], "purpose": (agent_entry(s["agent"]) or {}).get("purpose"),
@@ -564,14 +585,16 @@ def agent_steps(user: str) -> dict:
                    "key": None if s["key_source"] is None else "ours" if s["key_source"] == "platform" else "yours"}
                   for s in steps],
         "steps_not_pursued_30d": sum(1 for s in store.list("steps_not_pursued", user_key=user)
-                                     if s["at"] > time.time() - 30 * 86400),
+                                     if s["at"] >= max(time.time() - 30 * 86400, trace_from)),
     }
 
 
 def record_blocked(agent: str, kind: str, attempted: str, reason: str, user: str | None = None) -> None:
-    """The gateway refused a call: a model or tool not in the registry, a limit or a budget."""
-    store.put("gateway_blocked", {"id": new_id("blk"), "at": time.time(), "agent": agent, "kind": kind,
-                                  "attempted": attempted, "reason": reason, "user_key": user})
+    """The gateway refused a call: a model or tool not in the registry, a limit or a budget. It
+    belongs to the person whose request this is, unless another is given."""
+    store.put("gateway_blocked", {"id": new_id("blk"), "at": time.time(), "day": _today(), "agent": agent,
+                                  "kind": kind, "attempted": attempted, "reason": reason,
+                                  "user_key": user or current_user()})
 
 
 SERVICE = "service"  # an event about the whole service (the daily ceiling), not one demo copy
