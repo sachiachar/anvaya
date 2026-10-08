@@ -10,7 +10,7 @@ import re
 import pytest
 import yaml
 
-from app import step_guard, tasks
+from app import main, step_guard, tasks
 from app.governance import core, guardian
 from app.store import store
 
@@ -145,10 +145,47 @@ def test_the_release_expires_the_guardians_records_too():
     assert "expire_at" in actions()[0]
 
 
-def test_the_step_guard_obeys_the_guardian(monkeypatch):
+STEP = {"title": "Record the nominee", "why_it_matters": "w", "action": "institution",
+        "question_for_owner": "q", "steps": ["s"], "severity": "high"}
+
+
+def test_the_step_guard_obeys_the_guardian_and_counts_what_it_holds_back(monkeypatch):
     """A step the step guard allows still doesn't reach the owner if the guardian says no."""
     monkeypatch.setitem(guardian.DETECTORS, "next_step",
-                        [lambda facts: guardian.Finding("test_rule", "high", "Held for a test", floor="pause")])
-    step = {"title": "Record the nominee", "why_it_matters": "w", "action": "institution",
-            "question_for_owner": "q", "steps": ["s"], "severity": "high"}
-    assert step_guard.pursue("owner_guardcore", [step]) == []
+                        [lambda facts: guardian.Finding("test_rule", "medium", "Held for a test", floor="pause")])
+    assert step_guard.pursue("owner_guardcore", [STEP]) == []
+    assert [s["rule"] for s in store.list("steps_not_pursued")] == ["guardian:pause"]
+
+
+def test_repeats_replace_their_record_instead_of_adding_one():
+    for _ in range(3):
+        step_guard.pursue("owner_guardcore", [STEP])
+    assert len([a for a in actions() if a["action"] == "next_step"]) == 1
+    store.put("user_usage", {"id": f"{core._today()}:{ME}", "day": core._today(), "user_key": ME,
+                             "owner": {"tokens": core.allowances()["owner"]["tokens_per_day"]}})
+    for _ in range(3):
+        with pytest.raises(core.Refused):
+            core.check_call("saathi.chat", "gemini-3.1-flash-lite")
+    assert len([a for a in actions() if a["action"] == "model_call"]) == 1
+
+
+def test_a_live_call_is_recorded_as_one():
+    core.set_channel("live_call")
+    try:
+        store.put("user_usage", {"id": f"{core._today()}:{ME}", "day": core._today(), "user_key": ME,
+                                 "owner": {"voice_minutes": core.allowances()["owner"]["voice_minutes_per_day"]}})
+        with pytest.raises(core.Refused):
+            core.check_call("saathi.voice", "gemini-3.8-live")  # refused as the call starts
+        assert actions()[0]["channel"] == "live_call"
+    finally:
+        core.set_channel("app")
+
+
+def test_a_failed_record_never_turns_a_saved_confirmation_into_an_error(monkeypatch):
+    def broken(*_, **__):
+        raise RuntimeError("store unavailable")
+
+    monkeypatch.setattr(guardian, "decide", broken)
+    main._record_override({"id": "case_1", "certificate_check": {"verdict": "not_valid"}}, "certificate_check",
+                          "death certificate", "Checked with the registrar")  # logged, not raised
+    main._record_signs({"id": "case_1"}, {"signs": [{"id": "s_qr", "result": "found"}]}, "certificate")

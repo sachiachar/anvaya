@@ -176,13 +176,16 @@ class Decision:
 
 
 def decide(action: str, agent: str, facts: dict | None = None, *, refs: dict[str, str] | None = None,
-           channel: str = "app", case_key: str | None = None, user_key: str | None = None,
-           event_key: str | None = None, once: str | None = None) -> Decision:
+           case_key: str | None = None, user_key: str | None = None, event_key: str | None = None,
+           once: str | None = None, record_id: str | None = None) -> Decision:
     """Ask the guardian about one action. `facts` are what the detectors read; they are never
     stored. `refs` are the ids of the items involved, which are stored. `user_key` is whose action
     it is (the caller's by default); `event_key` whose intervention it is, if different (e.g.
     core.SERVICE for the daily ceiling). `once` gives the intervention a stable id, so a repeat
-    (the same refusal, the same step) adds no new one."""
+    (the same refusal, the same step) adds no new one. `record_id` does the same for the action
+    record: a repeat replaces it (with the latest time) instead of adding another. Where the
+    action came from (the app or a live call) is the request's (core.current_channel)."""
+    channel = core.current_channel()
     if action not in ACTIONS or channel not in CHANNELS:
         raise ValueError(f"unknown guardian action {action!r} or channel {channel!r}")
     facts, user = facts or {}, user_key or core.current_user()
@@ -193,7 +196,7 @@ def decide(action: str, agent: str, facts: dict | None = None, *, refs: dict[str
         response = stricter(response, f.floor)
     now = time.time()
     record = store.put("guardian_actions", {
-        "id": new_id("gac"), "at": now, "day": datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%d"),
+        "id": record_id or new_id("gac"), "at": now, "day": datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%d"),
         "expire_at": datetime.fromtimestamp(now + KEPT_DAYS * 86400, timezone.utc),
         "user_key": user, "action": action, "agent": agent, "autonomy": core.autonomy(agent), "channel": channel,
         "refs": refs or {}, "risk": risk, "response": response, "detectors": [f.detector for f in findings]})

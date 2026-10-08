@@ -111,11 +111,11 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
                 task.cancel()
             if not done and by_ceiling:  # the service's voice minutes for today ran out
                 # A blocked call and a guardian event (PR-15.6), off the event loop: store writes wait.
-                await asyncio.to_thread(governance.ceiling_reached, AGENT, "live_call")
+                await asyncio.to_thread(governance.ceiling_reached, AGENT)
                 await ws.send_json({"type": "error", "detail": "Voice calls are paused for today: the demo has "
                                     "reached its daily limit. You can keep typing, and voice is back tomorrow."})
             elif not done and by_allowance:  # the person's daily voice minutes ran out
-                await asyncio.to_thread(governance.allowance_reached, AGENT, "live_call")
+                await asyncio.to_thread(governance.allowance_reached, AGENT)
                 await ws.send_json({"type": "error", "detail": "You've used today's voice minutes. You can keep "
                                     "typing, and voice is back tomorrow, or you can ask for more."})
             elif not done:  # the call reached its length limit (PR-10.2)

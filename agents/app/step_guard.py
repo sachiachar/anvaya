@@ -180,15 +180,22 @@ def pursue(owner_id: str, steps: list[dict]) -> list[dict]:
     kept = []
     for step in steps:
         reason = check(typed(step), tactics)
-        # A salted hash of the copy, the rule and the step's title: it holds no words itself, and the
-        # same step dropped again on a later run is counted once.
-        digest = hashlib.sha256(f"{settings.user_key_salt}:{key}:{reason}:{step.get('title', '')}".encode()).hexdigest()[:16]
-        # Every step asks the guardian (PR-2.7); a dropped one becomes an event, once per step. The
+        # Salted hashes of the copy and the step's title (and the rule): they hold no words. The same
+        # step on a later run has the same record (replaced, not added) and is counted once.
+        step_id = _digest(key, step.get("title", ""))
+        # Every step asks the guardian (PR-2.7); a held-back one becomes an event, once per step. The
         # rule is fixed in code: the guardian can only make it stricter, never let a step through.
-        decision = guardian.decide("next_step", PLANNER, {"rule": reason}, refs={"step": f"step_{digest}"},
-                                   user_key=key, once=f"gev_step_{digest}")
+        decision = guardian.decide("next_step", PLANNER, {"rule": reason}, refs={"step": f"step_{step_id}"},
+                                   user_key=key, once=f"gev_step_{_digest(key, reason, step.get('title', ''))}",
+                                   record_id=f"gac_step_{step_id}")
         if reason is None and decision.goes_ahead:
             kept.append(step)
-        elif reason is not None:
-            store.put("steps_not_pursued", {"id": f"snp_{digest}", "at": time.time(), "rule": reason, "user_key": key})
+        else:
+            rule = reason or f"guardian:{decision.response}"
+            store.put("steps_not_pursued", {"id": f"snp_{_digest(key, rule, step.get('title', ''))}", "at": time.time(),
+                                            "rule": rule, "user_key": key})
     return kept
+
+
+def _digest(*parts) -> str:
+    return hashlib.sha256(":".join([settings.user_key_salt, *(str(p) for p in parts)]).encode()).hexdigest()[:16]
