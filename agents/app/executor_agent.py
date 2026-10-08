@@ -39,6 +39,11 @@ INDEX_LIMIT_CHARS = 40_000  # the index on its own, above the inline limit
 # Any opening or closing "kept" tag inside kept text, whatever its capitals or spacing.
 _FENCE = re.compile(r"<\s*/?\s*kept", re.IGNORECASE)
 CITATION = re.compile(r"\[((?:m|inv|p)_[0-9a-f]{12})\]")
+# For the answer the family reads (PR-15.9): any kept-item id, and brackets or parentheses that
+# hold only ids, e.g. "[m_…]", "[m_…, inv_…]" or "(p_…)". The sources list names them instead.
+_ID = r"(?:m|inv|p)_[0-9a-f]{12}"
+_ID_GROUP = re.compile(rf"[ \t]*[\[(]\s*{_ID}(?:\s*[,;]\s*{_ID})*\s*[\])]")
+_BARE_ID = re.compile(rf"[ \t]*\b{_ID}\b")
 
 
 def _index_text(owner_id: str, name: str) -> str:
@@ -236,6 +241,14 @@ def _sources(owner_id: str, answer: str) -> list[dict]:
     return out
 
 
+def clean_answer(answer: str) -> str:
+    """The answer without the ids it cites, so the family reads plain sentences (PR-15.9). The ids
+    are used before this, to list the sources."""
+    text = _BARE_ID.sub("", _ID_GROUP.sub("", answer))
+    text = re.sub(r"[ \t]+([.,;:!?])", r"\1", text)  # no space left before punctuation
+    return re.sub(r"[ \t]{2,}", " ", text).strip()
+
+
 class UnknownSession(LookupError):
     """A session that isn't this person's, for this owner."""
 
@@ -267,8 +280,8 @@ async def ask(owner: dict, user_id: str, question: str, session_id: str | None =
         if event.is_final_response() and event.content and event.content.parts:
             answer = "".join(p.text or "" for p in event.content.parts)
     return {
-        "answer": answer,
-        "sources": _sources(owner["id"], answer),
+        "answer": clean_answer(answer),
+        "sources": _sources(owner["id"], answer),  # from the ids, before they're removed
         "tools_used": tools_used,
         "session_id": session_id,
     }

@@ -3,6 +3,7 @@ instructions while small, the index and read_concept above a limit; never the co
 another owner's bundle or a replaced version; and every source it shows is a real kept item."""
 
 import asyncio
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -148,3 +149,23 @@ def test_sources_are_real_kept_items_with_their_titles(monkeypatch):
     monkeypatch.setattr(executor_agent._runner, "run_async", fake_run)
     result = asyncio.run(executor_agent.ask({"id": OWNER, "name": "Vikram Rao"}, "family:test", "Where are Papa's documents?"))
     assert result["sources"] == [{"id": papers["id"], "title": "Where the papers are"}]  # the invented id is dropped
+    # The family reads plain sentences: no ids in the answer (PR-15.9).
+    assert result["answer"] == "They're in the blue folder, and the gold is in the bank."
+    assert not ID_PATTERN.search(result["answer"])
+
+
+ID_PATTERN = re.compile(r"\b(?:m|inv|p)_[0-9a-f]{12}\b")
+
+
+@pytest.mark.parametrize("raw, clean", [
+    ("In the blue folder [m_0123456789ab].", "In the blue folder."),
+    ("Two policies [inv_0123456789ab, inv_ba9876543210]: LIC and HDFC.", "Two policies: LIC and HDFC."),
+    ("Ask Ajay (p_0123456789ab) about it.", "Ask Ajay about it."),
+    ("He named p_0123456789ab as nominee.", "He named as nominee."),
+    ("Papers [m_0123456789ab][m_ba9876543210]\n\nAnd the gold [m_aaaaaaaaaaaa].", "Papers\n\nAnd the gold."),
+    ("Vikram Rao never recorded anything about that.", "Vikram Rao never recorded anything about that."),
+    ("Keep [this note] and m_short as they are.", "Keep [this note] and m_short as they are."),
+])
+def test_the_answer_loses_its_ids_and_keeps_its_words(raw, clean):
+    assert executor_agent.clean_answer(raw) == clean
+    assert not ID_PATTERN.search(executor_agent.clean_answer(raw))
