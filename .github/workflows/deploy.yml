@@ -7,8 +7,10 @@
 # or only the allowlist.
 #
 # Who may use the demo lives in GitHub: environment "production" -> secret
-# ALLOWED_EMAILS (emails and/or @domains, comma-separated). Every API deploy applies
-# it; to apply a change right away: Actions -> Deploy -> Run workflow -> "allowlist".
+# ALLOWED_EMAILS (emails and/or @domains, comma-separated), and variable OPEN_SIGN_IN
+# ("true" lets any Google account in, for judging, PR-15.2). One of the two must be set.
+# Every API deploy applies both; to apply a change right away: Actions -> Deploy ->
+# Run workflow -> "allowlist".
 #
 # Google credentials come from Workload Identity Federation (no stored keys);
 # see infra/setup-github-actions.sh. Google gives them only to this workflow file, running on
@@ -89,10 +91,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Check the allowlist is set
+      - name: Check who may sign in is set
         env:
           ALLOWED_EMAILS: ${{ secrets.ALLOWED_EMAILS }}
-        run: '[ -n "$ALLOWED_EMAILS" ] || { echo "Set ALLOWED_EMAILS in environment production"; exit 1; }'
+          OPEN_SIGN_IN: ${{ vars.OPEN_SIGN_IN }}
+        run: '[ -n "$ALLOWED_EMAILS" ] || [ "$OPEN_SIGN_IN" = "true" ] || { echo "Set ALLOWED_EMAILS, or OPEN_SIGN_IN=true, in environment production"; exit 1; }'
 
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
@@ -107,6 +110,9 @@ jobs:
       - name: Deploy API to Cloud Run
         env:
           ALLOWED_EMAILS: ${{ secrets.ALLOWED_EMAILS }}
+          # "true": any Google account may sign in, each to its own demo copy (PR-15.2). A variable
+          # in environment "production", not a secret. Empty or anything else: only ALLOWED_EMAILS.
+          OPEN_SIGN_IN: ${{ vars.OPEN_SIGN_IN }}
           # Platform admin portal roles, e.g. "you@example.com:platform_admin,@team.com:risk_reviewer".
           # Anyone else allowed in is a read-only viewer.
           PLATFORM_ROLES: ${{ secrets.PLATFORM_ROLES }}
@@ -124,10 +130,10 @@ jobs:
         run: |
           gcloud run deploy life-after-agents --source agents \
             --project "${{ vars.GCP_PROJECT_ID }}" --region "${{ vars.GCP_REGION }}" --quiet --cpu-boost \
-            --update-env-vars "^;^ALLOWED_EMAILS=${ALLOWED_EMAILS};PLATFORM_ROLES=${PLATFORM_ROLES};BILLING_EXPORT_TABLE=${BILLING_EXPORT_TABLE};EXA_API_KEY=${EXA_API_KEY};MODEL_KEYS_KMS_KEY_NAME=${MODEL_KEYS_KMS_KEY_NAME}"
+            --update-env-vars "^;^ALLOWED_EMAILS=${ALLOWED_EMAILS};OPEN_SIGN_IN=${OPEN_SIGN_IN:-false};PLATFORM_ROLES=${PLATFORM_ROLES};BILLING_EXPORT_TABLE=${BILLING_EXPORT_TABLE};EXA_API_KEY=${EXA_API_KEY};MODEL_KEYS_KMS_KEY_NAME=${MODEL_KEYS_KMS_KEY_NAME}"
 
   allowlist:
-    # Manual only: apply the allowlist without rebuilding anything.
+    # Manual only: apply the allowlist and open sign-in without rebuilding anything.
     if: github.event_name == 'workflow_dispatch' && inputs.target == 'allowlist'
     runs-on: ubuntu-latest
     environment: production
@@ -137,14 +143,15 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOYER_SA }}
       - uses: google-github-actions/setup-gcloud@v3
-      - name: Update the allowlist on Cloud Run
+      - name: Update who may sign in on Cloud Run
         env:
           ALLOWED_EMAILS: ${{ secrets.ALLOWED_EMAILS }}
+          OPEN_SIGN_IN: ${{ vars.OPEN_SIGN_IN }}
         run: |
-          [ -n "$ALLOWED_EMAILS" ] || { echo "Set ALLOWED_EMAILS in environment production"; exit 1; }
+          [ -n "$ALLOWED_EMAILS" ] || [ "$OPEN_SIGN_IN" = "true" ] || { echo "Set ALLOWED_EMAILS, or OPEN_SIGN_IN=true, in environment production"; exit 1; }
           gcloud run services update life-after-agents \
             --project "${{ vars.GCP_PROJECT_ID }}" --region "${{ vars.GCP_REGION }}" --quiet \
-            --update-env-vars "^;^ALLOWED_EMAILS=${ALLOWED_EMAILS}"
+            --update-env-vars "^;^ALLOWED_EMAILS=${ALLOWED_EMAILS};OPEN_SIGN_IN=${OPEN_SIGN_IN:-false}"
 
   web:
     needs: changes

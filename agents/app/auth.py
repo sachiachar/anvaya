@@ -9,6 +9,9 @@ calling the API directly.
 
 ALLOWED_EMAILS is a comma-separated list of addresses and/or domains:
     ALLOWED_EMAILS=sachi@example.com, judge@contest.org, @hack2skill.com
+
+OPEN_SIGN_IN=true lets in any Google account with a verified email, for judging (PR-15.2).
+Each account still gets only its own demo copy (demo.py).
 """
 
 from __future__ import annotations
@@ -63,6 +66,8 @@ class User:
 
 
 def allowed(email: str) -> bool:
+    if settings.open_sign_in:
+        return True
     email = email.strip().lower()
     for entry in settings.allowed_emails:
         if entry.startswith("@") and email.endswith(entry):

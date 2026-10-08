@@ -252,7 +252,7 @@ Every push to `main` deploys **what changed since each part last deployed** ([.g
 | `web/**`, `firebase.json`, `firestore.rules` | The web app to Firebase Hosting, and the Firestore rules |
 | Docs only | Nothing |
 
-**Who can use the demo** is kept in GitHub: *Settings → Environments → production → secret `ALLOWED_EMAILS`* (emails and/or `@domains`, comma-separated). Every API deploy applies it. To apply a change at once, run **Actions → Deploy → Run workflow → allowlist**.
+**Who can use the demo** is kept in GitHub: *Settings → Environments → production → secret `ALLOWED_EMAILS`* (emails and/or `@domains`, comma-separated). For judging, set the variable `OPEN_SIGN_IN` to `true` in the same environment: any Google account can then sign in, each to its own demo copy. A deploy needs one of the two. Every API deploy applies both. To apply a change at once, run **Actions → Deploy → Run workflow → allowlist**.
 
 **Actions → Deploy → Run workflow → all** deploys everything.
 

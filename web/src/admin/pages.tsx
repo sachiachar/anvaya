@@ -421,7 +421,7 @@ export function GuardianPage({ me }: { me: Me }) {
                   <DecisionForm actions={[{ value: "confirm", label: "Confirm" }, { value: "reverse", label: "Reverse", tone: "danger" }]}
                     onDecide={(v, reason) => platform.decideGuardian(e.id, v as "confirm" | "reverse", reason).then(reload)} />
                 ) : <p className="pa-muted">A risk reviewer decides this.</p>
-              ) : <p className="pa-muted">{fmt.label(e.status)} by {e.decided_by}: {e.decision_reason}</p>}
+              ) : <p className="pa-muted">{fmt.label(e.status)} by {e.decided_by}{e.decision_reason ? `: ${e.decision_reason}` : ""}</p>}
             </li>
           ))}
         </ul>

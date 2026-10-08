@@ -73,6 +73,10 @@ def role_for(email: str | None) -> str:
     for entry, role in settings.platform_roles.items():
         if entry.startswith("@") and email.endswith(entry):
             return role
+    # With open sign-in anyone can get in (PR-15.2), so an account with no listed role is the admin
+    # of its own copy only, even before the copy exists; never a viewer of everyone's records.
+    if settings.open_sign_in and settings.platform_default_role == "viewer":
+        return "demo_admin"
     return settings.platform_default_role
 
 
