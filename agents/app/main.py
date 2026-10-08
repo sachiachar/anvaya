@@ -775,7 +775,34 @@ async def report_death(owner_id: str, certificate: UploadFile = File(...)) -> di
                                        expected, owner["name"], guide)
     case = release.new_case(new_id("case"), owner_id, loops.review_summary(check, guide))
     case["reported_by"] = demo.person()["name"]
-    return {"autonomy": ASSIST, "case": store.put("cases", case)}
+    case = store.put("cases", case)
+    _record_signs(case, case["certificate_check"], "certificate")  # once the case is saved
+    return {"autonomy": ASSIST, "case": case}
+
+
+# The guardian's records about document checks (PR-15.6): fixed text from code, the case id and the
+# fraud guide's sign ids only; never what a document says, a reviewer's name or their written reason.
+CHECKER = "activation.checker"
+MAX_SIGN_IDS = 5  # a guide can grow; the reason stays short
+
+
+def _record_signs(case: dict, check: dict, what: str) -> None:
+    """Warning signs a document check found become one guardian event for a risk reviewer."""
+    found = [s["id"] for s in check.get("signs") or [] if s.get("result") == "found"]
+    if found:
+        ids = ", ".join(found[:MAX_SIGN_IDS]) + (f" and {len(found) - MAX_SIGN_IDS} more" if len(found) > MAX_SIGN_IDS else "")
+        governance_core.record_intervention(
+            CHECKER, "add_check", f"The {what} check found {len(found)} warning sign{'s' if len(found) > 1 else ''}: {ids}",
+            case_key=case["id"])
+
+
+def _record_override(case: dict, check_field: str, what: str, override_reason: str | None) -> None:
+    """A saved confirmation that went against the AI's "not valid" (release._check_override let it
+    through only with a written reason) becomes one guardian event for a risk reviewer."""
+    if override_reason and (case.get(check_field) or {}).get("verdict") == "not_valid":
+        governance_core.record_intervention(CHECKER, "add_check",
+                                            f"A reviewer went against the AI's 'not valid' on the {what}",
+                                            case_key=case["id"])
 
 
 @api.post("/owners/{owner_id}/release/authority", dependencies=[Depends(demo.only("family"))])
@@ -818,12 +845,16 @@ def _reviewer() -> str:
 
 @api.post("/admin/cases/{case_id}/confirm-death", dependencies=[Depends(demo.only("reviewer"))])
 def confirm_death(case_id: str, body: Review) -> dict:
-    return _transition(case_id, lambda c: release.confirm_death(c, _reviewer(), body.override_reason))
+    out = _transition(case_id, lambda c: release.confirm_death(c, _reviewer(), body.override_reason))
+    _record_override(out["case"], "certificate_check", "death certificate", body.override_reason)
+    return out
 
 
 @api.post("/admin/cases/{case_id}/confirm-authority", dependencies=[Depends(demo.only("reviewer"))])
 def confirm_authority(case_id: str, body: Review) -> dict:
-    return _transition(case_id, lambda c: release.confirm_authority(c, _reviewer(), body.override_reason))
+    out = _transition(case_id, lambda c: release.confirm_authority(c, _reviewer(), body.override_reason))
+    _record_override(out["case"], "authority_check", "proof of legal authority", body.override_reason)
+    return out
 
 
 @api.post("/owners/{owner_id}/alive", dependencies=[Depends(demo.only("owner"))])

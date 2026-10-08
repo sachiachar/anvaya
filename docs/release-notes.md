@@ -103,7 +103,7 @@
   - the register of agents, with each one's role, allowed models and tools, and use;
   - calls that were refused;
   - budget requests to approve or reject;
-  - guardian interventions to confirm or reverse;
+  - guardian interventions to confirm or reverse. The guardian now records four things: a next step Saathi didn't pursue because it could be part of a fraud, a reviewer going against a "not valid" check, a call stopped by a daily limit, and warning signs found on a certificate. Each says why in a few fixed words, with no names and nothing anyone said. Each judge sees their own demo's records and the ones for the whole demo;
   - the fraud coverage map and reference guides;
   - every private demo copy, with when it was last used and today's allowance used; your own is marked, and a platform admin can restore any copy to the start;
   - an audit log of every decision.
@@ -141,7 +141,7 @@
 - Live calls end after about 15 minutes (Gemini Live limit), and spoken replies can't be rule-checked like typed ones.
 - Free-tier Gemini keys run out quickly; turn on billing for demos.
 - Spend, use and refused calls in the admin portal are always real. Spend appears only once Google Cloud billing has data; until then the portal says it isn't available yet.
-- The admin portal shows only real data. Guardian interventions stay empty until the guardian core is built, and quota headroom until it's read from Cloud Monitoring.
+- The admin portal shows only real data. Quota headroom stays empty until it's read from Cloud Monitoring.
 - Fraud research and the checks behind "Dream now" need an Exa key (`EXA_API_KEY`); without it, a run says web search isn't set up yet. Imagined scenarios no source confirms can only be discarded, and fade after three runs.
 - Spend can't yet be split by agent or tenant on the bill; those show use instead.
 

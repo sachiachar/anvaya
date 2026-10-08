@@ -383,9 +383,7 @@ def check_allowance_now(agent: str) -> None:
     check_ceiling(agent)
     left = remaining(agent)
     if left is not None and left <= 0:
-        metric = METRIC.get(agent, "tokens")
-        record_blocked(agent, "allowance", f"{_pool(agent)}.{metric}", "Daily allowance reached",
-                       user=current_user())
+        allowance_reached(agent)
         raise Refused("You've used today's allowance for this. It resets tomorrow, or you can ask for more.")
 
 
@@ -486,8 +484,7 @@ def check_ceiling(agent: str) -> None:
     """Refuse a call on our key once the service has used what this agent may use today."""
     left = service_remaining(agent)
     if left is not None and left <= 0:
-        record_blocked(agent, "ceiling", f"service.{_service_metric(agent)}", "Daily service ceiling reached",
-                       user=current_user())
+        ceiling_reached(agent)
         raise Refused("This is paused for today: the demo has reached its daily limit. It resets tomorrow.")
 
 
@@ -542,11 +539,47 @@ def record_blocked(agent: str, kind: str, attempted: str, reason: str, user: str
                                   "attempted": attempted, "reason": reason, "user_key": user})
 
 
-def record_intervention(agent: str, response: str, reason: str, case_key: str | None = None) -> dict:
-    """The guardian intervened (add_check, reduce_autonomy, pause or block); people review it."""
-    return store.put("guardian_events", {"id": new_id("gev"), "at": time.time(), "agent": agent,
-                                         "response": response, "reason": reason, "case_key": case_key,
-                                         "status": "open"})
+SERVICE = "service"  # an event about the whole service (the daily ceiling), not one demo copy
+LIMIT_EVENT_IDS = ("gev_allowance_", "gev_ceiling_")  # the daily-limit refusals' events, by their stable ids
+
+
+def record_intervention(agent: str, response: str, reason: str, case_key: str | None = None, *,
+                        user_key: str | None = None, once: str | None = None) -> dict | None:
+    """The guardian intervened (add_check, reduce_autonomy, pause or block); a risk reviewer
+    decides each one (PR-15.6).
+
+    `reason` is fixed text from code: never conversation text, a name or anything a person typed,
+    because judges and the fraud dreamer read it. `user_key` is the hashed key of the demo copy it
+    concerns, the caller's when not given, or SERVICE for the whole service. An event with neither
+    (no one signed in, or one recorded before PR-15.6) is shown only to the Anvaya team. With `once`,
+    the event is written only the first time (a stable id), so a repeated refusal or a step dropped
+    again doesn't add another; then it returns None."""
+    event = {"id": once or new_id("gev"), "at": time.time(), "agent": agent, "response": response,
+             "reason": reason, "case_key": case_key, "user_key": user_key or current_user(), "status": "open"}
+    if once is None:
+        return store.put("guardian_events", event)
+    return event if store.create("guardian_events", event) else None
+
+
+def allowance_reached(agent: str) -> None:
+    """A call refused because the person's daily allowance is used: one blocked call, and one
+    guardian event per person, measure, day and limit (an approved raise that runs out too is new)."""
+    user, metric = current_user(), METRIC.get(agent, "tokens")
+    where = f"{_pool(agent)}.{metric}"
+    cap = (allowance_status(user).get(_pool(agent), {}).get(metric) or {}).get("limit", 0)
+    record_blocked(agent, "allowance", where, "Daily allowance reached", user=user)
+    record_intervention(agent, "pause", f"Daily allowance reached: {where}",
+                        once=f"gev_allowance_{_today()}_{user}_{where}_{int(cap)}")
+
+
+def ceiling_reached(agent: str) -> None:
+    """A call refused by the service's daily ceiling: one blocked call, and one guardian event for
+    the whole service per measure, line (optional agents, or everything but safety) and day."""
+    where = f"service.{_service_metric(agent)}"
+    line = "optional agents" if (agent_entry(agent) or {}).get("optional") else "all but safety-critical agents"
+    record_blocked(agent, "ceiling", where, "Daily service ceiling reached", user=current_user())
+    record_intervention(agent, "pause", f"Daily service ceiling reached: {where}, {line} paused",
+                        user_key=SERVICE, once=f"gev_ceiling_{_today()}_{where}_{line.split()[0]}")
 
 
 def kill_switch() -> str:
