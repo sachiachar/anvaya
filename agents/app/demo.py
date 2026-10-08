@@ -128,6 +128,10 @@ def reset(copy_id: str | None = None) -> dict:
         for doc in store.list(collection, owner_id=oid):
             store.delete(collection, doc["id"])
     media.delete_all(oid)
+    key = copy_id or current()
+    for doc in store.list("agent_steps", user_key=key):  # its trace for the agents panel
+        store.delete("agent_steps", doc["id"])
+    governance.start_trace(key)  # and older refused calls and dropped steps no longer show there
     data = _persona()
     family = data["owner"].get("family", [])
     owner = {**{k: v for k, v in data["owner"].items() if k != "family"}, "id": oid, "readiness_score": None}

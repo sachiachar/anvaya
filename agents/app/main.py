@@ -85,6 +85,8 @@ async def bad_model_output(_: Request, exc: ValidationError) -> JSONResponse:
         "detail": "Gemini returned output that did not match the expected format. Try again."})
 
 ASSIST, PROPOSE, ACT = "assist", "propose", "act_within_limits"
+# The agents behind each item the app shows; its autonomy label comes from their policy (PR-15.7).
+CARDS, STEPS = "capture.extractor", "readiness.planner"
 
 
 def owner_or_404(owner_id: str) -> dict:
@@ -166,7 +168,8 @@ def _expand(turn: dict) -> dict:
     if not ids:
         return turn
     # A draft is in Firestore; once kept it's in the owner's bundle, under the same id.
-    items = [{**doc, "collection": c} for c in ("people", "moments", "inventory")
+    label = governance_core.autonomy(CARDS)
+    items = [{**doc, "collection": c, "autonomy": label} for c in ("people", "moments", "inventory")
              for doc in (store.get(c, i) or knowledge.get(turn["owner_id"], i) for i in ids.get(c, [])) if doc]
     return {**turn, "proposals": items, "discarded": sum(len(v) for v in ids.values()) - len(items)}
 
@@ -323,9 +326,10 @@ def add_wish(owner_id: str, text: str = Form(...)) -> dict:
 
 @api.get("/owners/{owner_id}/review")
 def review_queue(owner_id: str) -> dict:
+    label = governance_core.autonomy(CARDS)
     return {
-        "moments": store.list("moments", owner_id=owner_id, status="pending"),
-        "inventory": store.list("inventory", owner_id=owner_id, status="pending"),
+        "moments": [{**d, "autonomy": label} for d in store.list("moments", owner_id=owner_id, status="pending")],
+        "inventory": [{**d, "autonomy": label} for d in store.list("inventory", owner_id=owner_id, status="pending")],
     }
 
 
@@ -471,20 +475,26 @@ async def readiness(owner_id: str) -> dict:
     """Readiness loop: score, plus next steps that stay on the owner's list until done."""
     owner, args = _readiness_inputs(owner_id)
     if (cached := _cached("readiness", owner_id, args)) is not None:
-        return {**cached, "tasks": tasks.open_tasks(owner_id), "cached": True}
+        return {**cached, "tasks": _labelled_steps(owner_id), "cached": True}
     result = await loops.assess_readiness(owner, *args[1:])
     tasks.refresh(owner_id, [g.model_dump() for g in result.gaps])
     store.update("owners", owner_id, {"readiness_score": result.score})
     # Running readiness updates the next steps, which are one of its own inputs, so remember
     # the inputs as they are now; an unchanged owner then gets the saved result next time.
     _remember("readiness", owner_id, _readiness_inputs(owner_id)[1], {"autonomy": ACT, "score": result.score})
-    return {"autonomy": ACT, "score": result.score, "tasks": tasks.open_tasks(owner_id)}
+    return {"autonomy": ACT, "score": result.score, "tasks": _labelled_steps(owner_id)}
+
+
+def _labelled_steps(owner_id: str) -> list[dict]:
+    """The owner's open next steps, each with its agent's autonomy label (PR-15.7)."""
+    label = governance_core.autonomy(STEPS)
+    return [{**t, "autonomy": label} for t in tasks.open_tasks(owner_id)]
 
 
 @api.get("/owners/{owner_id}/tasks")
 def list_tasks(owner_id: str) -> dict:
     owner = owner_or_404(owner_id)
-    return {"score": owner.get("readiness_score"), "tasks": tasks.open_tasks(owner_id)}
+    return {"score": owner.get("readiness_score"), "tasks": _labelled_steps(owner_id)}
 
 
 class TaskUpdate(BaseModel):
@@ -782,7 +792,7 @@ async def report_death(owner_id: str, certificate: UploadFile = File(...)) -> di
 
 # The guardian's records about document checks (PR-15.6): fixed text from code, the case id and the
 # fraud guide's sign ids only; never what a document says, a reviewer's name or their written reason.
-CHECKER = "activation.checker"
+CHECKER = loops.CHECKER
 MAX_SIGN_IDS = 5  # a guide can grow; the reason stays short
 
 
@@ -996,6 +1006,13 @@ def decide_access(request_id: str, body: AccessDecision) -> dict:
 @app.get("/api/healthz")
 def healthz() -> dict:
     return {"ok": True, "store": settings.store, "kms": bool(settings.kms_key_name), "auth": settings.auth_required}
+
+
+@api.get("/agents/steps")
+def my_agent_steps() -> dict:
+    """The agents panel (PR-15.7): the signed-in person's own recent AI steps, a simple trace with no
+    text. The copy comes from the verified sign-in, never from the request."""
+    return governance_core.agent_steps(governance_core.current_user())
 
 
 @api.get("/allowance")

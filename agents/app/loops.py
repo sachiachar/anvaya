@@ -14,6 +14,7 @@ import re
 from .fraud_guides import Guide, signs_for_check
 from . import step_guard
 from .gemini import generate_json
+from .governance import core as governance
 from .tone import ALIVE_RULES, about_their_death, step_problems
 from .schemas import (
     CaptureResult,
@@ -26,6 +27,8 @@ from .schemas import (
     Readiness,
     Settlement,
 )
+
+CHECKER = "activation.checker"  # pre-checks certificates and proof of authority (Assist)
 
 
 def persona(owner: dict) -> str:
@@ -373,7 +376,7 @@ async def check_document(image: bytes, mime_type: str, expected: str, person: st
     if guide:
         prompt += "\n\n" + _guide_prompt(guide)
     return await generate_json(
-        agent="activation.checker",
+        agent=CHECKER,
         schema=DocumentCheck,
         media=[(image, mime_type)],
         system=(
@@ -417,6 +420,7 @@ def review_summary(check: DocumentCheck, guide: Guide | None = None) -> dict:
     signs = _named_signs(check, guide)
     summary["signs"] = signs
     summary["guide"] = {"key": guide.key, "title": guide.title, "version": guide.version} if guide else None
+    summary["autonomy"] = governance.autonomy(CHECKER)  # the label the app shows (PR-15.7)
     found = [s for s in signs if s["result"] == "found"]
     if not check.is_expected_type:
         summary.update(confidence=0.0, verdict="not_valid")
