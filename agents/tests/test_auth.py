@@ -92,3 +92,22 @@ def test_with_open_sign_in_a_judge_sees_only_their_own_copy(client, monkeypatch)
     assert client.get(f"/api/owners/{theirs}", headers=as_stranger).status_code == 404
     # In the platform admin portal, they decide for their own copy only.
     assert client.get("/api/platform/me", headers=as_stranger).json()["role"] == "demo_admin"
+
+
+def test_with_open_sign_in_the_portal_shows_a_new_account_only_its_own_records(client, monkeypatch):
+    monkeypatch.setattr(settings, "open_sign_in", True)
+    monkeypatch.setattr(settings, "allowed_emails", [])
+    store.put("platform_audit", {"id": "aud_team", "at": 1.0, "actor": "team@example.com", "actor_key": "u_team",
+                                 "role": "platform_admin", "action": "kill_switch.set", "target": "off",
+                                 "reason": "a team reason", "detail": {}})
+    store.put("guardian_events", {"id": "gev_team", "at": 1.0, "agent": "saathi.chat", "response": "add_check",
+                                  "reason": "r", "case_key": None, "status": "confirmed",
+                                  "decided_by": "team@example.com", "decision_reason": "a team reason"})
+    store.put("gateway_blocked", {"id": "blk_other", "at": 1.0, "agent": "saathi.chat", "kind": "allowance",
+                                  "attempted": "owner.tokens", "reason": "r", "user_key": "u_someoneelse"})
+    as_new = {"Authorization": "Bearer stranger"}  # straight to the portal: no demo copy yet
+    assert client.get("/api/platform/me", headers=as_new).json()["role"] == "demo_admin"
+    assert client.get("/api/platform/audit", headers=as_new).json()["entries"] == []
+    events = client.get("/api/platform/guardian", headers=as_new).json()["events"]
+    assert events and all("decided_by" not in e and "decision_reason" not in e for e in events)
+    assert client.get("/api/platform/agents", headers=as_new).json()["blocked"] == []

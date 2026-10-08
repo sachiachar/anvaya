@@ -111,10 +111,12 @@ def get_overview(fresh: bool = False, who: Actor = Depends(actor)) -> dict:
 
 
 @router.get("/agents")
-def get_agents(_: Actor = Depends(actor)) -> dict:
+def get_agents(who: Actor = Depends(actor)) -> dict:
     ensure_current()
-    return {"agents": agents_view(),
-            "blocked": sorted(store.list("gateway_blocked"), key=lambda b: -b["at"])}
+    blocked = store.list("gateway_blocked")
+    if who.role == "demo_admin":  # only calls refused for their own copy
+        blocked = [b for b in blocked if b.get("user_key") == who.key]
+    return {"agents": agents_view(), "blocked": sorted(blocked, key=lambda b: -b["at"])}
 
 
 @router.get("/approvals")
@@ -158,9 +160,11 @@ def decide_approval(request_id: str, body: Decision, who: Actor = Depends(need("
 
 
 @router.get("/guardian")
-def get_guardian(_: Actor = Depends(actor)) -> dict:
+def get_guardian(who: Actor = Depends(actor)) -> dict:
     ensure_current()
     events = sorted(store.list("guardian_events"), key=lambda e: -e["at"])
+    if who.role == "demo_admin":  # never the reviewers' emails or their written reasons
+        events = [{k: v for k, v in e.items() if k not in ("decided_by", "decision_reason")} for e in events]
     decided = [e for e in events if e["status"] != "open"]
     reversed_ = [e for e in decided if e["status"] == "reversed"]
     by_response: dict[str, int] = {}
