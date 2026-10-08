@@ -39,6 +39,10 @@ done
 echo "== Firestore (native mode)"
 gcloud firestore databases describe --database="(default)" >/dev/null 2>&1 || \
   gcloud firestore databases create --location="$REGION"
+# The agents panel's trace (PR-15.7) keeps each line two days; Firestore deletes it at its expire_at.
+gcloud firestore fields ttls list --collection-group=agent_steps --format 'value(name.basename(),ttlConfig.state)' \
+  | grep -Eq '^expire_at[[:space:]]+(ACTIVE|CREATING)$' || \
+  gcloud firestore fields ttls update expire_at --collection-group=agent_steps --enable-ttl --async --quiet
 
 echo "== Private media bucket"
 gcloud storage buckets describe "gs://$BUCKET" >/dev/null 2>&1 || \

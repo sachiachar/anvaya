@@ -3,9 +3,11 @@
 autonomy; only the caller's own copy, never any text. Each card, step and check carries its
 autonomy label from the agent's policy."""
 
+import pathlib
 import time
 
 import pytest
+import yaml
 from fastapi.testclient import TestClient
 
 from app import demo, loops, main, proposals
@@ -103,6 +105,18 @@ def test_a_refused_call_belongs_to_the_person_asking_and_a_key_fallback_isnt_sto
     core.record_blocked("saathi.chat", "key_fallback", "judge_studio", "Key failed (429); trying the next one")
     [step] = client.get("/api/agents/steps").json()["steps"]
     assert (step["result"], step["reason"]) == ("stopped", "Paused by the kill switch")
+
+
+def test_the_release_turns_on_the_traces_expiry_for_the_same_field():
+    """The TTL policy is part of every API release (deploy.yml), not a step someone must remember;
+    it names the collection and field the code writes, and the deployer may set it."""
+    repo = pathlib.Path(__file__).resolve().parents[2]
+    workflow = yaml.safe_load((repo / ".github" / "workflows" / "deploy.yml").read_text())
+    run = next(s["run"] for s in workflow["jobs"]["api"]["steps"] if "ttls update" in s.get("run", ""))
+    call(ME, tokens_in=1)
+    stored = store.list("agent_steps", user_key=ME)[0]
+    assert "expire_at" in stored and "--collection-group=agent_steps" in run and "ttls update expire_at" in run
+    assert "roles/datastore.indexAdmin" in (repo / "infra" / "setup-github-actions.sh").read_text()
 
 
 def test_the_labels_come_from_registered_agents():
