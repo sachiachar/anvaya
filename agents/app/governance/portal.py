@@ -60,7 +60,7 @@ def overview(*, fresh: bool = False, who: Actor | None = None) -> dict:
         "quota": s.get("quota"),
         "pending_approvals": len([r for r in store.list("budget_requests", status="pending")
                                   if who is None or who.role != "demo_admin" or r.get("copy_id") == who.key]),
-        "open_interventions": len(store.list("guardian_events", status="open")),
+        "open_interventions": len([e for e in store.list("guardian_events", status="open") if _sees_event(who, e)]),
         "blocked_30d": len([b for b in store.list("gateway_blocked") if b["at"] > time.time() - 30 * 86400]),
         # Next steps Saathi never pursued (PR-13.3): counts only, no words or names. A demo admin
         # sees their own copy's.
@@ -120,6 +120,12 @@ def get_agents(who: Actor = Depends(actor)) -> dict:
     return {"agents": agents_view(), "blocked": sorted(blocked, key=lambda b: -b["at"])}
 
 
+def _sees_event(who: Actor | None, event: dict) -> bool:
+    """A demo admin sees the guardian's events for their own copy, and those for the whole service
+    (user_key None, e.g. the daily ceiling); the Anvaya team sees all (PR-15.6)."""
+    return who is None or who.role != "demo_admin" or event.get("user_key") in (who.key, None)
+
+
 def _hide_deciders(rows: list[dict], who: Actor) -> list[dict]:
     """For a demo admin: a decision someone else made shows "Anvaya team", never their email or
     written reason (with open sign-in, anyone can be a demo admin, PR-15.2). Their own stay."""
@@ -173,7 +179,7 @@ def decide_approval(request_id: str, body: Decision, who: Actor = Depends(need("
 @router.get("/guardian")
 def get_guardian(who: Actor = Depends(actor)) -> dict:
     ensure_current()
-    events = sorted(store.list("guardian_events"), key=lambda e: -e["at"])
+    events = sorted((e for e in store.list("guardian_events") if _sees_event(who, e)), key=lambda e: -e["at"])
     if who.role == "demo_admin":
         events = _hide_deciders(events, who)
     decided = [e for e in events if e["status"] != "open"]

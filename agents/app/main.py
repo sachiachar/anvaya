@@ -775,7 +775,19 @@ async def report_death(owner_id: str, certificate: UploadFile = File(...)) -> di
                                        expected, owner["name"], guide)
     case = release.new_case(new_id("case"), owner_id, loops.review_summary(check, guide))
     case["reported_by"] = demo.person()["name"]
+    _record_signs(case, case["certificate_check"], "certificate")
     return {"autonomy": ASSIST, "case": store.put("cases", case)}
+
+
+def _record_signs(case: dict, check: dict, what: str) -> None:
+    """Warning signs a document check found become one guardian event for a risk reviewer
+    (PR-15.6): the sign ids from the fraud guide only, never what the document says."""
+    found = [s["id"] for s in check.get("signs") or [] if s.get("result") == "found"]
+    if found:
+        governance_core.record_intervention(
+            release.CHECKER, "add_check",
+            f"The {what} check found {len(found)} warning sign{'s' if len(found) > 1 else ''}: {', '.join(found)}",
+            case_key=case["id"])
 
 
 @api.post("/owners/{owner_id}/release/authority", dependencies=[Depends(demo.only("family"))])
@@ -794,6 +806,7 @@ async def submit_authority(owner_id: str, proof: UploadFile = File(...)) -> dict
         release.attach_authority_check(case, loops.review_summary(check))
     except release.ReleaseError as e:
         raise HTTPException(409, str(e)) from e
+    _record_signs(case, case["authority_check"], "proof of authority")  # once it has a guide (PR-15.13)
     return {"autonomy": ASSIST, "case": store.put("cases", case)}
 
 

@@ -184,6 +184,12 @@ flowchart LR
 
 **How it's built** (`agents/app/governance/`, one layer shared by the gateway, the guardian and the portal):
 - `core.py`: the registry and policies, roles and permissions, the audit log, the gateway's `check_call` (registry, policy, kill switch, the service's daily ceiling and the person's allowance), `record_usage` (daily ledger with calls, tokens and minutes; never dollars), `record_blocked` and `record_intervention`;
+  - **What the guardian records today** (PR-15.6). Each is one open event for a risk reviewer to confirm or reverse:
+    - the step guard drops a next step (`block`, the rule only, once per step);
+    - a reviewer goes against a "not valid" check (`add_check`, the case id; never the reviewer's name or reason, which stay in the case's audit trail);
+    - an allowance refuses a call (`pause`, once per person, measure and day) or the daily ceiling does (`pause`, once per measure, line and day, for the whole service);
+    - a certificate check finds warning signs (`add_check`, the sign ids from the fraud guide and the case id).
+  - Reasons are fixed text from code, because judges and the fraud dreamer read them. Each event carries the copy's hashed key, or none for the whole service. A demo admin sees only their own copy's events and the whole service's;
 - `billing.py`: actual spend from the Cloud Billing export to BigQuery (PR-10.9). This is the only source of dollar figures. It's cached for an hour and covers up to yesterday. The portal says "not available yet" rather than estimating;
 - `portal.py`: the platform admin portal API under `/api/platform` (PR-12), with roles checked on the server;
 - `files.py`: strict schemas for the two files, and the checks between them (PR-10.11).

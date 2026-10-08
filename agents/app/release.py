@@ -17,7 +17,9 @@ import time
 from typing import Any
 
 from .config import settings
+from .governance import core as governance
 
+CHECKER = "activation.checker"  # the agent whose document checks a reviewer confirms or overrides
 STATES = ("reported", "death_confirmed", "waiting", "released", "cancelled")
 
 
@@ -51,6 +53,13 @@ def _check_override(check: dict[str, Any] | None, what: str, reviewer: str, reas
     return ""
 
 
+def _record_override(case: dict[str, Any], what: str) -> None:
+    """The guardian records an override for a risk reviewer (PR-15.6): which check and which case,
+    never the reviewer's name or their written reason (those stay in the case's audit trail)."""
+    governance.record_intervention(CHECKER, "add_check", f"A reviewer went against the AI's 'not valid' on the {what}",
+                                   case_key=case["id"])
+
+
 def confirm_death(case: dict[str, Any], reviewer: str, override_reason: str | None = None) -> dict[str, Any]:
     if case["state"] != "reported":
         raise ReleaseError(f"cannot confirm death from state {case['state']}")
@@ -58,6 +67,8 @@ def confirm_death(case: dict[str, Any], reviewer: str, override_reason: str | No
     case["state"] = "death_confirmed"
     case["death_confirmed_by"] = reviewer
     _log(case, f"death confirmed by {reviewer}{note}")
+    if note:
+        _record_override(case, "death certificate")
     return case
 
 
@@ -80,6 +91,8 @@ def confirm_authority(case: dict[str, Any], reviewer: str, override_reason: str 
     case["state"] = "waiting"
     case["wait_until"] = now + settings.release_wait_seconds
     _log(case, f"legal authority confirmed by {reviewer}{note}; waiting period started; owner devices alerted")
+    if note:
+        _record_override(case, "proof of legal authority")
     return case
 
 

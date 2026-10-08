@@ -34,6 +34,7 @@ from .step_types import CHANNELS, FLAGS, STEP_TYPES
 from .store import store
 
 log = logging.getLogger(__name__)
+PLANNER = "readiness.planner"  # the agent whose next steps this guards
 
 # Words for each flag, in English, Hinglish and Hindi, matched on normalised text (see _plain).
 _SECRET = re.compile(r"\b(otps?|one[- ]time (passwords?|codes?|pins?)|passwords?|passcodes?|pins?|pincodes?|cvvs?|cvcs?|"
@@ -186,4 +187,7 @@ def pursue(owner_id: str, steps: list[dict]) -> list[dict]:
             digest = hashlib.sha256(f"{settings.user_key_salt}:{key}:{reason}:{step.get('title', '')}".encode())
             store.put("steps_not_pursued", {"id": f"snp_{digest.hexdigest()[:16]}", "at": time.time(),
                                             "rule": reason, "user_key": key})
+            # And a guardian event a risk reviewer decides (PR-15.6), once per step: the rule only.
+            governance.record_intervention(PLANNER, "block", f"A next step was not pursued: rule {reason}",
+                                           user_key=key, once=f"gev_step_{digest.hexdigest()[:16]}")
     return kept
