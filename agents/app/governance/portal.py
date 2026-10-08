@@ -56,6 +56,7 @@ def overview(*, fresh: bool = False, who: Actor | None = None) -> dict:
             "by_tenant": tenants,
         },
         "kill_switch": s.get("kill_switch", "off"),
+        "service_ceiling": core.service_status(),  # today's use under the daily ceiling (PR-15.1)
         "quota": s.get("quota"),
         "pending_approvals": len([r for r in store.list("budget_requests", status="pending")
                                   if who is None or who.role != "demo_admin" or r.get("copy_id") == who.key]),

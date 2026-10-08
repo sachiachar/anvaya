@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import {
   fmt, platform, type Agent, type AuditEntry, type Blocked, type BudgetRequest, type DemoCopy, type GuardianEvent,
   type CuePrivacy, type Draft, type Guide, type KillSwitchState, type Me, type Permission, type Run, type RunStage, type Scenario,
-  type Source,
+  type ServiceCeiling, type Source,
   type Spend, type Use, type KeyPerson, type KeyPolicy, type KeySource, type KeyUse,
 } from "./api";
 import type { KeyFeature, KeyKind } from "../api";
@@ -127,6 +127,34 @@ const KILL_LABELS: Record<KillSwitchState, string> = {
   all_paused: "All non-safety agents paused",
 };
 
+const CEILING_LABELS: Record<ServiceCeiling["state"], string> = {
+  ok: "Everything running",
+  optional_paused: "Optional features paused for today (live voice, spoken replies, summaries)",
+  paused: "All non-safety agents paused for today",
+};
+
+/** Today's use of the daily ceiling for the whole service (PR-15.1), counted on our key only. */
+function CeilingSection({ ceiling }: { ceiling: ServiceCeiling }) {
+  const rows = ([["tokens", "Tokens"], ["voice_minutes", "Voice minutes"]] as const)
+    .flatMap(([k, label]) => (ceiling[k] ? [{ label, use: ceiling[k] }] : []));
+  if (!rows.length) return null;
+  return (
+    <Section title="Daily ceiling for the whole service" aside={<Status value={ceiling.state} />}>
+      <p>
+        {CEILING_LABELS[ceiling.state]}. Optional features stop at {fmt.pct(ceiling.optional_pause_at ?? 0)}; everything
+        else stops when {fmt.pct(ceiling.safety_reserve ?? 0)} is left. Certificate checks and the guardian always keep
+        running. Resets at midnight UTC.
+      </p>
+      {rows.map(({ label, use }) => (
+        <div key={label}>
+          <p>{label}: {fmt.num(use.used)} of {fmt.num(use.limit)} today</p>
+          <Bar value={use.used} max={use.limit} label={`${label}: ${fmt.pct(use.share)} of today's ceiling`} />
+        </div>
+      ))}
+    </Section>
+  );
+}
+
 function describeUse(u: Use) {
   return [`${fmt.num(u.calls)} calls`, u.tokens ? `${fmt.num(u.tokens)} tokens` : "", u.minutes ? `${fmt.num(u.minutes)} min` : ""]
     .filter(Boolean).join(", ");
@@ -234,6 +262,8 @@ export function OverviewPage({ me, fresh }: { me: Me; fresh: boolean }) {
           </div>
         ) : <p className="pa-muted">Only a platform admin can change the kill switch.</p>}
       </Section>
+
+      <CeilingSection ceiling={o.service_ceiling} />
 
       <SpendSection spend={spend} />
 

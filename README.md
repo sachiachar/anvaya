@@ -191,6 +191,7 @@ web/                    React installable web app (Firebase Hosting)
   src/vaultCrypto.ts    On-device encryption and recovery codes
   src/admin/            The platform admin portal
 infra/deploy.sh         One-command Google Cloud deploy
+infra/budget-alert.sh   Monthly Google Cloud budget alert (run once by a person)
 docs/                   Concept, architecture, use cases, release notes
 ```
 

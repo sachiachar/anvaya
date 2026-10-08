@@ -114,6 +114,7 @@ All of these are Google's proprietary managed services. We use them under the Go
 | **Firestore** | Stores cases, cards, the ledger and the audit log; clients have no direct access (`firestore.rules`) | `agents/app/store.py` |
 | **Cloud Storage** | Private bucket for recordings and documents | `agents/app/media.py` |
 | **Cloud Billing export to BigQuery** | Actual spend for the admin portal, read from the detailed usage cost export (dataset `anvaya_platform`, set by `BILLING_EXPORT_TABLE`) | `agents/app/governance/billing.py` |
+| **Cloud Billing Budget API** | A monthly budget alert by email at 50%, 90% and 100% of spend, and at a forecast of 100%: a backstop to the daily service ceiling (PR-15.1). A person sets it up once | `infra/budget-alert.sh` |
 | **Cloud KMS** | Two keys: `vault-escrow` wraps the vault escrow blob; `model-keys` encrypts the Gemini keys people add themselves (PR-10.10), with the person's user key bound in | `agents/app/escrow.py`, `agents/app/governance/keys.py` |
 | **Secret Manager** | Holds the Gemini API key for Cloud Run | `infra/deploy.sh` |
 | **Cloud Build, Artifact Registry** | Build and store the API container on each deploy | `gcloud run deploy --source` |

@@ -30,6 +30,16 @@ export type Spend =
     }
   | { available: false; reason: "not_configured" | "no_data" | "error"; message: string };
 
+type CeilingUse = { used: number; limit: number; share: number };
+/** Today's use of the daily ceiling for the whole service (PR-15.1). Empty measures: no ceiling set. */
+export type ServiceCeiling = {
+  state: "ok" | "optional_paused" | "paused";
+  optional_pause_at: number | null;
+  safety_reserve: number | null;
+  tokens?: CeilingUse;
+  voice_minutes?: CeilingUse;
+};
+
 export type Overview = {
   spend: Spend;
   usage: {
@@ -39,6 +49,7 @@ export type Overview = {
     by_tenant: Record<string, Use & { active_users_today: number | null }>;
   };
   kill_switch: KillSwitchState;
+  service_ceiling: ServiceCeiling;
   quota: { rpm_limit: number; rpm_peak: number; tpm_limit: number; tpm_peak: number } | null;
   pending_approvals: number;
   open_interventions: number;

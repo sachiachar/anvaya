@@ -96,8 +96,11 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
             cap = governance.limit(AGENT, "max_call_minutes", 20)
             # The person's voice minutes left today (PR-10.4); not counted on their own key.
             left = governance.remaining(AGENT) if source == keys.PLATFORM else None
-            by_allowance = left is not None and left < cap
-            planned = left if by_allowance else cap
+            # And the service's voice minutes left today, for everyone together (PR-15.1).
+            service_left = governance.service_remaining(AGENT) if source == keys.PLATFORM else None
+            by_ceiling = service_left is not None and service_left < min(cap, left if left is not None else cap)
+            by_allowance = not by_ceiling and left is not None and left < cap
+            planned = service_left if by_ceiling else left if by_allowance else cap
             if source == keys.PLATFORM:
                 # Hold the planned minutes, so a second call at the same time sees what's really left.
                 governance.reserve(AGENT, planned)
@@ -106,7 +109,12 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
                                                return_when=asyncio.FIRST_COMPLETED)
             for task in pending:
                 task.cancel()
-            if not done and by_allowance:  # the person's daily voice minutes ran out
+            if not done and by_ceiling:  # the service's voice minutes for today ran out
+                governance.record_blocked(AGENT, "ceiling", "service.voice_minutes", "Daily service ceiling reached",
+                                          user=governance.current_user())
+                await ws.send_json({"type": "error", "detail": "Voice calls are paused for today: the demo has "
+                                    "reached its daily limit. You can keep typing, and voice is back tomorrow."})
+            elif not done and by_allowance:  # the person's daily voice minutes ran out
                 governance.record_blocked(AGENT, "allowance", "owner.voice_minutes", "Daily voice minutes used",
                                           user=governance.current_user())
                 await ws.send_json({"type": "error", "detail": "You've used today's voice minutes. You can keep "

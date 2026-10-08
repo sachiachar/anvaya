@@ -378,7 +378,9 @@ def check_allowance(agent: str) -> None:
 
 
 def check_allowance_now(agent: str) -> None:
-    """The allowance check itself, whatever key the person has: used when a call falls back to ours."""
+    """The allowance check itself, whatever key the person has: used when a call falls back to ours.
+    The service's daily ceiling is checked first (PR-15.1)."""
+    check_ceiling(agent)
     left = remaining(agent)
     if left is not None and left <= 0:
         metric = METRIC.get(agent, "tokens")
@@ -403,13 +405,83 @@ def count_for_user(agent: str, *, tokens: int = 0, minutes: float = 0.0) -> None
 
 
 def reserve(agent: str, amount: float) -> None:
-    """Hold part of the allowance before a long call (live voice), so a second call at the same
-    time sees only what's really left. Release it when the call ends; the actual use is counted."""
+    """Hold part of the allowance and the service ceiling before a long call (live voice), so a
+    second call at the same time sees only what's really left. Release it when the call ends; the
+    actual use is counted."""
     _add(agent, amount)
+    _add_service(agent, amount)
 
 
 def release(agent: str, amount: float) -> None:
     _add(agent, -amount)
+    _add_service(agent, -amount)
+
+
+# ---- A daily ceiling for the whole service (PR-15.1) ----------------------------------
+#
+# With open sign-in (PR-15.2) anyone can use the demo, so besides each person's allowance there
+# is one daily ceiling on everything our key spends (policies.yaml "service_ceiling"): tokens, and
+# voice minutes. As it fills, optional agents (voice, spoken replies, summaries) stop first, at
+# optional_pause_at. Every other agent stops when only the safety reserve is left. Safety-critical
+# agents (certificate checks, the guardian) are never refused: the reserve is kept for them, and
+# a handover must never wait on the budget. Calls on a person's own key don't count.
+
+
+def service_ceiling() -> dict:
+    return _files()[1].get("service_ceiling") or {}
+
+
+def _service_metric(agent: str) -> str:
+    return "voice_minutes" if METRIC.get(agent) == "voice_minutes" else "tokens"
+
+
+def _service_today() -> dict:
+    return store.get("service_usage", _today()) or {}
+
+
+def service_status() -> dict:
+    """Today's use of the service ceiling, per measure: used, limit and share; and the state:
+    ok, optional_paused (optional agents stopped) or paused (all but safety-critical stopped)."""
+    ceiling, used_today = service_ceiling(), _service_today()
+    out: dict = {"optional_pause_at": ceiling.get("optional_pause_at"),
+                 "safety_reserve": ceiling.get("safety_reserve"), "state": "ok"}
+    for metric in ("tokens", "voice_minutes"):
+        cap = ceiling.get(f"{metric}_per_day")
+        if not cap:
+            continue
+        used = used_today.get(metric, 0)
+        share = used / cap
+        out[metric] = {"used": round(used, 1), "limit": cap, "share": round(share, 3)}
+        if share >= 1 - ceiling["safety_reserve"]:
+            out["state"] = "paused"
+        elif share >= ceiling["optional_pause_at"] and out["state"] == "ok":
+            out["state"] = "optional_paused"
+    return out
+
+
+def service_remaining(agent: str) -> float | None:
+    """What this agent may still use today under the ceiling, in its measure, or None when nothing
+    limits it (no ceiling set, or a safety-critical agent)."""
+    ceiling, entry = service_ceiling(), agent_entry(agent) or {}
+    cap = ceiling.get(f"{_service_metric(agent)}_per_day")
+    if not cap or entry.get("safety_critical"):
+        return None
+    line = ceiling["optional_pause_at"] if entry.get("optional") else 1 - ceiling["safety_reserve"]
+    return max(0.0, cap * line - _service_today().get(_service_metric(agent), 0))
+
+
+def check_ceiling(agent: str) -> None:
+    """Refuse a call on our key once the service has used what this agent may use today."""
+    left = service_remaining(agent)
+    if left is not None and left <= 0:
+        record_blocked(agent, "ceiling", f"service.{_service_metric(agent)}", "Daily service ceiling reached",
+                       user=current_user())
+        raise Refused("This is paused for today: the demo has reached its daily limit. It resets tomorrow.")
+
+
+def _add_service(agent: str, amount: float) -> None:
+    if amount and service_ceiling():
+        store.increment("service_usage", _today(), {_service_metric(agent): amount}, {"day": _today()})
 
 
 # ---- Recording (used by the gateway and the guardian) -------------------------
@@ -425,7 +497,7 @@ def record_usage(agent: str, model: str, tenant: str, *, tokens_in: int = 0, tok
 
     `key_source` is whose key answered (keys.py, PR-10.10): "platform", or a person's own
     ("judge_studio", "judge_vertex"). Only calls on the platform key count against the
-    person's daily allowance.
+    person's daily allowance and the service's daily ceiling.
 
     An atomic increment, so calls that finish at the same time (on several server instances)
     never overwrite each other's counts in the portal's usage figures. Dollars come only
@@ -444,6 +516,8 @@ def record_usage(agent: str, model: str, tenant: str, *, tokens_in: int = 0, tok
         store.increment("key_usage", f"{day_id}:{user}", {key_source: {
             "calls": 1, "tokens": tokens_in + tokens_out, "minutes": minutes, "errors": int(error)}},
             {"day": day_id, "user_key": user})
+    if key_source == "platform":  # everything our key spends, safety work included (PR-15.1)
+        _add_service(agent, round(minutes, 2) if _service_metric(agent) == "voice_minutes" else tokens_in + tokens_out)
     if not error and key_source == "platform":
         count_for_user(agent, tokens=tokens_in + tokens_out, minutes=minutes)
 
