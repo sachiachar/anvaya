@@ -7,8 +7,9 @@
 #
 # The deployer can only do what the deploy needs: build from source (Cloud Build, the source
 # bucket, the Artifact Registry repository), update the API's Cloud Run service, act as the
-# API's and the build's service accounts (and no other), and publish Firebase Hosting and the
-# Firestore rules. Running this again removes the broader project-wide roles it used to grant.
+# API's and the build's service accounts (and no other), publish Firebase Hosting and the
+# Firestore rules, and set Firestore TTL policies. Running this again removes the broader
+# project-wide roles it used to grant.
 #
 # Usage: PROJECT_ID=my-project REPO=owner/repo ./infra/setup-github-actions.sh
 # Needs gcloud (project owner) and gh (repository admin), and the API deployed once
@@ -46,8 +47,10 @@ gcloud iam service-accounts describe "$DEPLOYER_SA" >/dev/null 2>&1 || \
 NARROW_READY=true
 
 echo "== Project-wide roles: only what has no narrower place to grant it"
+# datastore.indexAdmin: Firestore indexes and TTL policies (the agents panel's trace expires, PR-15.7);
+# it can't read or write documents.
 for role in roles/run.developer roles/cloudbuild.builds.editor roles/serviceusage.serviceUsageConsumer \
-            roles/firebasehosting.admin roles/firebaserules.admin; do
+            roles/firebasehosting.admin roles/firebaserules.admin roles/datastore.indexAdmin; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "$MEMBER" --role "$role" --condition=None >/dev/null
 done
 

@@ -131,6 +131,23 @@ jobs:
           gcloud run deploy life-after-agents --source agents \
             --project "${{ vars.GCP_PROJECT_ID }}" --region "${{ vars.GCP_REGION }}" --quiet --cpu-boost \
             --update-env-vars "^;^ALLOWED_EMAILS=${ALLOWED_EMAILS};OPEN_SIGN_IN=${OPEN_SIGN_IN:-false};PLATFORM_ROLES=${PLATFORM_ROLES};BILLING_EXPORT_TABLE=${BILLING_EXPORT_TABLE};EXA_API_KEY=${EXA_API_KEY};MODEL_KEYS_KMS_KEY_NAME=${MODEL_KEYS_KMS_KEY_NAME}"
+      # The agents panel's trace (PR-15.7) keeps each line two days: Firestore deletes it at its
+      # expire_at. Turned on once, then skipped. Needs roles/datastore.indexAdmin on the deployer
+      # (infra/setup-github-actions.sh). Field and collection: agents/app/governance/core.py.
+      - name: Firestore TTL for the agents trace
+        env:
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+        run: |
+          ttls=$(gcloud firestore fields ttls list --collection-group=agent_steps --project "$PROJECT" \
+            --format 'value(name.basename(),ttlConfig.state)') || {
+            echo "Can't read Firestore TTL settings. Run infra/setup-github-actions.sh again: it gives the deployer roles/datastore.indexAdmin."
+            exit 1; }
+          if echo "$ttls" | grep -Eq '^expire_at[[:space:]]+(ACTIVE|CREATING)$'; then
+            echo "TTL on agent_steps.expire_at is already on"
+          else
+            gcloud firestore fields ttls update expire_at --collection-group=agent_steps --enable-ttl \
+              --project "$PROJECT" --async --quiet
+          fi
 
   allowlist:
     # Manual only: apply the allowlist and open sign-in without rebuilding anything.
