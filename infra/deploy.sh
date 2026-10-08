@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Deploy Anvaya to Google Cloud: agents on Cloud Run, web app on Firebase Hosting.
-# Usage: PROJECT_ID=my-project [ALLOWED_EMAILS=a@x.com,@team.com] [BILLING_EXPORT_TABLE=project.dataset] ./infra/deploy.sh
+# Usage: PROJECT_ID=my-project [ALLOWED_EMAILS=a@x.com,@team.com] [OPEN_SIGN_IN=true] [BILLING_EXPORT_TABLE=project.dataset] ./infra/deploy.sh
 set -euo pipefail
 
 : "${PROJECT_ID:?Set PROJECT_ID}"
@@ -15,8 +15,11 @@ MODEL_KEYS_KEY="model-keys"   # people's own model keys (PR-10.10), separate fro
 MODEL_KEYS_KMS_KEY_NAME="projects/${PROJECT_ID}/locations/${REGION}/keyRings/${KEYRING}/cryptoKeys/${MODEL_KEYS_KEY}"
 
 # Who may use the demo: emails and/or @domains, comma-separated. Defaults to agents/.env.
-ALLOWED_EMAILS="${ALLOWED_EMAILS:-$(grep -E '^ALLOWED_EMAILS=' agents/.env | cut -d= -f2-)}"
-: "${ALLOWED_EMAILS:?Set ALLOWED_EMAILS (e.g. you@example.com,@yourcompany.com)}"
+ALLOWED_EMAILS="${ALLOWED_EMAILS:-$(grep -sE '^ALLOWED_EMAILS=' agents/.env | cut -d= -f2- || true)}"
+# OPEN_SIGN_IN=true lets any Google account in, each to its own demo copy (PR-15.2). Off by default.
+OPEN_SIGN_IN="${OPEN_SIGN_IN:-false}"
+[ -n "$ALLOWED_EMAILS" ] || [ "$OPEN_SIGN_IN" = "true" ] || \
+  { echo "Set ALLOWED_EMAILS (e.g. you@example.com,@yourcompany.com), or OPEN_SIGN_IN=true"; exit 1; }
 # The Cloud Billing export the admin portal reads actual spend from (project.dataset). Optional.
 BILLING_EXPORT_TABLE="${BILLING_EXPORT_TABLE:-}"
 
@@ -72,7 +75,7 @@ echo "== Deploy agents to Cloud Run"
 gcloud run deploy "$SERVICE" --source agents --region "$REGION" --service-account "$SA" \
   --allow-unauthenticated --memory 1Gi --timeout 3600 --cpu-boost \
   --set-secrets "GOOGLE_API_KEY=gemini-api-key:latest" \
-  --set-env-vars "^;^GOOGLE_GENAI_USE_VERTEXAI=false;STORE=firestore;MEDIA_BUCKET=$BUCKET;KMS_KEY_NAME=$KMS_KEY_NAME;MODEL_KEYS_KMS_KEY_NAME=$MODEL_KEYS_KMS_KEY_NAME;RELEASE_WAIT_SECONDS=60;AUTH_REQUIRED=true;FIREBASE_PROJECT_ID=$PROJECT_ID;ALLOWED_EMAILS=$ALLOWED_EMAILS;BILLING_EXPORT_TABLE=$BILLING_EXPORT_TABLE"
+  --set-env-vars "^;^GOOGLE_GENAI_USE_VERTEXAI=false;STORE=firestore;MEDIA_BUCKET=$BUCKET;KMS_KEY_NAME=$KMS_KEY_NAME;MODEL_KEYS_KMS_KEY_NAME=$MODEL_KEYS_KMS_KEY_NAME;RELEASE_WAIT_SECONDS=60;AUTH_REQUIRED=true;FIREBASE_PROJECT_ID=$PROJECT_ID;ALLOWED_EMAILS=$ALLOWED_EMAILS;OPEN_SIGN_IN=$OPEN_SIGN_IN;BILLING_EXPORT_TABLE=$BILLING_EXPORT_TABLE"
 
 echo "== Build and deploy the web app to Firebase Hosting"
 # Firebase Hosting cannot proxy WebSockets, so live calls go straight to Cloud Run.

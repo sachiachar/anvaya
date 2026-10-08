@@ -24,6 +24,9 @@ class Settings:
     firebase_project_id: str = os.getenv("FIREBASE_PROJECT_ID", os.getenv("GOOGLE_CLOUD_PROJECT", ""))
     allowed_emails: list[str] = field(default_factory=lambda: [
         e.strip().lower() for e in os.getenv("ALLOWED_EMAILS", "").split(",") if e.strip()])
+    # Open sign-in for judging (PR-15.2): any Google account with a verified email gets in, with
+    # its own demo copy. Off by default; when off, only ALLOWED_EMAILS gets in.
+    open_sign_in: bool = os.getenv("OPEN_SIGN_IN", "false").lower() == "true"
 
     # "file" for local demos (survives restarts), "memory" for tests, "firestore" on Google Cloud.
     store: str = os.getenv("STORE", "memory")
