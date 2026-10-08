@@ -1,0 +1,27 @@
+# The guardian's policy (PR-2.7.3): which response each risk level gets, for each action.
+# Reviewed like code. Design: docs/architecture.md (the guardian core).
+#
+# Risk levels, from lowest: none, low, medium, high (a detector returns one, with a reason).
+# Responses, from mildest: continue, add_check, reduce_autonomy, pause, block.
+#   continue         the action goes ahead
+#   add_check        it goes ahead, and a risk reviewer looks at it afterwards
+#   reduce_autonomy  it goes ahead with less freedom (for example, an answer without tools)
+#   pause            it waits for a risk reviewer (part 2: held, and the owner is alerted)
+#   block            it doesn't happen
+#
+# A rule fixed in code can only make a response stricter: some detectors set a floor (for example,
+# a next step that could be part of a fraud is always blocked). This file can never let through
+# something the code forbids.
+#
+# Actions: next_step, model_call, review_confirmation, certificate_check. Each lists only the
+# levels where it differs from the default.
+
+version: 1
+
+default: {none: continue, low: continue, medium: add_check, high: pause}
+
+actions:
+  next_step: {high: block}
+  model_call: {}
+  review_confirmation: {}
+  certificate_check: {}

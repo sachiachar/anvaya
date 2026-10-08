@@ -619,25 +619,31 @@ def record_intervention(agent: str, response: str, reason: str, case_key: str | 
     return event if store.create("guardian_events", event) else None
 
 
-def allowance_reached(agent: str) -> None:
-    """A call refused because the person's daily allowance is used: one blocked call, and one
-    guardian event per person, measure, day and limit (an approved raise that runs out too is new)."""
+def allowance_reached(agent: str, channel: str = "app") -> None:
+    """A call refused because the person's daily allowance is used: one blocked call, and the
+    guardian's decision (PR-2.7): one event per person, measure, day and limit (an approved raise
+    that runs out too is new)."""
+    from . import guardian  # guardian uses this module
+
     user, metric = current_user(), METRIC.get(agent, "tokens")
     where = f"{_pool(agent)}.{metric}"
     cap = (allowance_status(user).get(_pool(agent), {}).get(metric) or {}).get("limit", 0)
     record_blocked(agent, "allowance", where, "Daily allowance reached", user=user)
-    record_intervention(agent, "pause", f"Daily allowance reached: {where}",
-                        once=f"gev_allowance_{_today()}_{user}_{where}_{int(cap)}")
+    guardian.decide("model_call", agent, {"limit": "allowance", "where": where}, channel=channel,
+                    once=f"gev_allowance_{_today()}_{user}_{where}_{int(cap)}")
 
 
-def ceiling_reached(agent: str) -> None:
-    """A call refused by the service's daily ceiling: one blocked call, and one guardian event for
-    the whole service per measure, line (optional agents, or everything but safety) and day."""
+def ceiling_reached(agent: str, channel: str = "app") -> None:
+    """A call refused by the service's daily ceiling: one blocked call, and the guardian's decision:
+    one event for the whole service per measure, line (optional agents, or everything but safety)
+    and day."""
+    from . import guardian
+
     where = f"service.{_service_metric(agent)}"
     line = "optional agents" if (agent_entry(agent) or {}).get("optional") else "all but safety-critical agents"
     record_blocked(agent, "ceiling", where, "Daily service ceiling reached", user=current_user())
-    record_intervention(agent, "pause", f"Daily service ceiling reached: {where}, {line} paused",
-                        user_key=SERVICE, once=f"gev_ceiling_{_today()}_{where}_{line.split()[0]}")
+    guardian.decide("model_call", agent, {"limit": "ceiling", "where": where, "line": line}, channel=channel,
+                    event_key=SERVICE, once=f"gev_ceiling_{_today()}_{where}_{line.split()[0]}")
 
 
 def kill_switch() -> str:
