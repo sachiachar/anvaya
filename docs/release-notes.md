@@ -139,6 +139,7 @@
 - New concept document and two pitches: one for people and families, one for banks and insurers. They cite figures for India and Asia, and regulatory deadlines. Branded PDFs are included.
 - A business model with costs and margins, a brand guide, a proposal for governing the agents, a proposal for finding fraud before it happens ("fraud foresight"), and the guardian layer and storage design in the architecture document.
 - **Easier to read:** the README, the contribution guide, the architecture document, the four proposals, the use cases, the business model, the brand guide, the demo script and the list of dependencies now use short sentences, with one idea in each. No facts changed.
+- **Measured quality:** the README now shows how well three steps work, measured against real Gemini on a small made-up test set: the certificate check, Priya's questions, and cards that say only what was said. It reports what went wrong too. For example, genuine certificates from before October 2023 were flagged for a missing QR code that they don't need.
 - About 10 new diagrams show how things work, for example the fraud foresight steps, the handover in the demo and the states of a wish. GitHub draws them on the page.
 - The concept document and the pitches keep their warm style.
 
