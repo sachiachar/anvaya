@@ -42,6 +42,13 @@ def _by(days: list[dict], key: str) -> dict[str, dict]:
     return dict(sorted(out.items(), key=lambda kv: (-kv[1]["tokens"], -kv[1]["minutes"], kv[0])))
 
 
+def _hours() -> list[dict]:
+    """The last HOURS_KEPT_DAYS of hourly use, oldest first; hours with no calls are left out."""
+    since = time.strftime("%Y-%m-%dT%H", time.gmtime(time.time() - core.HOURS_KEPT_DAYS * 86400))
+    return [{"hour": h["hour"], "agents": {a: _use([v]) for a, v in h.get("agents", {}).items()}}
+            for h in sorted(store.list("usage_hours"), key=lambda h: h["hour"]) if h["hour"] >= since]
+
+
 def overview(*, fresh: bool = False, who: Actor | None = None) -> dict:
     """Actual spend from Google Cloud billing; usage (not dollars) per agent, model and tenant."""
     days = _days()
@@ -55,6 +62,9 @@ def overview(*, fresh: bool = False, who: Actor | None = None) -> dict:
         "spend": billing.spend(fresh=fresh),
         "usage": {
             "daily": [{"day": d["day"], **_use(list(d["agents"].values()))} for d in days],
+            # For the dashboard's charts: each day and each hour, per agent (calls, tokens, minutes).
+            "daily_by_agent": [{"day": d["day"], "agents": {a: _use([v]) for a, v in d["agents"].items()}} for d in days],
+            "hourly": _hours(),
             "by_agent": _by(days, "agents"),
             "by_model": _by(days, "model_use"),
             "by_tenant": tenants,

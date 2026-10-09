@@ -102,6 +102,7 @@
 - When Saathi words a story or wish differently from one Vikram already kept ("SBI account for my wife" after "Transfer of SBI account"), the card says "This looks like an update to …" and asks: Replace it, Keep both, or Not now. Replace it keeps the new card as the next version, so the map shows one item, not two. Nothing is merged without asking.
 
 **Governance and the admin portal**
+- **The dashboard now has charts.** "Use over time" shows tokens, voice minutes or calls per hour and per day, as bars split by agent. Hover a bar to see each agent's share. Select an agent in the legend to hide or show it. The hourly chart shows the last 48 hours, and a slider goes back up to 14 days. The daily chart covers 30 days, and shows the daily ceiling as a dashed line when a day comes near it. Hourly counts start with this release.
 - **The Agents page opens on a loop map.** Each AI step is a circle, coloured by how much it may do on its own. Each gate shows where a person must act. The map shows which agents are working now, with a turning ring, and refreshes every 15 seconds. Loops can also show as active today, idle, paused (by the kill switch or the daily ceiling) or planned.
 - Select a loop to see its agents: their autonomy and model, the last call, today's calls and tokens, the last 30 days, and blocked calls. The fraud loops also show their last run and its counts, and the guardian shows its open events. The map holds no names and no conversation text.
 - A separate platform admin portal for the Anvaya team, at https://anvaya-admin.web.app. It shows:

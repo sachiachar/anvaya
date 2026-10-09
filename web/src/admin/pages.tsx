@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   fmt, platform, type Added, type Agent, type AuditEntry, type Blocked, type BudgetRequest, type DemoCopy, type GuardianEvent,
   type CuePrivacy, type Draft, type Guide, type KillSwitchState, type Me, type Permission, type Run, type RunStage, type Scenario,
@@ -7,6 +7,9 @@ import {
 } from "./api";
 import type { KeyFeature, KeyKind } from "../api";
 import { LoopMap } from "./loopMap";
+
+// The charts library loads only when the dashboard opens.
+const UsageCharts = lazy(() => import("./usageCharts"));
 
 // ---- Shared pieces --------------------------------------------------------------
 
@@ -269,6 +272,12 @@ export function OverviewPage({ me, fresh }: { me: Me; fresh: boolean }) {
       </Section>
 
       <CeilingSection ceiling={o.service_ceiling} />
+
+      <Section title="Use over time">
+        <Suspense fallback={<p className="pa-muted">Loading the charts…</p>}>
+          <UsageCharts usage={u} ceiling={o.service_ceiling} />
+        </Suspense>
+      </Section>
 
       <SpendSection spend={spend} />
 

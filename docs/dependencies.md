@@ -62,6 +62,7 @@ Dependabot skips FastAPI 0.142 and later (`ignore` in `.github/dependabot.yml`).
 | --- | --- | --- | --- |
 | react, react-dom | 19.3.0 | MIT | The user interface for the app and the admin portal |
 | firebase | 12.19.0 | Apache-2.0 | Google sign-in in the browser (Firebase Authentication) |
+| echarts | 6.1.0 | Apache-2.0 (zrender BSD-3-Clause, tslib 0BSD) | Interactive usage charts on the admin portal's dashboard; only bar and line charts are loaded, and only on that page |
 | @grpc/grpc-js (override) | 1.14.5 | Apache-2.0 | Not used directly: raises the version `firebase` pulls in, to fix two security alerts |
 
 **Development only**
