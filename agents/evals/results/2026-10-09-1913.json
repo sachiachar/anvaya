@@ -1,0 +1,184 @@
+{
+  "date": "2026-10-09",
+  "at": "2026-10-09T19:13",
+  "steps": {
+    "certificates": {
+      "agent": "activation.checker",
+      "model": "gemini-3.1-flash-lite",
+      "totals": {
+        "forgeries_flagged": {
+          "count": 6,
+          "of": 7,
+          "share": 0.857
+        },
+        "forgeries_flagged_by_a_sign": {
+          "count": 5,
+          "of": 7,
+          "share": 0.714
+        },
+        "right_sign_named": {
+          "count": 5,
+          "of": 7,
+          "share": 0.714
+        },
+        "genuine_passed": {
+          "count": 3,
+          "of": 6,
+          "share": 0.5
+        },
+        "wrong_person_or_type_caught": {
+          "count": 2,
+          "of": 2,
+          "share": 1.0
+        }
+      },
+      "cases": [
+        {
+          "id": "genuine-1",
+          "expect": "genuine",
+          "verdict": "likely_valid",
+          "signs_found": [],
+          "passed": true,
+          "flagged_by_a_sign": null,
+          "sign_named": null
+        },
+        {
+          "id": "genuine-2",
+          "expect": "genuine",
+          "verdict": "likely_valid",
+          "signs_found": [],
+          "passed": true,
+          "flagged_by_a_sign": null,
+          "sign_named": null
+        },
+        {
+          "id": "genuine-3",
+          "expect": "genuine",
+          "verdict": "needs_attention",
+          "signs_found": [],
+          "passed": false,
+          "flagged_by_a_sign": null,
+          "sign_named": null
+        },
+        {
+          "id": "genuine-4",
+          "expect": "genuine",
+          "verdict": "needs_attention",
+          "signs_found": [],
+          "passed": false,
+          "flagged_by_a_sign": null,
+          "sign_named": null
+        },
+        {
+          "id": "genuine-5",
+          "expect": "genuine",
+          "verdict": "likely_valid",
+          "signs_found": [],
+          "passed": true,
+          "flagged_by_a_sign": null,
+          "sign_named": null
+        },
+        {
+          "id": "genuine-6",
+          "expect": "genuine",
+          "verdict": "needs_attention",
+          "signs_found": [],
+          "passed": false,
+          "flagged_by_a_sign": null,
+          "sign_named": null
+        },
+        {
+          "id": "forged-dates",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "dates_impossible"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": true
+        },
+        {
+          "id": "forged-no-registration",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "registration_details"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": true
+        },
+        {
+          "id": "forged-registration-year",
+          "expect": "forgery",
+          "verdict": "likely_valid",
+          "signs_found": [],
+          "passed": false,
+          "flagged_by_a_sign": false,
+          "sign_named": false
+        },
+        {
+          "id": "forged-wrong-office",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "wrong_office"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": true
+        },
+        {
+          "id": "forged-altered-name",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [],
+          "passed": true,
+          "flagged_by_a_sign": false,
+          "sign_named": false
+        },
+        {
+          "id": "forged-link",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "qr_wrong_site"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": true
+        },
+        {
+          "id": "forged-no-signature",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "qr_missing"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": true
+        },
+        {
+          "id": "wrong-person",
+          "expect": "wrong_person",
+          "verdict": "needs_attention",
+          "signs_found": [],
+          "passed": true,
+          "flagged_by_a_sign": null,
+          "sign_named": null
+        },
+        {
+          "id": "wrong-type",
+          "expect": "wrong_type",
+          "verdict": "not_valid",
+          "signs_found": [],
+          "passed": true,
+          "flagged_by_a_sign": null,
+          "sign_named": null
+        }
+      ]
+    }
+  }
+}

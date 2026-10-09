@@ -70,7 +70,9 @@ def score_certificate(case: dict, summary: dict) -> dict:
         passed = verdict != "likely_valid"
     return {"id": case["id"], "expect": expect, "verdict": verdict, "signs_found": found, "passed": passed,
             "flagged_by_a_sign": bool(found) if expect == "forgery" else None,
-            "sign_named": (case.get("sign") in found) if expect == "forgery" else None}
+            "sign_named": (case.get("sign") in found) if expect == "forgery" else None,
+            # Why a document needs attention without a sign: low confidence or a concern (synthetic text).
+            "confidence": summary.get("confidence"), "concerns": summary.get("concerns") or []}
 
 
 def certificate_totals(rows: list[dict]) -> dict:
