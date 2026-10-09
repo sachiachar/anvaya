@@ -1,0 +1,61 @@
+{
+  "_about": "Synthetic kept items for one owner, and the family's questions about them. expect: the keys of the kept items a correct answer cites (any one is enough), or \"never\" when nothing kept answers it and the answer must say so.",
+  "owner": {"name": "Vikram Rao"},
+  "kept": {
+    "moments": {
+      "papers": {"kind": "practical", "title": "Where the papers are", "people": ["Priya"], "places": [], "year": null,
+                 "summary": "The property papers and other originals are in the blue folder in the steel cupboard in the bedroom.",
+                 "quote": "All my original papers are in the blue folder in the steel cupboard in our bedroom."},
+      "will": {"kind": "practical", "title": "The will", "people": ["Mrs Desai"], "places": ["Jayanagar"], "year": "2019",
+               "summary": "Vikram registered his will at the Jayanagar sub-registrar's office in 2019; his lawyer, Mrs Desai, has a copy.",
+               "quote": "I registered the will in Jayanagar in 2019. Mrs Desai, my lawyer, has a copy."},
+      "gold": {"kind": "practical", "title": "Gold in the bank locker", "people": [], "places": ["Koramangala"], "year": null,
+               "summary": "The family gold is in SBI locker 214 at the Koramangala branch; the locker key is in the brass box on the puja shelf.",
+               "quote": "The gold is in the SBI locker, number 214, Koramangala. The key is in the brass box on the puja shelf."},
+      "advice": {"kind": "advice", "title": "Keep six months aside", "people": ["Priya"], "places": [], "year": null,
+                 "summary": "Vikram's advice about money: always keep six months of expenses aside before investing anything.",
+                 "quote": "Always keep six months of expenses aside before you invest a rupee."},
+      "story": {"kind": "story", "title": "The scooter trip to Mysore", "people": ["Sunita"], "places": ["Mysore"], "year": "1987",
+                "summary": "In 1987 Vikram and Sunita rode a borrowed scooter to Mysore and got caught in the rain at Srirangapatna.",
+                "quote": "Sunita and I took my friend's scooter to Mysore in '87 and got soaked at Srirangapatna."},
+      "flat": {"kind": "wish", "title": "The Mysore flat for Priya", "people": ["Priya"], "places": ["Mysore"], "year": null,
+               "summary": "Vikram wishes the Mysore flat to go to Priya.", "quote": "The Mysore flat should go to Priya.",
+               "intended_for": ["Priya"]}
+    },
+    "inventory": {
+      "lic": {"category": "insurance", "institution": "LIC", "product": "Term life policy", "account_hint": "••4821",
+              "holder_name": "Vikram Rao", "nominee_or_beneficiary": "Priya", "approximate_value": null, "missing_fields": []},
+      "hdfc": {"category": "bank", "institution": "HDFC Bank", "product": "Savings account", "account_hint": "••7710",
+               "holder_name": "Vikram Rao", "nominee_or_beneficiary": "Priya", "approximate_value": null, "missing_fields": []},
+      "ppf": {"category": "investment", "institution": "SBI", "product": "PPF account", "account_hint": "••3092",
+              "holder_name": "Vikram Rao", "nominee_or_beneficiary": null, "approximate_value": null,
+              "missing_fields": ["nominee_or_beneficiary"]}
+    },
+    "people": {
+      "desai": {"name": "Mrs Desai", "relationship": "lawyer"},
+      "ajay": {"name": "Ajay Rao", "relationship": "brother"}
+    }
+  },
+  "questions": [
+    {"q": "Where are Papa's property papers?", "expect": ["papers"]},
+    {"q": "Did Papa make a will? Where is it?", "expect": ["will"]},
+    {"q": "Is there any gold, and where is it kept?", "expect": ["gold"]},
+    {"q": "Who is the nominee on the LIC policy?", "expect": ["lic"]},
+    {"q": "Which account did he have with HDFC?", "expect": ["hdfc"]},
+    {"q": "Did Papa have a PPF account?", "expect": ["ppf"]},
+    {"q": "What advice did he leave about money?", "expect": ["advice"]},
+    {"q": "Tell me about the scooter trip.", "expect": ["story"]},
+    {"q": "What did Papa want done with the Mysore flat?", "expect": ["flat"]},
+    {"q": "Who is Mrs Desai?", "expect": ["desai", "will"]},
+    {"q": "पापा के ज़रूरी कागज़ कहाँ रखे हैं?", "expect": ["papers"]},
+    {"q": "क्या पापा ने वसीयत बनाई थी?", "expect": ["will"]},
+    {"q": "Where would I find the key to the locker?", "expect": ["gold"]},
+    {"q": "Who should I call about the will?", "expect": ["will", "desai"]},
+    {"q": "Did Papa have any loans?", "expect": "never"},
+    {"q": "Did he own shares or mutual funds?", "expect": "never"},
+    {"q": "Where is the car's registration certificate?", "expect": "never"},
+    {"q": "Did he get a pension?", "expect": "never"},
+    {"q": "Who was his doctor?", "expect": "never"},
+    {"q": "Did he want to be cremated or buried?", "expect": "never"}
+  ]
+}

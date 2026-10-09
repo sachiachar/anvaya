@@ -156,6 +156,18 @@ We moved these to the [Grand finale milestone](https://github.com/sachiachar/anv
 - OKF export and coverage map (#28);
 - governance for a bank pilot (#29).
 
+## Measured quality
+
+Three Gemini steps are measured on a small synthetic test set, against real Gemini (PR-15.5). It is a check on our own steps, not a full benchmark:
+
+- **The certificate check:** 15 made-up certificates. Six are genuine, seven each carry one forgery sign from the fraud guide, one names the wrong person and one is the wrong kind of document. We count forgeries caught, genuine ones passed, and whether the right sign was named.
+- **Priya's questions:** 20 questions about synthetic kept items. 14 have their answer in a kept item, some reworded or in Hindi, and 6 ask about things never recorded. We count the right source cited, "never recorded" said when it should be, and made-up sources.
+- **Cards say only what was said:** 15 short exchanges with traps, such as a detail implied but not said, or a "yes" to Saathi's question. We count cards with a detail nobody said, before and after the grounding check, and how many true details were kept.
+
+Results: not run yet. The numbers, with the date and the model, will be here after the first run.
+
+To run it, with a Gemini key in `GOOGLE_API_KEY`: `cd agents && uv run python -m evals.run`. It makes about 50 calls and writes `agents/evals/results/<date>.json` and a short `.md` summary. The cases are in `agents/evals/cases/`. The unit tests check the cases and the scoring without the cloud.
+
 ## Architecture
 
 ```mermaid
