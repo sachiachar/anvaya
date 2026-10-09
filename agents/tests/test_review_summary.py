@@ -109,28 +109,46 @@ def test_a_bad_date_in_a_guide_is_refused_when_it_loads():
 
 # ---- A registration number from another year (PR-15.5) ------------------------------------
 
-def _numbered(number, registration_date="2022-03-16", result="ruled_out"):
+def _numbered(year, registration_date="2022-03-16", death_date="2022-03-14", result="ruled_out"):
     from app.schemas import SignResult
-    return check(registration_date=registration_date, death_date="2022-03-14", registration_number=number,
+    return check(registration_date=registration_date, death_date=death_date, registration_number_year=year,
                  signs=[SignResult(sign_id="registration_details", result=result, note="Looks fine")])
 
 
 def test_a_registration_number_from_another_year_is_found_in_code():
     """The re-run: a number with 2019 on a 2022 registration passed as likely valid."""
-    summary = review_summary(_numbered("D-2019:29-90514-000231"), _guide())
+    summary = review_summary(_numbered(2019), _guide())
     row = _row(summary, "registration_details")
     assert row["result"] == "found" and "2019" in row["note"] and "16 March 2022" in row["note"]
+    assert "Looks fine" in row["note"]  # what the check had said stays visible
     assert summary["verdict"] == "needs_attention"
 
 
-def test_a_matching_or_unreadable_number_leaves_the_models_result():
-    for number in ("D-2022:29-90514-000231", "1234/2022", "", None, "D-29-90514-000231",  # no year
-                   "2019/2022-000231"):  # two years: nothing certain to compare
-        assert _row(review_summary(_numbered(number), _guide()), "registration_details")["result"] == "ruled_out", number
-    no_date = _numbered("D-2019:29-90514-000231", registration_date=None)
-    assert _row(review_summary(no_date, _guide()), "registration_details")["result"] == "ruled_out"
+def test_a_matching_year_or_a_late_registration_leaves_the_models_result():
+    for case in (_numbered(2022),                                                     # the year of registration
+                 _numbered(2021, registration_date="2022-01-05", death_date="2021-12-20"),  # numbered by the death
+                 _numbered(None),                                                     # no year in the number
+                 _numbered(2019, registration_date=None)):                            # nothing to compare with
+        assert _row(review_summary(case, _guide()), "registration_details")["result"] == "ruled_out"
 
 
 def test_code_never_rules_out_what_the_model_found():
-    found = _numbered("D-2022:29-90514-000231", result="found")
-    assert _row(review_summary(found, _guide()), "registration_details")["result"] == "found"
+    assert _row(review_summary(_numbered(2022, result="found"), _guide()), "registration_details")["result"] == "found"
+
+
+def test_only_the_year_is_read_never_the_whole_number():
+    """Rule 5: ID numbers are kept to their last 4 characters; a year isn't an ID number."""
+    from app.schemas import DocumentCheck
+    assert "registration_number_year" in DocumentCheck.model_fields
+    assert "registration_number" not in DocumentCheck.model_fields
+    assert "Never the number itself" in DocumentCheck.model_fields["registration_number_year"].description
+
+
+def test_the_code_check_is_declared_on_the_sign_and_filled_into_saved_guides():
+    from app import fraud_guides
+    assert next(s for s in _guide().signs if s.id == "registration_details").code_check == "registration_year"
+    saved = _guide().model_dump()
+    for sign in saved["signs"]:
+        sign.pop("code_check")
+    old = fraud_guides._with_built_in_dates(fraud_guides.Guide.model_validate(saved))
+    assert next(s for s in old.signs if s.id == "registration_details").code_check == "registration_year"

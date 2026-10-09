@@ -51,6 +51,10 @@ class Sign(BaseModel):
     # out for an older document, whatever the model says (loops._named_signs): the model was found to
     # ignore a date written only in look_for (PR-15.5).
     applies_from: str | None = None
+    # A check code also runs for this sign, from what the model read; it can only add the sign, never
+    # rule it out (loops.CODE_CHECKS). "registration_year": the year in the registration number matches
+    # the year of registration or of the death (PR-15.5 found the model missed one that didn't).
+    code_check: Literal["registration_year"] | None = None
 
     @field_validator("applies_from")
     @classmethod
@@ -153,14 +157,20 @@ def current(key: str) -> Guide | None:
     return stored or BUILT_IN.get(key)
 
 
+CODE_FIELDS = ("applies_from", "code_check")  # sign fields that code enforces, added after guides were saved
+
+
 def _with_built_in_dates(guide: Guide) -> Guide:
-    """A version saved before signs had `applies_from` gets it from the built-in sign with the same id.
-    Only when the field is absent: a version that clears it on purpose (None) keeps it cleared."""
-    base = BUILT_IN.get(guide.key)
-    built_in = {s.id: s.applies_from for s in (base.signs if base else [])}
-    signs = [s.model_copy(update={"applies_from": built_in[s.id]})
-             if "applies_from" not in s.model_fields_set and built_in.get(s.id) else s for s in guide.signs]
-    return guide.model_copy(update={"signs": signs})
+    """A version saved before signs had `applies_from` or `code_check` gets them from the built-in sign
+    with the same id. Only when a field is absent: a version that clears it on purpose (None) keeps it."""
+    base = {s.id: s for s in (BUILT_IN[guide.key].signs if guide.key in BUILT_IN else [])}
+
+    def filled(s: Sign) -> Sign:
+        add = {f: getattr(base[s.id], f) for f in CODE_FIELDS
+               if s.id in base and f not in s.model_fields_set and getattr(base[s.id], f)}
+        return s.model_copy(update=add) if add else s
+
+    return guide.model_copy(update={"signs": [filled(s) for s in guide.signs]})
 
 
 def _save_next(key: str, build: Callable[[Guide | None], Guide]) -> Guide:
@@ -257,9 +267,10 @@ _IN_SOURCES = [
 ]
 
 
-def _sign(id: str, look_for: str, genuine: str, *sources: str, applies_from: str | None = None) -> Sign:
+def _sign(id: str, look_for: str, genuine: str, *sources: str, applies_from: str | None = None,
+          code_check: str | None = None) -> Sign:
     return Sign(id=id, look_for=look_for, genuine=genuine, label="derived", trust="machine-confirmed",
-                sources=list(sources), applies_from=applies_from)
+                sources=list(sources), applies_from=applies_from, code_check=code_check)
 
 
 _IN_DEATH = Guide(
@@ -297,7 +308,7 @@ _IN_DEATH = Guide(
         _sign("registration_details",
               "The registration number is missing, or its year doesn't match the date of registration",
               "A registration number and date of registration as set out in the state's rules",
-              "model_rules"),
+              "model_rules", code_check="registration_year"),
         _sign("wrong_office",
               "The issuing registrar's office is not in the area where the passing took place",
               "The registrar of the area where the passing took place registers it and issues the certificate",
