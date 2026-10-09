@@ -4,15 +4,20 @@ It reads the owner's kept-knowledge bundle (PR-7.5): while the bundle is small, 
 in the assistant's instructions; above a size limit it gets the bundle's index.md and opens the
 concepts it needs. Either way it understands questions worded differently, or in another
 language, instead of matching keywords. It cites the kept item behind every fact, says plainly
-when the owner never recorded something, and never sees the conversation or the vault.
+when the owner never recorded something, and never sees the owner's conversation or the vault.
+The family's own conversation with it is kept in the store, so it survives restarts (PR-15.8).
 """
 
 from __future__ import annotations
 
+import asyncio
 import re
+import time
+from datetime import datetime, timezone
 
 from google.adk.agents import LlmAgent
 from google.adk.agents.run_config import RunConfig
+from google.adk.events import Event
 from google.adk.models.llm_request import LlmRequest
 from google.adk.models.llm_response import LlmResponse
 from google.adk.models import FallbackModel, Gemini
@@ -25,10 +30,16 @@ from google.genai import errors, types
 
 from . import knowledge
 from .gemini import client_for, no_429, retry_for
+from .store import new_id, store
 from .governance import core as governance
 from .governance import keys
 
 APP_NAME = "life-after"
+AGENT_NAME = "handover_assistant"
+# The family's conversation (PR-15.8) is kept in the store, not in this server's memory, so it
+# survives a restart or another instance answering. Each question sees the last few turns.
+HISTORY_TURNS = 6
+TURNS_KEPT_DAYS = 30  # each turn's expire_at; Firestore deletes it then (TTL, turned on by deploy.yml)
 
 
 # The whole bundle goes into the instructions up to this size (about 20,000 tokens, well within
@@ -212,7 +223,7 @@ class KeyedGemini(Gemini):
 
 def build_agent() -> LlmAgent:
     return LlmAgent(
-        name="handover_assistant",
+        name=AGENT_NAME,
         # Retries on overload, then falls back to a second model.
         model=FallbackModel(models=[
             KeyedGemini(model=governance.primary_model(AGENT), retry_options=retry_for(AGENT)),
@@ -226,6 +237,7 @@ def build_agent() -> LlmAgent:
     )
 
 
+# Holds one question's session only while it's answered (ask() deletes it); the conversation itself is in the store.
 _session_service = InMemorySessionService()
 _runner = Runner(app_name=APP_NAME, agent=build_agent(), session_service=_session_service)
 
@@ -263,36 +275,49 @@ class UnknownSession(LookupError):
     """A session that isn't this person's, for this owner."""
 
 
+def _past_turns(session_id: str) -> list[dict]:
+    return sorted(store.list("handover_turns", session_id=session_id), key=lambda t: t["at"])
+
+
 async def ask(owner: dict, user_id: str, question: str, session_id: str | None = None) -> dict:
-    """user_id names who is asking, within one demo copy; a session continues only for the same
-    person and owner, so a session ID from another copy is refused (PR-1.6)."""
+    """user_id names who is asking, within one demo copy; a conversation continues only for the
+    same person and owner, so a conversation id from another copy is refused (PR-1.6).
+
+    The conversation lives in the store (`handover_turns`, PR-15.8): each question rebuilds a
+    short-lived ADK session from its last turns, and the session is gone when the answer is in.
+    So a restart, a release or a second server instance never loses it."""
     if session_id is not None:
-        session = await _session_service.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
-        if session is None or session.state.get("owner_id") != owner["id"]:
+        past = await asyncio.to_thread(_past_turns, session_id)
+        if not past or any(t["asker"] != user_id or t["owner_id"] != owner["id"] for t in past):
             raise UnknownSession(session_id)
     else:
-        session = await _session_service.create_session(
-            app_name=APP_NAME,
-            user_id=user_id,
-            state={"owner_id": owner["id"], "owner_name": owner["name"]},
-        )
-        session_id = session.id
+        session_id, past = new_id("hs"), []
+    session = await _session_service.create_session(
+        app_name=APP_NAME, user_id=user_id, state={"owner_id": owner["id"], "owner_name": owner["name"]})
+    for turn in past[-HISTORY_TURNS:]:  # what was asked and answered so far, as the family saw it
+        for author, role, text in (("user", "user", turn["question"]), (AGENT_NAME, "model", turn["answer"])):
+            await _session_service.append_event(session, Event(
+                author=author, content=types.Content(role=role, parts=[types.Part(text=text)])))
     answer = ""
     tools_used: list[str] = []
-    async for event in _runner.run_async(
-        user_id=user_id,
-        session_id=session_id,
-        new_message=types.Content(role="user", parts=[types.Part(text=question)]),
-        run_config=RunConfig(max_llm_calls=_max_calls()),
-    ):
-        for call in event.get_function_calls():
-            tools_used.append(call.name)
-        if event.is_final_response() and event.content and event.content.parts:
-            answer = "".join(p.text or "" for p in event.content.parts)
+    try:
+        async for event in _runner.run_async(
+            user_id=user_id,
+            session_id=session.id,
+            new_message=types.Content(role="user", parts=[types.Part(text=question)]),
+            run_config=RunConfig(max_llm_calls=_max_calls()),
+        ):
+            for call in event.get_function_calls():
+                tools_used.append(call.name)
+            if event.is_final_response() and event.content and event.content.parts:
+                answer = "".join(p.text or "" for p in event.content.parts)
+    finally:
+        await _session_service.delete_session(app_name=APP_NAME, user_id=user_id, session_id=session.id)
     sources = _sources(owner["id"], answer)  # from the ids, before they're removed
-    return {
-        "answer": clean_answer(answer, sources),
-        "sources": sources,
-        "tools_used": tools_used,
-        "session_id": session_id,
-    }
+    cleaned = clean_answer(answer, sources)
+    now = time.time()
+    await asyncio.to_thread(store.put, "handover_turns", {
+        "id": new_id("ht"), "session_id": session_id, "owner_id": owner["id"], "asker": user_id, "at": now,
+        "question": question, "answer": cleaned, "sources": [s["id"] for s in sources],
+        "expire_at": datetime.fromtimestamp(now + TURNS_KEPT_DAYS * 86400, timezone.utc)})
+    return {"answer": cleaned, "sources": sources, "tools_used": tools_used, "session_id": session_id}

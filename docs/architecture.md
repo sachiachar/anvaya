@@ -253,7 +253,7 @@ The portal is a separate entry point (`web/admin.html`). Its own Firebase Hostin
   - each concept keeps its **graph part** (`type`, `status`, typed links) apart from its content. So fixed-code readers never read text or sources. These readers are the gap check and the anonymous fraud cues in `docs/proposals/fraud-foresight.md` §5;
   - a machine copy (`.catalog.json`) is written with conditional writes. It can be rebuilt from the concept and event files. `index.md` and `log.md` are rewritten from it the same way. So overlapping Keeps never lose an item, and an older Keep never overwrites a newer index. Each request reads the catalog once;
   - identifiers (9 or more digits with any separators, and PAN) keep only their last 4 characters. Dates and amounts are left alone. The vault can't enter. Only the demo's own seeding may add something the owner didn't confirm, and it is labelled as such.
-- **Firestore holds workflow data only:** pending cards, cases and reviews, guardian events, next steps and access requests.
+- **Firestore holds workflow data only:** pending cards, cases and reviews, guardian events, next steps, access requests, and the family's conversation with the handover assistant (`handover_turns`, PR-15.8). Each family question rebuilds a short-lived ADK session from the conversation's last 6 turns, and the session is deleted once the answer is in, so a restart, a release or a second instance never loses a conversation. A turn holds the question, the answer as the family saw it (ids removed) and the source ids. Only the same person in the same copy can continue it. A demo reset deletes it, and Firestore deletes it after 30 days (TTL, turned on by each release). The admin portal never shows it, and it is never logged.
 - **The conversation:**
   - sensitive details are masked before storage (Sensitive Data Protection);
   - only the owner can reach it;
@@ -387,7 +387,7 @@ On `released`, KMS removes the outer layer. The recipient's phone then decrypts 
 3. **KMS decrypt scope.** The API has both encrypt and decrypt. Move decrypt to a separate release service.
 4. **No notifications.** During the waiting period, the owner is alerted only inside the app. Add push, SMS and email.
 5. **Live calls** end after about 15 minutes (Gemini Live limit). `reply_problems` can't check spoken replies.
-6. **Handover questions** aren't stored for audit yet (ADK sessions are in memory).
+6. **Handover questions** are kept for 30 days (PR-15.8), but nothing yet lets a reviewer read them in a case: our team can look only in Firestore.
 7. **Participant consent** for other voices in live calls is a notice only.
 
 ## 9. Environments and configuration

@@ -39,9 +39,10 @@ done
 echo "== Firestore (native mode)"
 gcloud firestore databases describe --database="(default)" >/dev/null 2>&1 || \
   gcloud firestore databases create --location="$REGION"
-# Records that expire at their expire_at: the agents panel's trace (PR-15.7, two days) and the
-# guardian's action records (PR-2.7, 30 days). The release turns these on too (deploy.yml).
-for group in agent_steps guardian_actions; do
+# Records that expire at their expire_at: the agents panel's trace (PR-15.7, two days), the
+# guardian's action records (PR-2.7, 30 days) and the family's conversation with the assistant
+# (PR-15.8, 30 days). The release turns these on too (deploy.yml).
+for group in agent_steps guardian_actions handover_turns; do
   gcloud firestore fields ttls list --collection-group="$group" --format 'value(name.basename(),ttlConfig.state)' \
     | grep -Eq '^expire_at[[:space:]]+(ACTIVE|CREATING)$' || \
     gcloud firestore fields ttls update expire_at --collection-group="$group" --enable-ttl --async --quiet
