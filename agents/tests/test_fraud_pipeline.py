@@ -152,8 +152,9 @@ def test_a_run_keeps_two_close_and_one_far_variant_per_sequence_within_limits(st
         assert sorted(s["variant"] for s in mine) == ["close", "close", "far"]
     assert all(s["safeguard"] in fraud_pipeline.SAFEGUARDS for s in scenarios)
     assert run["limits"] == {"max_sequences_per_run": 2, "max_scenarios_per_sequence": 3,
-                             "max_new_patterns_per_run": 2, "fraud.dreamer.max_model_calls_per_run": 8,
-                             "fraud.researcher.max_model_calls_per_run": 6}
+                             "max_new_patterns_per_run": 2, "max_subjects_per_run": 2,
+                             "fraud.dreamer.max_model_calls_per_run": 8,
+                             "fraud.researcher.max_model_calls_per_run": 8}
     assert run["calls"] == {"fraud.dreamer": 8, "fraud.researcher": 6}
 
 
@@ -364,7 +365,8 @@ def test_research_drafts_at_most_two_confirmed_tactics_and_changes_no_guide(stub
                     tactic("Third tactic mike")]
     run = research()
     drafts = store.list("fraud_drafts")
-    assert run["counts"] == {"found": 2, "confirmed": 2, "unconfirmed": 0}
+    assert {k: run["counts"][k] for k in ("found", "confirmed", "unconfirmed", "drafts", "added")} == \
+        {"found": 2, "confirmed": 2, "unconfirmed": 0, "drafts": 2, "added": 0}  # one website: drafts, not added
     assert {d["tactic"] for d in drafts} == {"Registrar office insider kilo", "Forged hospital record lima"}
     assert all(d["review"] == "pending" and d["label"] == "derived" and d["sources"] for d in drafts)
     assert fraud_guides.current(KEY).version == 1  # nothing changes until a reviewer approves
@@ -374,7 +376,7 @@ def test_research_skips_known_and_unconfirmed_tactics(stub):
     stub.tactics = [tactic("A cheap template with a replica signature"), tactic("New one november")]
     stub.confirm = False
     run = research()
-    assert run["counts"] == {"found": 1, "confirmed": 0, "unconfirmed": 1}
+    assert {k: run["counts"][k] for k in ("found", "confirmed", "unconfirmed")} == {"found": 1, "confirmed": 0, "unconfirmed": 1}
     assert store.list("fraud_drafts") == []
 
 

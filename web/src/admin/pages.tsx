@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  fmt, platform, type Agent, type AuditEntry, type Blocked, type BudgetRequest, type DemoCopy, type GuardianEvent,
+  fmt, platform, type Added, type Agent, type AuditEntry, type Blocked, type BudgetRequest, type DemoCopy, type GuardianEvent,
   type CuePrivacy, type Draft, type Guide, type KillSwitchState, type Me, type Permission, type Run, type RunStage, type Scenario,
   type CeilingState, type ServiceCeiling, type Source,
   type Spend, type Use, type KeyPerson, type KeyPolicy, type KeySource, type KeyUse,
@@ -600,7 +600,7 @@ export function FraudPage({ me }: { me: Me }) {
   const live = data.runs[0];
   return (
     <>
-      <p className="pa-lede">The dreaming agent imagines attacks on our safeguards, and the research agent checks each one, and new tactics, against cited sources. Only what a source confirms can be approved, and nothing changes a guide or a check until a reviewer approves it.</p>
+      <p className="pa-lede">Every hour the research agent looks into the next subjects, and the dreaming agent imagines attacks on our safeguards from each new tactic. What two independent websites confirm is added to the guide on its own; anything with one source waits for a reviewer. The pipeline only ever adds: you can remove anything it added, and two removals in a week pause it for that guide.</p>
       <div className="pa-kpis">
         <div className="pa-kpi"><span>Scenarios covered</span><strong>{data.coverage.covered}</strong><em>A safeguard catches it</em></div>
         <div className="pa-kpi"><span>Partly covered</span><strong>{data.coverage.partly}</strong><em>Caught only sometimes</em></div>
@@ -659,18 +659,41 @@ export function FraudPage({ me }: { me: Me }) {
           ))}
         </ul>
       </Section>
-      <Section title="New tactics to review">
-        {data.drafts.length === 0 && <Empty>None waiting. "Research now" looks for new tactics; only ones a source confirms appear here.</Empty>}
+      <Section title="Added on its own" aside={data.adding_paused?.length ? <Status value="paused" /> : undefined}>
+        {(data.adding_paused ?? []).map((g) => (
+          <div key={g} className="pa-row">
+            <p className="pa-warn">Adding is paused for {g} after two removals in a week. Until it resumes, new findings wait for a reviewer.</p>
+            {reviewer && <DecisionForm actions={[{ value: "resume", label: "Resume adding" }]}
+              onDecide={(_, reason) => platform.resumeAdding(g, reason).then(reload)} />}
+          </div>
+        ))}
+        {!data.added?.length && <Empty>Nothing yet. Tactics and scenarios two independent websites confirm appear here, added to the guide.</Empty>}
+        <ul className="pa-list">
+          {(data.added ?? []).map((a: Added) => (
+            <li key={a.id}>
+              <p><strong>{a.name}</strong> {a.spot_check && <Status value="spot_check" />}</p>
+              <p className="pa-muted">{fmt.label(a.kind)} · {a.sources} independent sources · added {fmt.when(a.at)}</p>
+              {reviewer && <DecisionForm actions={[
+                ...(a.spot_check ? [{ value: "keep", label: "Looks right" }] : []),
+                { value: "remove", label: "Remove from the guide", tone: "danger" as const }]}
+                onDecide={(v, reason) => (v === "keep" ? platform.keepAdded(a.id, reason) : platform.removeAdded(a.id, reason)).then(reload)} />}
+            </li>
+          ))}
+        </ul>
+      </Section>
+      <Section title="New tactics and warning signs to review">
+        {data.drafts.length === 0 && <Empty>None waiting. Tactics only one website confirms, and the warning signs of tactics added on their own, appear here.</Empty>}
         <ul className="pa-list">
           {data.drafts.map((d: Draft) => (
             <li key={d.id}>
-              <p><strong>{d.tactic}</strong></p>
+              <p><strong>{d.kind === "sign" ? `Warning sign for “${d.tactic}”` : d.tactic}</strong></p>
+              {d.kind === "sign" && <p className="pa-muted">The tactic is already in the guide. Adding this sign puts it into every certificate check.</p>}
               <ol className="pa-muted">{d.steps.map((x) => <li key={x.step}>{x.step} <em>(caught by: {x.caught_by})</em></li>)}</ol>
               {d.sign && <SignPreview sign={d.sign} />}
               {d.source_note && <p className="pa-muted">What sources say: {d.source_note}</p>}
               <Sources sources={d.sources} />
               {reviewer ? (
-                <DecisionForm actions={[{ value: "approve", label: "Add to the guide" }, { value: "discard", label: "Discard", tone: "danger" }]}
+                <DecisionForm actions={[{ value: "approve", label: d.kind === "sign" ? "Add the sign" : "Add to the guide" }, { value: "discard", label: "Discard", tone: "danger" }]}
                   onDecide={(v, reason) => platform.decideDraft(d.id, v as "approve" | "discard", reason).then(reload)} />
               ) : <p className="pa-muted">Waiting for a risk reviewer.</p>}
             </li>

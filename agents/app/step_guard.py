@@ -119,7 +119,7 @@ def approved_tactics() -> list[tuple[str, fraud_guides.Exploits]]:
         log.warning("fraud guides unavailable; no next step is pursued until they can be read")
         raise TacticsUnavailable from e
     return [(f"{g.key}:{t.id}", t.exploits) for g in guides for t in g.tactics
-            if t.label in fraud_guides.CHECKABLE and t.exploits and not t.exploits.empty()]
+            if t.label in fraud_guides.CHECKABLE and t.status == "active" and t.exploits and not t.exploits.empty()]
 
 
 def check(step: dict, tactics: list[tuple[str, fraud_guides.Exploits]]) -> str | None:

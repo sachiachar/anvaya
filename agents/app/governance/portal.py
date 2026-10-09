@@ -237,7 +237,47 @@ def get_fraud(_: Actor = Depends(actor)) -> dict:
             "drafts": sorted(store.list("fraud_drafts", review="pending"), key=lambda d: -d["at"]),
             "privacy": _cue_privacy(),
             "runs": sorted(store.list("fraud_runs"), key=lambda r: -r["started_at"])[:10],
-            "guides": fraud_guides.summaries()}
+            "guides": fraud_guides.summaries(),
+            # What the pipeline added on its own (PR-2.7.y): a person can remove any of it, and 1 in 10
+            # is marked for an optional spot check. Adding pauses for a guide after 2 removals in a week.
+            # Every active one, spot checks first, so nothing added is ever out of a person's reach.
+            "added": sorted(store.list("fraud_auto", status="active"), key=lambda a: (not a["spot_check"], -a["at"])),
+            "adding_paused": sorted(a["id"] for a in store.list("fraud_autonomy") if a.get("paused"))}
+
+
+class AddedDecision(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+@router.post("/fraud/added/{item_id}/remove")
+def remove_added(item_id: str, body: AddedDecision, who: Actor = Depends(need("review_fraud"))) -> dict:
+    """Retire something the pipeline added on its own. Two removals in a week pause adding for that guide."""
+    try:
+        item = fraud_pipeline.remove_added(item_id)
+    except KeyError as e:
+        raise HTTPException(404, "Nothing active with that id was added.") from e
+    audit(who, "fraud.added_removed", item_id, body.reason, kind=item["kind"])
+    return {"item": item, "adding_paused": fraud_pipeline.adding_paused(item["guide_key"])}
+
+
+@router.post("/fraud/added/{item_id}/keep")
+def keep_added(item_id: str, body: AddedDecision, who: Actor = Depends(need("review_fraud"))) -> dict:
+    """A spot check found it right: it stays, and is no longer marked for checking."""
+    item = store.get("fraud_auto", item_id)
+    if not item or item["status"] != "active":
+        raise HTTPException(404, "Nothing active with that id was added.")
+    audit(who, "fraud.added_kept", item_id, body.reason, kind=item["kind"])
+    return store.update("fraud_auto", item_id, {"spot_check": False, "checked_at": time.time()})
+
+
+@router.post("/fraud/guides/{guide_id}/resume-adding")
+def resume_adding(guide_id: str, body: AddedDecision, who: Actor = Depends(need("review_fraud"))) -> dict:
+    """Let the pipeline add on its own again for this guide, after it paused."""
+    if not fraud_guides.ensure_saved(guide_id):
+        raise HTTPException(404, "guide not found")
+    fraud_pipeline.resume_adding(guide_id)
+    audit(who, "fraud.adding_resumed", guide_id, body.reason)
+    return {"guide": guide_id, "adding_paused": False}
 
 
 def _claim(item_id: str) -> None:

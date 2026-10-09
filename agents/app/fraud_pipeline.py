@@ -10,8 +10,11 @@ Rules in code, each with a test:
     safeguards and guardian events (agent, response and reason only; never case keys or owner data).
   - "Confirmed" means a cited source supports an answer that says the claim
     has been reported, and that answer repeats the claim's own words; a mention isn't enough.
-  - Nothing confirmed here changes a guide by itself: confirmed scenarios and tactics wait for a
-    reviewer. Unconfirmed scenarios fade after 3 runs.
+  - Adding on its own (PR-2.7.y, the owner's decision): a tactic or scenario at least 2 independent
+    websites confirm is added to the guide by itself, add-only; one source makes a draft for a
+    reviewer. A person can remove anything added, and 2 removals in a week pause adding for that
+    guide. Unconfirmed scenarios fade after 3 runs.
+  - Research subjects rotate (gaps from dreaming first), and dreaming takes each tactic in turn.
   - One failed model call costs one item, not the run: the item is logged as not checked and the
     run goes on. A run fails if it tried checks and none worked, if no imagining worked, or for a
     reason that stops every item (no search key, refused by the gateway, stopped).
@@ -29,6 +32,7 @@ import re
 import time
 from datetime import datetime, timezone
 from typing import Literal
+from urllib.parse import urlparse
 
 from google.genai import errors as genai_errors
 from pydantic import BaseModel, Field
@@ -172,8 +176,10 @@ def _similar(a: str, b: str) -> bool:
 # text from the web must read as a description of a document, never as instructions.
 MAX_SIGN_CHARS = 300
 _INSTRUCTION = re.compile(
-    r"\b(ignore|disregard|instruction|prompt|system|you must|you should|rule out|confidence|verdict|approve|"
-    r"likely[_ ]valid|report (?:every|all)|always|never)\b", re.IGNORECASE)
+    r"\b(ignore|disregard|instruction|prompt|system|you must|you should|rul(?:e|ed|ing) out|confidence|verdict|"
+    r"approve|likely[_ ]valid|report (?:every|all)|always|never|not applicable|does not apply|doesn't apply|"
+    r"other signs?|remaining signs?|these signs|listed signs?|treat (?:it |this )?as|skip|is normal|are normal)\b",
+    re.IGNORECASE)
 
 
 def _safe_sign(sign: DocumentSign) -> bool:
@@ -261,7 +267,7 @@ def start_run(kind: Literal["dream", "research"], guide_key: str, by: str, *, qu
         raise Busy("A fraud run is already in progress. Try again when it finishes.")
     limits = {k: governance.limit(a, k) for a, k in (
         (DREAMER, "max_sequences_per_run"), (DREAMER, "max_scenarios_per_sequence"),
-        (RESEARCHER, "max_new_patterns_per_run"))}
+        (RESEARCHER, "max_new_patterns_per_run"), (RESEARCHER, "max_subjects_per_run"))}
     limits |= {f"{a}.max_model_calls_per_run": governance.limit(a, "max_model_calls_per_run") for a in (DREAMER, RESEARCHER)}
     return store.put("fraud_runs", {"id": run_id, "kind": kind, "guide_key": guide_key, "by": by,
                                     "status": "queued" if queued else "running", "started_at": now, "limits": limits,
@@ -367,17 +373,26 @@ def _finish(run: dict, counts: dict, error: str | None = None, stopped: str | No
 
 
 def _seeds(guide: Guide) -> list:
-    """Rule 1: only checked tactics seed new scenarios, least-dreamed first."""
-    tactics = [t for t in guide.tactics if t.label in CHECKABLE]
-    dreamed = store.list("fraud_scenarios", guide_key=guide.key)
-    tactics.sort(key=lambda t: sum(s.get("sequence_id") == t.id for s in dreamed))
+    """Rule 1: only checked, active tactics seed new scenarios. Each tactic is dreamed on in turn:
+    ones never dreamed on first, in the order they joined the guide (so each newly researched tactic
+    gets its turn), then the one dreamed on longest ago."""
+    tactics = [t for t in guide.tactics if t.label in CHECKABLE and t.status == "active"]
+    dreamed = {d["tactic"]: d.get("at", 0) for d in store.list("fraud_dreamed", guide_key=guide.key)}
+    tactics.sort(key=lambda t: (t.id in dreamed, dreamed.get(t.id, 0)))  # stable: guide order among equals
     return tactics[: int(governance.limit(DREAMER, "max_sequences_per_run", 2))]
+
+
+def _dreamed(guide_key: str, tactic_id: str) -> None:
+    store.put("fraud_dreamed", {"id": f"{guide_key}|{tactic_id}", "guide_key": guide_key, "tactic": tactic_id,
+                                "at": time.time()})
 
 
 def _recent_events(n: int = 10) -> list[dict]:
     """What the guardian has seen lately: agent, response and reason only. Never case keys. Not the
     daily-limit refusals (PR-15.6): they're routine, and would push out the signs worth learning from."""
-    events = sorted((e for e in store.list("guardian_events") if not e["id"].startswith(governance.LIMIT_EVENT_IDS)),
+    # Nor its own gap reports: imagined content never feeds on itself (rule 1).
+    events = sorted((e for e in store.list("guardian_events")
+                     if not e["id"].startswith((*governance.LIMIT_EVENT_IDS, "gev_gap_"))),
                     key=lambda e: -e.get("at", 0))[:n]
     return [{"agent": e.get("agent"), "response": e.get("response"), "reason": e.get("reason")} for e in events]
 
@@ -503,6 +518,7 @@ async def dream(run: dict) -> dict:
                 not_checked(f"imagine from “{tactic.name}”", e)
                 continue
             imagined_ok += 1
+            _dreamed(guide.key, tactic.id)  # this tactic's turn is taken; the next run takes the next one
             counts["imagined"] += len(imagined)
             guard.progress(counts)
             picked = _pick(imagined, existing)
@@ -526,7 +542,7 @@ async def dream(run: dict) -> dict:
                     checks_failed += 1
                     continue
                 checks_ok += 1
-                store.put("fraud_scenarios", {
+                saved = store.put("fraud_scenarios", {
                     "id": new_id("scn"), "at": time.time(), "run_id": run["id"], "guide_key": guide.key,
                     "sequence_id": tactic.id, "scenario": scenario.title, "steps": scenario.steps,
                     "variant": scenario.variant, "claim": scenario.claim, "safeguard": scenario.targets,
@@ -541,10 +557,29 @@ async def dream(run: dict) -> dict:
                 existing.append(scenario.title)
                 counts["kept"] += 1
                 counts["confirmed" if evidence.confirmed else "unconfirmed"] += 1
+                added = can_add(guide.key, evidence)
+                if added:  # 2 independent websites report it: validated on its own (PR-2.7.y)
+                    try:
+                        approve_scenario(saved, auto=True)
+                        store.update("fraud_scenarios", saved["id"], {"review": "added", "label": "validated"})
+                        _record_added(guide.key, "scenario", saved["id"], scenario.title, [saved["id"]],
+                                      independent_sources(evidence.sources))
+                        counts["added"] = counts.get("added", 0) + 1
+                    except Exception as e:  # it stays a confirmed scenario for a reviewer; the run goes on
+                        log.exception("fraud dreaming run %s: adding a scenario failed", run["id"])
+                        not_checked(f"add “{scenario.title}”", e, title=scenario.title)
+                        added = False
+                # A gap sources confirm is the sign of something new: the team is told; nothing waits on it.
+                # Imagined gaps no source reports stay on the coverage map only.
+                if coverage == "gap" and evidence.confirmed:
+                    governance.record_intervention(
+                        DREAMER, "add_check", f"Dreaming found a gap: no safeguard catches an attack on the {scenario.targets}",
+                        user_key=governance.SERVICE, once=f"gev_gap_{saved['id']}")
                 guard.progress(counts)
                 guard.say("save", (f"Caught by {caught_by}" if caught_by else "Gap: no safeguard catches it")
                           + (" (only sometimes)" if coverage == "partly" else "")
-                          + ("; waiting for a reviewer" if evidence.confirmed else "; added as unconfirmed"),
+                          + ("; added on its own" if added else "; waiting for a reviewer" if evidence.confirmed
+                             else "; added as unconfirmed"),
                           title=scenario.title, coverage=coverage)
         if failed and not checks_ok and (checks_failed or not imagined_ok):
             return _finish(run, counts, f"Nothing could be checked: {failed[-1]}")
@@ -556,6 +591,159 @@ async def dream(run: dict) -> dict:
         return _finish(run, counts, _reason(e))
 
 
+# ---- Research subjects: they rotate, gaps first (PR-2.7.y) ------------------------------------
+#
+# Each guide has a list of subjects, built from what dreaming found nobody catches (gaps), its
+# warning signs, our safeguards, a few fixed open subjects, and its known tactics. Each research run
+# takes the next ones: a gap never researched first, then the one researched least recently. A
+# subject that finds nothing new 3 times in a row rests for a week. So research covers many angles
+# and keeps looking for fraud unlike anything already known.
+
+OPEN_SUBJECTS: dict[str, list[str]] = {  # reviewed like code
+    "IN.death_certificate": [
+        "new death certificate fraud reported in India in the last 12 months",
+        "insurance claim fraud using a fake death certificate in India",
+        "bank account takeover after the account holder's death in India",
+        "people posing as the legal heir or nominee to claim a dead person's money in India",
+        "fake succession certificate or legal heir certificate fraud in India",
+    ],
+}
+SUBJECT_REST_AFTER = 3              # runs in a row that find nothing new
+SUBJECT_REST_SECONDS = 7 * 86400
+
+
+def _slug(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")[:40]
+
+
+def subjects(guide: Guide) -> list[dict]:
+    """Every research subject for a guide, in priority order: gaps, signs, safeguards, open subjects, tactics."""
+    gaps = [s for s in store.list("fraud_scenarios", guide_key=guide.key)
+            if s.get("coverage") == "gap" and s.get("label") != "invalidated"
+            and s.get("review") not in ("faded", "discarded", "removed")]
+    return [
+        *({"id": f"gap:{s['id']}", "kind": "gap", "about": s["claim"]} for s in sorted(gaps, key=lambda s: s["at"])),
+        *({"id": f"sign:{s.id}", "kind": "sign", "about": f"how forgers fake or get around this: {s.look_for}"}
+          for s in guide.signs if s.status == "active"),
+        *({"id": f"safeguard:{_slug(name)}", "kind": "safeguard",
+           "about": f"ways criminals get around a safeguard like this in inheritance or death-claim fraud: {how}"}
+          for name, how in SAFEGUARDS.items()),
+        *({"id": f"open:{_slug(text)}", "kind": "open", "about": text} for text in OPEN_SUBJECTS.get(guide.key, [])),
+        *({"id": f"tactic:{t.id}", "kind": "tactic", "about": f"new variants of this fraud: {t.name}"}
+          for t in guide.tactics if t.status == "active"),
+    ]
+
+
+def _subject_state(guide_key: str) -> dict[str, dict]:
+    return {d["subject"]: d for d in store.list("fraud_subjects", guide_key=guide_key)}
+
+
+def pick_subjects(guide: Guide, n: int, now: float | None = None) -> list[dict]:
+    """The next n subjects: a gap never researched first, then the least recently researched; never a resting one."""
+    now = now or time.time()
+    state = _subject_state(guide.key)
+    ready = [s for s in subjects(guide) if state.get(s["id"], {}).get("rested_until", 0) <= now]
+    ready.sort(key=lambda s: state.get(s["id"], {}).get("last_at", 0))  # least recently researched first
+    # A new gap goes first, but only one a run, so dreaming's gaps never crowd out the other subjects.
+    new_gap = next((s for s in ready if s["kind"] == "gap" and s["id"] not in state), None)
+    rest = [s for s in ready if s is not new_gap and not (s["kind"] == "gap" and s["id"] not in state)]
+    return ([new_gap] if new_gap else [])[:n] + rest[: n - (1 if new_gap else 0)]
+
+
+def subject_done(guide_key: str, subject: dict, found_new: bool, now: float | None = None) -> None:
+    now = now or time.time()
+    doc_id = f"{guide_key}|{subject['id']}"
+    before = store.get("fraud_subjects", doc_id) or {}
+    streak = 0 if found_new else before.get("empty_streak", 0) + 1
+    store.put("fraud_subjects", {
+        "id": doc_id, "guide_key": guide_key, "subject": subject["id"], "kind": subject["kind"], "last_at": now,
+        "runs": before.get("runs", 0) + 1, "empty_streak": streak,
+        "rested_until": now + SUBJECT_REST_SECONDS if streak >= SUBJECT_REST_AFTER else 0})
+
+
+# ---- Adding on its own (PR-2.7.y): add-only, two independent sources -------------------------
+#
+# The owner decided the pipeline adds what it finds without a reviewer approving each item. Rules in
+# code: it only adds (a tactic, its warning sign, a validated scenario), never removes or weakens
+# anything, and never touches a release; it adds only what at least 2 independent websites confirm
+# (one source makes a draft, as before); 1 in 10 added items is marked for an optional spot check;
+# a person can retire any added item, and 2 removals in a week pause adding for that guide until
+# someone resumes it.
+
+AUTO_MIN_SOURCES = 2
+SPOT_CHECK_EVERY = 10
+PAUSE_AFTER_REMOVALS = 2
+REMOVAL_WINDOW_SECONDS = 7 * 86400
+
+
+# Second-level suffixes where a site's own name is the third label (tribune.co.in, gov.in sites).
+_SECOND_LEVEL = {"co", "com", "net", "org", "gov", "ac", "edu", "nic", "res", "gen", "firm", "ind", "ltd", "mil"}
+# Hosts where anyone can publish under their own subdomain or page: they never count as independent.
+_OPEN_HOSTS = {"blogspot.com", "medium.com", "wordpress.com", "github.io", "substack.com", "wixsite.com",
+               "weebly.com", "tumblr.com", "notion.site", "sites.google.com", "google.com", "linkedin.com",
+               "facebook.com", "x.com", "twitter.com", "quora.com", "reddit.com", "youtube.com", "instagram.com",
+               "telegram.me", "t.me", "scribd.com", "slideshare.net", "pinterest.com"}
+
+
+def _site(url: str) -> str | None:
+    """The website a page belongs to: its registrable domain (a.x.com and b.x.com are one site), or
+    None for a host anyone can publish on."""
+    host = (urlparse(url).hostname or "").lower().rstrip(".")
+    labels = host.split(".")
+    if len(labels) < 2:
+        return None
+    take = 3 if len(labels) >= 3 and labels[-2] in _SECOND_LEVEL and len(labels[-1]) == 2 else 2
+    site = ".".join(labels[-take:])
+    if site in _OPEN_HOSTS or ".".join(labels[-3:]) in _OPEN_HOSTS:
+        return None
+    return site
+
+
+def independent_sources(sources: list[dict]) -> int:
+    """How many different websites confirm it. Pages of one site, or of one site's subdomains, count
+    once; blogs and social sites anyone can publish on don't count at all."""
+    return len({site for s in sources if (site := _site(s.get("url", "")))})
+
+
+def adding_paused(guide_key: str) -> bool:
+    return bool((store.get("fraud_autonomy", guide_key) or {}).get("paused"))
+
+
+def can_add(guide_key: str, evidence: Evidence) -> bool:
+    return evidence.confirmed and independent_sources(evidence.sources) >= AUTO_MIN_SOURCES and not adding_paused(guide_key)
+
+
+def _record_added(guide_key: str, kind: str, item_id: str, name: str, retires: list[str], sources: int) -> dict:
+    """The portal's list of what the pipeline added on its own, each with a way to retire it."""
+    store.increment("fraud_auto_counts", guide_key, {"added": 1}, {"guide_key": guide_key})
+    count = (store.get("fraud_auto_counts", guide_key) or {}).get("added", 1)
+    return store.put("fraud_auto", {
+        "id": item_id, "at": time.time(), "guide_key": guide_key, "kind": kind, "name": name, "retires": retires,
+        "sources": sources, "spot_check": count % SPOT_CHECK_EVERY == 1, "status": "active"})
+
+
+def remove_added(item_id: str) -> dict:
+    """A person retires something the pipeline added. Two removals in a week pause adding for that guide."""
+    item = store.get("fraud_auto", item_id)
+    if not item or item["status"] != "active":
+        raise KeyError(item_id)
+    fraud_guides.retire_items(item["guide_key"], set(item["retires"]))
+    item = store.update("fraud_auto", item_id, {"status": "removed", "removed_at": time.time()})
+    if item["kind"] == "scenario" and store.get("fraud_scenarios", item_id):  # ruled out from now on (rule 6)
+        store.update("fraud_scenarios", item_id, {"review": "removed", "label": "invalidated"})
+    resumed = (store.get("fraud_autonomy", item["guide_key"]) or {}).get("resumed_at", 0)
+    since = max(time.time() - REMOVAL_WINDOW_SECONDS, resumed)  # removals before a resume don't count again
+    removed = [a for a in store.list("fraud_auto", guide_key=item["guide_key"], status="removed")
+               if a.get("removed_at", 0) > since]
+    if len(removed) >= PAUSE_AFTER_REMOVALS:
+        store.put("fraud_autonomy", {"id": item["guide_key"], "paused": True, "paused_at": time.time()})
+    return item
+
+
+def resume_adding(guide_key: str) -> None:
+    store.put("fraud_autonomy", {"id": guide_key, "paused": False, "resumed_at": time.time()})
+
+
 # ---- Research (PR-2.5) -----------------------------------------------------------------
 
 
@@ -564,77 +752,117 @@ def _source_id(url: str) -> str:
 
 
 async def research(run: dict) -> dict:
-    """Look for new tactics for one guide. Confirmed ones become drafts for a reviewer; if
+    """Look for new tactics for one guide, subject by subject (pick_subjects). A tactic 2 independent
+    websites confirm is added to the guide on its own; one source makes a draft for a reviewer; if
     nothing is confirmed, nothing changes."""
     governance.set_current_user(run["by"])  # every step uses the starter's own key first (PR-10.10)
-    counts = {"found": 0, "confirmed": 0, "unconfirmed": 0}
+    counts = {"subjects": 0, "found": 0, "confirmed": 0, "added": 0, "drafts": 0, "unconfirmed": 0}
     try:
         guide = fraud_guides.current(run["guide_key"])
         if guide is None:
             return _finish(run, counts, "guide not found")
         known = [t.name for t in guide.tactics] + [s.look_for for s in guide.signs]
         guard = Guard(run)
-        guard.call(RESEARCHER)
-        guard.say("research", f"Searching the web for new tactics: {guide.document}, {guide.country}")
-        found = await answer_from_web(
-            agent=RESEARCHER, query=f"{guide.document} {guide.country} forgery fraud tactics",
-            system=("You research document fraud for a fraud-prevention team. Report only what the pages "
-                    "describe. Never give operational detail such as tools, templates or where to buy them."),
-            question=(f"Document: {guide.document}, {guide.country}.\nWe already know: {known}\n\n"
-                      "Which forgery or impersonation tactics involving this document do the pages report that "
-                      "aren't in that list? Put a short title as the first line. Describe at most two, each in a "
-                      "short paragraph: its name, how it works step by step, and what would show on the document."),
-        )
-        if not found.text.strip():
-            return _finish(run, counts)
-        guard.call(RESEARCHER)
-        structured = await generate_json(
-            agent=RESEARCHER, schema=NewTactics,
-            system="You turn a research note into structured data. Use only what the note says.",
-            prompt=(f"Note:\n{found.text}\n\nWarning sign ids: {[s.id for s in guide.signs]}\n"
-                    f"Safeguards: {list(SAFEGUARDS)}"),
-        )
         cap = int(governance.limit(RESEARCHER, "max_new_patterns_per_run", 2))
         failed: list[str] = []
-        checked = 0
-        for tactic in structured.tactics[:cap]:
-            if any(_similar(tactic.name, k) for k in known):
-                guard.say("skip", f"Already in the guide: “{tactic.name}”")
-                continue
-            counts["found"] += 1
+        checked = checks_failed = researched = 0
+        for subject in pick_subjects(guide, int(governance.limit(RESEARCHER, "max_subjects_per_run", 2))):
+            if counts["found"] >= cap:
+                break
+            counts["subjects"] += 1
             guard.call(RESEARCHER)
-            guard.say("check", f"Checking “{tactic.name}” against cited sources", title=tactic.name)
+            guard.say("research", f"Searching the web ({subject['kind']}): {subject['about'][:140]}")
             try:
-                evidence = await check_claim(tactic.claim)
+                found = await answer_from_web(
+                    agent=RESEARCHER, query=f"{guide.document} {guide.country} fraud: {subject['about'][:200]}",
+                    system=("You research document fraud for a fraud-prevention team. Report only what the pages "
+                            "describe. Never give operational detail such as tools, templates or where to buy them."),
+                    question=(f"Document: {guide.document}, {guide.country}.\nSubject: {subject['about']}\n"
+                              f"We already know: {known}\n\n"
+                              "Which forgery, impersonation or claim-fraud tactics about this subject do the pages report "
+                              "that aren't in that list? Prefer recent reports. Put a short title as the first line. "
+                              "Describe at most two, each in a short paragraph: its name, how it works step by step, and "
+                              "what would show on the document."),
+                )
+                structured = None
+                if found.text.strip():
+                    guard.call(RESEARCHER)
+                    structured = await generate_json(
+                        agent=RESEARCHER, schema=NewTactics,
+                        system="You turn a research note into structured data. Use only what the note says.",
+                        prompt=(f"Note:\n{found.text}\n\nWarning sign ids: {[s.id for s in guide.signs]}\n"
+                                f"Safeguards: {list(SAFEGUARDS)}"),
+                    )
             except _RUN_LEVEL:
                 raise
-            except Exception as e:  # this tactic isn't kept; the run goes on to the next
-                log.exception("fraud research run %s: checking a tactic failed", run["id"])
-                counts["not_checked"] = counts.get("not_checked", 0) + 1
-                guard.progress(counts)
-                guard.say("skip", f"Couldn't check “{tactic.name}”: {_reason(e)}. It can come up again in a later "
-                                  "run.", title=tactic.name)
+            except Exception as e:  # this subject isn't researched now; it comes round again
+                log.exception("fraud research run %s: a subject failed", run["id"])
                 failed.append(_reason(e))
+                guard.say("skip", f"Couldn't research this subject: {_reason(e)}. It comes round again.")
                 continue
-            checked += 1
-            if not evidence.confirmed:
-                counts["unconfirmed"] += 1
-                guard.say("skip", f"No source confirms “{tactic.name}”; not kept", title=tactic.name)
-                continue
-            if tactic.sign and not _safe_sign(tactic.sign):
-                tactic.sign = None  # the tactic stays; its warning sign read like instructions
-                counts["signs_dropped"] = counts.get("signs_dropped", 0) + 1
-            guard.say("save", f"New tactic waiting for a reviewer: “{tactic.name}”", title=tactic.name)
-            counts["confirmed"] += 1
-            store.put("fraud_drafts", {
-                "id": new_id("drf"), "at": time.time(), "run_id": run["id"], "guide_key": guide.key,
-                "kind": "tactic", "tactic": tactic.name,
-                "steps": [{"step": s.text, "caught_by": s.caught_by} for s in tactic.steps],
-                "sign": tactic.sign.model_dump() if tactic.sign else None, "claim": tactic.claim,
-                "label": "derived", "sources": evidence.sources, "source_note": evidence.summary, "review": "pending",
-            })
-            guard.progress(counts)
-        if failed and not checked:
+            researched += 1
+            new_here = False
+            for tactic in (structured.tactics if structured else []):
+                if counts["found"] >= cap:
+                    break
+                if any(_similar(tactic.name, k) for k in known):
+                    guard.say("skip", f"Already in the guide: “{tactic.name}”")
+                    continue
+                counts["found"] += 1
+                known.append(tactic.name)  # checked once per run, even if another subject brings it up again
+                guard.call(RESEARCHER)
+                guard.say("check", f"Checking “{tactic.name}” against cited sources", title=tactic.name)
+                try:
+                    evidence = await check_claim(tactic.claim)
+                except _RUN_LEVEL:
+                    raise
+                except Exception as e:  # this tactic isn't kept; the run goes on to the next
+                    log.exception("fraud research run %s: checking a tactic failed", run["id"])
+                    counts["not_checked"] = counts.get("not_checked", 0) + 1
+                    guard.progress(counts)
+                    guard.say("skip", f"Couldn't check “{tactic.name}”: {_reason(e)}. It can come up again in a later "
+                                      "run.", title=tactic.name)
+                    failed.append(_reason(e))
+                    checks_failed += 1
+                    continue
+                checked += 1
+                if not evidence.confirmed:
+                    counts["unconfirmed"] += 1
+                    guard.say("skip", f"No source confirms “{tactic.name}”; not kept", title=tactic.name)
+                    continue
+                if tactic.sign and not _safe_sign(tactic.sign):
+                    tactic.sign = None  # the tactic stays; its warning sign read like instructions
+                    counts["signs_dropped"] = counts.get("signs_dropped", 0) + 1
+                counts["confirmed"] += 1
+                new_here = True
+                draft = {"id": new_id("drf"), "at": time.time(), "run_id": run["id"], "guide_key": guide.key,
+                         "kind": "tactic", "tactic": tactic.name,
+                         "steps": [{"step": s.text, "caught_by": s.caught_by} for s in tactic.steps],
+                         "sign": tactic.sign.model_dump() if tactic.sign else None, "claim": tactic.claim,
+                         "label": "derived", "sources": evidence.sources, "source_note": evidence.summary,
+                         "subject": subject["id"]}
+                sites = independent_sources(evidence.sources)
+                if can_add(guide.key, evidence):
+                    # The tactic is added on its own; its warning sign, written from one page's text,
+                    # would go into every certificate check, so it always waits for a reviewer.
+                    added = _add_tactic({**draft, "sign": None}, trust="machine-confirmed", auto=True)
+                    store.put("fraud_drafts", {**draft, "review": "added", "added_as": added})
+                    if draft["sign"]:
+                        store.put("fraud_drafts", {**draft, "id": new_id("drf"), "kind": "sign",
+                                                   "tactic_id": added["tactic"], "review": "pending"})
+                    _record_added(guide.key, "tactic", added["tactic"], tactic.name, [added["tactic"]], sites)
+                    counts["added"] += 1
+                    guard.say("save", f"Added to the guide: “{tactic.name}” ({sites} independent sources)"
+                              + ("; its warning sign waits for a reviewer" if draft["sign"] else ""), title=tactic.name)
+                else:
+                    store.put("fraud_drafts", {**draft, "review": "pending"})
+                    counts["drafts"] += 1
+                    guard.say("save", f"New tactic waiting for a reviewer: “{tactic.name}” (fewer than "
+                                      f"{AUTO_MIN_SOURCES} independent sources)", title=tactic.name)
+                guard.progress(counts)
+            subject_done(guide.key, subject, new_here)
+        # Failed only if no subject could be researched, or checks were tried and none worked.
+        if failed and (not researched or (checks_failed and not checked)):
             return _finish(run, counts, f"Nothing could be checked: {failed[-1]}")
         return _finish(run, counts)
     except Stopped as e:
@@ -647,41 +875,57 @@ async def research(run: dict) -> dict:
             store.update("fraud_guides", run["guide_key"], {"status": "current"})
 
 
-# ---- What a reviewer's decision does ---------------------------------------------------
+# ---- Adding to a guide: by a reviewer's decision, or on its own ------------------------------
+
+
+def _sources_of(items: list[dict]) -> list[fraud_guides.Source]:
+    return [fraud_guides.Source(id=_source_id(s["url"]), title=s["title"] or s["url"], url=s["url"]) for s in items]
+
+
+def _add_tactic(draft: dict, *, trust: str, auto: bool = False) -> dict:
+    """A researched tactic, and its warning sign, as a new guide version. Returns the ids added."""
+    sources = _sources_of(draft["sources"])
+    ids = [s.id for s in sources]
+    # Unique by construction (the draft's id), so a new tactic is never skipped as a duplicate.
+    slug = (_slug(draft["tactic"]) or "tactic") + "_" + draft["id"][-6:]
+    tactic = fraud_guides.Tactic(
+        id=slug, name=draft["tactic"], label="derived", trust=trust, sources=ids, auto=auto,
+        steps=[fraud_guides.Step(text=s["step"], caught_by=s["caught_by"]) for s in draft["steps"]])
+    signs = []
+    if draft.get("sign") and _safe_sign(DocumentSign(**draft["sign"])):
+        signs.append(fraud_guides.Sign(id=f"{slug}_sign", look_for=draft["sign"]["look_for"], genuine=draft["sign"]["genuine"],
+                                       label="derived", trust=trust, sources=ids, auto=auto))
+    fraud_guides.add_items(draft["guide_key"], tactics=[tactic], signs=signs, sources=sources)
+    return {"tactic": slug, "signs": [s.id for s in signs]}
 
 
 def approve_draft(draft: dict) -> Guide:
     """A reviewer approved a researched tactic: add it, and its warning sign, as a new guide version.
     Approved items count as human-reviewed."""
-    sources = [fraud_guides.Source(id=_source_id(s["url"]), title=s["title"] or s["url"], url=s["url"])
-               for s in draft["sources"]]
-    ids = [s.id for s in sources]
-    # Unique by construction (the draft's id), so an approved tactic is never skipped as a duplicate.
-    slug = (re.sub(r"[^a-z0-9]+", "_", draft["tactic"].lower()).strip("_")[:40] or "tactic") + "_" + draft["id"][-6:]
-    tactic = fraud_guides.Tactic(
-        id=slug, name=draft["tactic"], label="derived", trust="human-reviewed", sources=ids,
-        steps=[fraud_guides.Step(text=s["step"], caught_by=s["caught_by"]) for s in draft["steps"]])
-    signs = []
-    if draft.get("sign") and _safe_sign(DocumentSign(**draft["sign"])):
-        signs.append(fraud_guides.Sign(id=f"{slug}_sign", look_for=draft["sign"]["look_for"],
-                                       genuine=draft["sign"]["genuine"], label="derived", trust="human-reviewed",
-                                       sources=ids))
-    return fraud_guides.add_items(draft["guide_key"], tactics=[tactic], signs=signs, sources=sources)
+    if draft.get("kind") == "sign":  # the warning sign of a tactic the pipeline added on its own
+        sources = _sources_of(draft["sources"])
+        if _safe_sign(DocumentSign(**draft["sign"])):
+            fraud_guides.add_items(draft["guide_key"], sources=sources, signs=[fraud_guides.Sign(
+                id=f"{draft['tactic_id']}_sign", look_for=draft["sign"]["look_for"], genuine=draft["sign"]["genuine"],
+                label="derived", trust="human-reviewed", sources=[x.id for x in sources])])
+        return fraud_guides.current(draft["guide_key"])
+    _add_tactic(draft, trust="human-reviewed")
+    return fraud_guides.current(draft["guide_key"])
 
 
-def approve_scenario(scenario: dict) -> Guide:
-    """A reviewer approved a confirmed scenario: it becomes `validated`. If it would leave a mark
-    on the certificate, that mark becomes a projection sign for the check (at most a third of
-    the signs; see fraud_guides.signs_for_check)."""
-    sources = [fraud_guides.Source(id=_source_id(s["url"]), title=s["title"] or s["url"], url=s["url"])
-               for s in scenario.get("sources", [])]
+def approve_scenario(scenario: dict, *, auto: bool = False) -> Guide:
+    """A confirmed scenario becomes `validated`, by a reviewer's decision or, with 2 independent
+    sources, on its own (auto). If it would leave a mark on the certificate, that mark becomes a
+    projection sign for the check (at most a third of the signs; see fraud_guides.signs_for_check)."""
+    sources = _sources_of(scenario.get("sources", []))
     ids = [s.id for s in sources]
+    trust = "machine-confirmed" if auto else "human-reviewed"
     signs = []
     if scenario.get("document_sign") and _safe_sign(DocumentSign(**scenario["document_sign"])):
         signs.append(fraud_guides.Sign(id=scenario["id"], look_for=scenario["document_sign"]["look_for"],
                                        genuine=scenario["document_sign"]["genuine"], label="validated",
-                                       trust="human-reviewed", sources=ids, projection=True))
+                                       trust=trust, sources=ids, projection=True, auto=auto))
     entry = {"id": scenario["id"], "title": scenario["scenario"], "safeguard": scenario["safeguard"],
              "caught_by": scenario["caught_by"], "coverage": scenario["coverage"], "label": "validated",
-             "sources": ids}
+             "sources": ids, "auto": auto}
     return fraud_guides.add_items(scenario["guide_key"], signs=signs, scenarios=[entry], sources=sources)

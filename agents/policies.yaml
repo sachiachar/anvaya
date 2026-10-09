@@ -158,7 +158,8 @@ policies:
       - {tool: web_search, scope: external}
     consumption:
       call: {max_input_tokens: 8000, max_output_tokens: 2000, max_retries: 1}
-      run: {max_model_calls_per_run: 6, max_new_patterns_per_run: 2}
+      # 2 subjects an hour, each one search, one structuring call and up to 2 checks
+      run: {max_model_calls_per_run: 8, max_new_patterns_per_run: 2, max_subjects_per_run: 2}
       per_user: {pool: platform}
 
   - agent: fraud.dreamer
