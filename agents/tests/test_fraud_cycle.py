@@ -61,10 +61,42 @@ def test_a_queued_run_can_be_stopped_before_it_begins(fresh):
     assert ("dream", KEY, "u_reviewer") not in fresh  # the cycle doesn't run a stopped run
 
 
-def test_a_queued_run_the_scheduler_never_called_times_out():
+def test_a_queued_run_waits_through_an_hour_and_times_out_only_after():
     run = fraud_pipeline.start_run("research", KEY, "u_reviewer", queued=True)
-    fraud_pipeline.expire_stale(now=run["started_at"] + fraud_pipeline.RUN_TIMEOUT_SECONDS + 1)
+    fraud_pipeline.expire_stale(now=run["started_at"] + 3600 + 60)  # the next hourly cycle hasn't come yet
+    assert store.get("fraud_runs", run["id"])["status"] == "queued"
+    fraud_pipeline.expire_stale(now=run["started_at"] + fraud_pipeline.QUEUED_TIMEOUT_SECONDS + 1)
     assert store.get("fraud_runs", run["id"])["status"] == "failed" and store.get(*fraud_pipeline.LOCK) is None
+
+
+def test_a_running_run_is_never_timed_out_while_the_scheduler_still_waits_for_it():
+    assert fraud_pipeline.RUN_TIMEOUT_SECONDS > 1800  # the job's attempt deadline
+
+
+def test_a_queued_runs_time_limit_counts_from_when_it_really_starts(monkeypatch, fresh):
+    run = fraud_pipeline.start_run("dream", KEY, "u_reviewer", queued=True)
+    store.update(*fraud_pipeline.LOCK, {"at": 1.0})  # queued long ago
+    seen = {}
+
+    async def watch(r):
+        seen["lock_at"] = store.get(*fraud_pipeline.LOCK)["at"]
+        return fraud_pipeline._finish(r, {})
+
+    monkeypatch.setattr(fraud_pipeline, "dream", watch)
+    asyncio.run(fraud_pipeline.execute(run))
+    assert seen["lock_at"] > 1.0
+
+
+def test_the_hour_is_skipped_once_the_fraud_agents_used_their_share(fresh):
+    ceiling = __import__("app.governance.core", fromlist=["core"]).service_ceiling()
+    share = int(ceiling["tokens_per_day"] * ceiling["scheduled_fraud_share"])
+    day = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).strftime("%Y-%m-%d")
+    store.put("usage_days", {"id": day, "day": day, "agents": {fraud_pipeline.DREAMER: {"tokens_in": share, "tokens_out": 0}}})
+    try:
+        out = asyncio.run(fraud_pipeline.cycle())
+        assert fresh == [] and "skipped" in out
+    finally:
+        store.delete("usage_days", day)
 
 
 # ---- Only the scheduler may call the cycle ---------------------------------------------------
@@ -126,6 +158,7 @@ def test_run_now_records_a_scheduler_failure_and_frees_the_lock(monkeypatch):
     assert r.status_code == 502
     [run] = store.list("fraud_runs")
     assert run["status"] == "failed" and store.get(*fraud_pipeline.LOCK) is None
+    assert store.get("fraud_guides", KEY)["status"] == "current"  # not left "research requested"
 
 
 def test_run_now_locally_runs_in_the_background(monkeypatch, fresh):

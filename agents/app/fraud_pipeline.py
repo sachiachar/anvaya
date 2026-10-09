@@ -27,6 +27,7 @@ import hashlib
 import logging
 import re
 import time
+from datetime import datetime, timezone
 from typing import Literal
 
 from google.genai import errors as genai_errors
@@ -60,7 +61,10 @@ SAFEGUARDS: dict[str, str] = {
 }
 
 FADE_AFTER_RUNS = 3
-RUN_TIMEOUT_SECONDS = 15 * 60
+# Longer than the scheduler waits for a cycle (30 minutes), so a run that is still working is never
+# marked failed under it. A queued run waits for the next hourly cycle at most, so it expires later.
+RUN_TIMEOUT_SECONDS = 35 * 60
+QUEUED_TIMEOUT_SECONDS = 2 * 3600
 
 
 class Busy(RuntimeError):
@@ -235,11 +239,14 @@ def expire_stale(now: float | None = None) -> None:
     """A run still 'running' or 'queued' after the timeout (for example after a server restart, or a
     scheduler that never called) is marked failed and its lock released, so new runs can start."""
     now = now or time.time()
-    for run in [*store.list("fraud_runs", status="running"), *store.list("fraud_runs", status="queued")]:
-        if now - run["started_at"] >= RUN_TIMEOUT_SECONDS:
-            store.update("fraud_runs", run["id"], {"status": "failed", "error": "timed out", "finished_at": now})
+    for status, limit in (("running", RUN_TIMEOUT_SECONDS), ("queued", QUEUED_TIMEOUT_SECONDS)):
+        for run in store.list("fraud_runs", status=status):
+            if now - run["started_at"] >= limit:
+                store.update("fraud_runs", run["id"], {"status": "failed", "error": "timed out", "finished_at": now})
     lock = store.get(*LOCK)
-    if lock and now - lock["at"] >= RUN_TIMEOUT_SECONDS:
+    held = store.get("fraud_runs", lock["run_id"]) if lock else None
+    limit = QUEUED_TIMEOUT_SECONDS if held and held["status"] == "queued" else RUN_TIMEOUT_SECONDS
+    if lock and now - lock["at"] >= limit:
         store.delete(*LOCK)
 
 
@@ -270,23 +277,48 @@ SCHEDULER = "service:fraud-scheduler"  # who starts the hourly runs: no person, 
 
 
 async def execute(run: dict) -> dict:
-    """Run one recorded run to the end, here and now."""
-    run = store.update("fraud_runs", run["id"], {"status": "running", "started_at": time.time()})
+    """Run one recorded run to the end, here and now. A queued run that was stopped, or has timed
+    out, since it was listed isn't brought back."""
+    current = store.get("fraud_runs", run["id"]) or {}
+    if current.get("status") not in ("queued", "running"):
+        return current or run
+    now = time.time()
+    lock = store.get(*LOCK)
+    if lock and lock.get("run_id") == run["id"]:
+        store.update(*LOCK, {"at": now})  # the run's time limit counts from when it really starts
+    run = store.update("fraud_runs", run["id"], {"status": "running", "started_at": now})
     return await (dream if run["kind"] == "dream" else research)(run)
+
+
+def cancel_queued(run: dict, reason: str) -> dict:
+    """A queued run that can't start (the scheduler couldn't be asked): finished as failed, its lock
+    freed, and a guide waiting for research shown as current again."""
+    if store.get("fraud_guides", run["guide_key"]):
+        store.update("fraud_guides", run["guide_key"], {"status": "current"})
+    return _finish(run, {}, reason)
+
+
+def _fraud_tokens_today() -> int:
+    day = store.get("usage_days", datetime.now(timezone.utc).strftime("%Y-%m-%d")) or {}
+    return sum(a.get("tokens_in", 0) + a.get("tokens_out", 0) for name, a in (day.get("agents") or {}).items()
+               if name in (DREAMER, RESEARCHER))
 
 
 async def cycle() -> dict:
     """One scheduled cycle: the runs a reviewer queued with "Run now" if there are any, otherwise
     research and then dreaming for each guide. A guide whose run can't start (one is already going)
-    is skipped until the next hour."""
-    expire_stale()
-    queued = store.list("fraud_runs", status="queued")
+    is skipped until the next hour, and so is the whole hour once the fraud agents have used their
+    share of the day's tokens (policies.yaml service_ceiling.scheduled_fraud_share)."""
+    queued = store.list("fraud_runs", status="queued")  # before expiring, so a waiting request is honoured
     if queued:
         return {run["id"]: (await execute(run))["status"] for run in sorted(queued, key=lambda r: r["started_at"])}
+    expire_stale()
+    ceiling = governance.service_ceiling()
+    if ceiling and _fraud_tokens_today() >= ceiling["tokens_per_day"] * ceiling.get("scheduled_fraud_share", 0.2):
+        return {"skipped": "the fraud agents have used their share of today's tokens"}
     out = {}
-    for key, built_in in fraud_guides.BUILT_IN.items():
-        if not store.get("fraud_guides", key):
-            fraud_guides.save_version(built_in)  # first run for a built-in guide: save it as version 1
+    for key in fraud_guides.BUILT_IN:
+        fraud_guides.ensure_saved(key)
         for kind in ("research", "dream"):
             try:
                 run = start_run(kind, key, SCHEDULER)

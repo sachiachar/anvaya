@@ -291,11 +291,8 @@ def decide_draft(draft_id: str, body: ScenarioDecision, who: Actor = Depends(nee
 
 
 def _start(kind: Literal["dream", "research"], guide_id: str, who: Actor, background: BackgroundTasks) -> dict:
-    if not store.get("fraud_guides", guide_id):
-        built_in = fraud_guides.BUILT_IN.get(guide_id)
-        if not built_in:
-            raise HTTPException(404, "guide not found")
-        fraud_guides.save_version(built_in)  # first run for a built-in guide: save it as version 1
+    if not fraud_guides.ensure_saved(guide_id):  # a built-in guide's first run saves it as version 1
+        raise HTTPException(404, "guide not found")
     # On Google Cloud the run is queued and the hourly job is asked to run now: a run started in the
     # background after this reply would get almost no CPU from Cloud Run and stall (scheduler.py).
     on_cloud = bool(settings.fraud_scheduler_job)
@@ -311,7 +308,7 @@ def _start(kind: Literal["dream", "research"], guide_id: str, who: Actor, backgr
             scheduler.run_now()
         except Exception as e:
             log.exception("couldn't ask the scheduler to run now")
-            fraud_pipeline._finish(run, {}, f"Couldn't start the run: {type(e).__name__}")
+            fraud_pipeline.cancel_queued(run, f"Couldn't start the run: {type(e).__name__}")
             raise HTTPException(502, "The run couldn't be started. Try again, or wait for the hourly run.") from e
     else:  # local development: this machine keeps its CPU
         background.add_task(fraud_pipeline.execute, run)

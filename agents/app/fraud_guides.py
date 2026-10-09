@@ -191,6 +191,16 @@ def save_version(guide: Guide) -> Guide:
     return _save_next(guide.key, lambda _latest: guide)
 
 
+def ensure_saved(key: str) -> bool:
+    """Before a guide's first run: a built-in guide is saved as version 1. False if there's no such guide."""
+    if store.get("fraud_guides", key):
+        return True
+    if key not in BUILT_IN:
+        return False
+    save_version(BUILT_IN[key])
+    return True
+
+
 def add_items(key: str, *, signs: list[Sign] = (), tactics: list[Tactic] = (), scenarios: list[dict] = (),
               sources: list[Source] = ()) -> Guide:
     """A new version of the guide with these items added. Nothing is removed here: retiring a

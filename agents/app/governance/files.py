@@ -124,6 +124,9 @@ class ServiceCeiling(Strict):
     voice_minutes_per_day: int = Field(gt=0)
     optional_pause_at: float = Field(gt=0, le=1)   # share where optional agents stop
     safety_reserve: float = Field(ge=0, lt=1)      # share kept for safety-critical agents
+    # The most of the day's tokens the hourly fraud cycle may use; it skips the hour after that, so
+    # scheduled runs never crowd out people (fraud_pipeline.cycle).
+    scheduled_fraud_share: float = Field(default=0.2, gt=0, le=1)
 
     @model_validator(mode="after")
     def _optional_stop_first(self) -> ServiceCeiling:
