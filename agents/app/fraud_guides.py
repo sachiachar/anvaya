@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, field_validator
@@ -50,6 +51,14 @@ class Sign(BaseModel):
     # out for an older document, whatever the model says (loops._named_signs): the model was found to
     # ignore a date written only in look_for (PR-15.5).
     applies_from: str | None = None
+
+    @field_validator("applies_from")
+    @classmethod
+    def _iso_date(cls, value: str | None) -> str | None:
+        """Checked when a guide loads, so a bad date can never break a check later."""
+        if value is not None:
+            date.fromisoformat(value)
+        return value
 
 
 class Step(BaseModel):
@@ -123,7 +132,7 @@ def _latest_stored(key: str) -> Guide | None:
     if not versions:
         return None
     latest = max(versions, key=lambda v: v["version"])
-    return Guide.model_validate({k: v for k, v in latest.items() if k != "id"})
+    return _with_built_in_dates(Guide.model_validate({k: v for k, v in latest.items() if k != "id"}))
 
 
 def current_all() -> list[Guide]:
@@ -141,14 +150,16 @@ def current(key: str) -> Guide | None:
     except Exception:  # Firestore unavailable: the check still runs on the built-in copy
         log.warning("fraud guide store unavailable; using the built-in copy of %s", key)
         stored = None
-    return _with_built_in_dates(stored) if stored else BUILT_IN.get(key)
+    return stored or BUILT_IN.get(key)
 
 
 def _with_built_in_dates(guide: Guide) -> Guide:
-    """A version saved before signs had `applies_from` gets it from the built-in sign with the same id."""
-    built_in = {s.id: s.applies_from for s in (BUILT_IN.get(guide.key).signs if BUILT_IN.get(guide.key) else [])}
-    signs = [s if s.applies_from or not built_in.get(s.id) else s.model_copy(update={"applies_from": built_in[s.id]})
-             for s in guide.signs]
+    """A version saved before signs had `applies_from` gets it from the built-in sign with the same id.
+    Only when the field is absent: a version that clears it on purpose (None) keeps it cleared."""
+    base = BUILT_IN.get(guide.key)
+    built_in = {s.id: s.applies_from for s in (base.signs if base else [])}
+    signs = [s.model_copy(update={"applies_from": built_in[s.id]})
+             if "applies_from" not in s.model_fields_set and built_in.get(s.id) else s for s in guide.signs]
     return guide.model_copy(update={"signs": signs})
 
 
