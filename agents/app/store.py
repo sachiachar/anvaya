@@ -59,7 +59,8 @@ class MemoryStore:
             return copy.deepcopy(doc)
 
     def list(self, collection, **where):
-        docs = self._data.get(collection, {}).values()
+        with self._lock:  # another thread may be writing (requests run store calls in worker threads)
+            docs = list(self._data.get(collection, {}).values())
         return [copy.deepcopy(d) for d in docs if all(d.get(k) == v for k, v in where.items())]
 
     def delete(self, collection, doc_id):

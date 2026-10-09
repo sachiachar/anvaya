@@ -4,15 +4,21 @@ It reads the owner's kept-knowledge bundle (PR-7.5): while the bundle is small, 
 in the assistant's instructions; above a size limit it gets the bundle's index.md and opens the
 concepts it needs. Either way it understands questions worded differently, or in another
 language, instead of matching keywords. It cites the kept item behind every fact, says plainly
-when the owner never recorded something, and never sees the conversation or the vault.
+when the owner never recorded something, and never sees the owner's conversation or the vault.
+The family's own conversation with it is kept in the store, so it survives restarts (PR-15.8).
 """
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import re
+import time
+from datetime import datetime, timezone
 
 from google.adk.agents import LlmAgent
 from google.adk.agents.run_config import RunConfig
+from google.adk.events import Event
 from google.adk.models.llm_request import LlmRequest
 from google.adk.models.llm_response import LlmResponse
 from google.adk.models import FallbackModel, Gemini
@@ -25,10 +31,17 @@ from google.genai import errors, types
 
 from . import knowledge
 from .gemini import client_for, no_429, retry_for
+from .store import new_id, store
 from .governance import core as governance
 from .governance import keys
 
+log = logging.getLogger(__name__)
 APP_NAME = "life-after"
+AGENT_NAME = "handover_assistant"
+# The family's conversation (PR-15.8) is kept in the store, not in this server's memory, so it
+# survives a restart or another instance answering. Each question sees the last few turns.
+HISTORY_TURNS = 6
+TURNS_KEPT_DAYS = 30  # each turn's expire_at; Firestore deletes it then (TTL, turned on by deploy.yml)
 
 
 # The whole bundle goes into the instructions up to this size (about 20,000 tokens, well within
@@ -212,7 +225,7 @@ class KeyedGemini(Gemini):
 
 def build_agent() -> LlmAgent:
     return LlmAgent(
-        name="handover_assistant",
+        name=AGENT_NAME,
         # Retries on overload, then falls back to a second model.
         model=FallbackModel(models=[
             KeyedGemini(model=governance.primary_model(AGENT), retry_options=retry_for(AGENT)),
@@ -226,6 +239,7 @@ def build_agent() -> LlmAgent:
     )
 
 
+# Holds one question's session only while it's answered (ask() deletes it); the conversation itself is in the store.
 _session_service = InMemorySessionService()
 _runner = Runner(app_name=APP_NAME, agent=build_agent(), session_service=_session_service)
 
@@ -263,36 +277,93 @@ class UnknownSession(LookupError):
     """A session that isn't this person's, for this owner."""
 
 
+# ---- The family's conversation (PR-15.8) ----------------------------------------------------
+#
+# Kept in the store, not in this server's memory, so a restart, a release or a second instance never
+# loses it. Two records:
+# - handover_conversations: one per conversation, holding only its last turns as the model gave them
+#   (citations included), so each question reads one record and the model keeps citing;
+# - handover_turns: one per question, for our team's audit: the question (long numbers masked) and the
+#   answer as the family saw it, with the source ids. Questions the guardian blocked are recorded too.
+# Both are tied to the owner and the person asking, deleted by a demo reset, and expire after 30 days.
+
+
+def _conversation(session_id: str | None, owner_id: str, user_id: str) -> tuple[str, list[dict]]:
+    """The conversation to continue: its id and last turns. A conversation that belongs to someone
+    else is refused; one that no longer exists (reset, or expired) simply starts again, new."""
+    found = store.get("handover_conversations", session_id) if session_id else None
+    if found and (found["asker"] != user_id or found["owner_id"] != owner_id):
+        raise UnknownSession(session_id)
+    return (session_id, found["recent"]) if found else (new_id("hs"), [])
+
+
+def _masked(text: str) -> str:
+    """Long numbers kept to their last 4 characters (knowledge.mask), but kept-item ids left whole,
+    so an answer the model sees again still cites them."""
+    return "".join(part if i % 2 else knowledge.mask(part) for i, part in enumerate(re.split(f"({_ID})", text)))
+
+
+def record_turn(session_id: str, owner_id: str, user_id: str, question: str, *, model_answer: str,
+                answer: str, sources: list[str], blocked: bool = False) -> None:
+    """Remember one question and its answer. A failure is logged, never raised: the family already
+    has the answer, and the model call is spent."""
+    now = time.time()
+    expire = datetime.fromtimestamp(now + TURNS_KEPT_DAYS * 86400, timezone.utc)
+    masked, model_answer, answer = _masked(question), _masked(model_answer), _masked(answer)
+    try:
+        recent = (store.get("handover_conversations", session_id) or {}).get("recent", [])
+        store.put("handover_conversations", {
+            "id": session_id, "owner_id": owner_id, "asker": user_id, "at": now, "expire_at": expire,
+            "recent": [*recent, {"question": masked, "model_answer": model_answer}][-HISTORY_TURNS:]})
+        store.put("handover_turns", {"id": new_id("ht"), "session_id": session_id, "owner_id": owner_id,
+                                     "asker": user_id, "at": now, "question": masked, "answer": answer,
+                                     "sources": sources, "blocked": blocked, "expire_at": expire})
+    except Exception:
+        log.exception("couldn't record a handover turn for %s", session_id)
+
+
+def record_blocked(owner_id: str, user_id: str, question: str, answer: str, session_id: str | None) -> str:
+    """A question the guardian blocked: recorded like any other, so a review sees the attempt. Returns
+    the conversation id to carry on with."""
+    try:
+        session_id, _ = _conversation(session_id, owner_id, user_id)
+    except UnknownSession:
+        session_id = new_id("hs")  # not theirs: a new conversation, never the other person's
+    record_turn(session_id, owner_id, user_id, question, model_answer=answer, answer=answer, sources=[], blocked=True)
+    return session_id
+
+
 async def ask(owner: dict, user_id: str, question: str, session_id: str | None = None) -> dict:
-    """user_id names who is asking, within one demo copy; a session continues only for the same
-    person and owner, so a session ID from another copy is refused (PR-1.6)."""
-    if session_id is not None:
-        session = await _session_service.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
-        if session is None or session.state.get("owner_id") != owner["id"]:
-            raise UnknownSession(session_id)
-    else:
-        session = await _session_service.create_session(
-            app_name=APP_NAME,
-            user_id=user_id,
-            state={"owner_id": owner["id"], "owner_name": owner["name"]},
-        )
-        session_id = session.id
+    """user_id names who is asking, within one demo copy; a conversation continues only for the
+    same person and owner, so a conversation id from another copy is refused (PR-1.6).
+
+    Each question rebuilds a short-lived ADK session from the conversation's last turns (from the
+    store), and the session is gone once the answer is in (PR-15.8)."""
+    session_id, recent = await asyncio.to_thread(_conversation, session_id, owner["id"], user_id)
+    session = await _session_service.create_session(
+        app_name=APP_NAME, user_id=user_id, state={"owner_id": owner["id"], "owner_name": owner["name"]})
+    for turn in recent:  # what was asked and answered so far, with the model's own citations
+        for author, role, text in (("user", "user", turn["question"]), (AGENT_NAME, "model", turn["model_answer"])):
+            await _session_service.append_event(session, Event(
+                author=author, content=types.Content(role=role, parts=[types.Part(text=text)])))
     answer = ""
     tools_used: list[str] = []
-    async for event in _runner.run_async(
-        user_id=user_id,
-        session_id=session_id,
-        new_message=types.Content(role="user", parts=[types.Part(text=question)]),
-        run_config=RunConfig(max_llm_calls=_max_calls()),
-    ):
-        for call in event.get_function_calls():
-            tools_used.append(call.name)
-        if event.is_final_response() and event.content and event.content.parts:
-            answer = "".join(p.text or "" for p in event.content.parts)
+    try:
+        async for event in _runner.run_async(
+            user_id=user_id,
+            session_id=session.id,
+            new_message=types.Content(role="user", parts=[types.Part(text=question)]),
+            run_config=RunConfig(max_llm_calls=_max_calls()),
+        ):
+            for call in event.get_function_calls():
+                tools_used.append(call.name)
+            if event.is_final_response() and event.content and event.content.parts:
+                answer = "".join(p.text or "" for p in event.content.parts)
+    finally:
+        await _session_service.delete_session(app_name=APP_NAME, user_id=user_id, session_id=session.id)
     sources = _sources(owner["id"], answer)  # from the ids, before they're removed
-    return {
-        "answer": clean_answer(answer, sources),
-        "sources": sources,
-        "tools_used": tools_used,
-        "session_id": session_id,
-    }
+    cleaned = clean_answer(answer, sources)
+    if answer.strip():  # an empty answer (a run that ran out) isn't part of the conversation
+        await asyncio.to_thread(record_turn, session_id, owner["id"], user_id, question, model_answer=answer,
+                                answer=cleaned, sources=[s["id"] for s in sources])
+    return {"answer": cleaned, "sources": sources, "tools_used": tools_used, "session_id": session_id}
