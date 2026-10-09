@@ -17,9 +17,12 @@ Nothing here holds conversation text or names: users appear as hashed keys.
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import pathlib
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
@@ -31,6 +34,8 @@ from pydantic import BaseModel
 from ..config import settings
 from ..store import new_id, store
 from . import files
+
+log = logging.getLogger(__name__)
 
 ROLES = ("viewer", "demo_admin", "budget_approver", "risk_reviewer", "platform_admin")
 PERMISSIONS: dict[str, set[str]] = {
@@ -551,10 +556,76 @@ def record_usage(agent: str, model: str, tenant: str, *, tokens_in: int = 0, tok
                                   "model": model, "tokens": tokens_in + tokens_out, "minutes": round(minutes, 2),
                                   "result": "failed" if error else "done", "key_source": key_source,
                                   "expire_at": datetime.fromtimestamp(now + STEPS_KEPT_DAYS * 86400, timezone.utc)})
+    # The agents map's last call (one row per agent, no user and no text).
+    _quietly(store.put, "agent_pulse", {"id": agent, "at": time.time(), "model": model,
+                                        "result": "failed" if error else "done"})
     if key_source == "platform":  # everything our key spends, safety work included (PR-15.1)
         _add_service({"tokens": tokens_in + tokens_out, "voice_minutes": round(minutes, 2)})
     if not error and key_source == "platform":
         count_for_user(agent, tokens=tokens_in + tokens_out, minutes=minutes)
+
+
+# ---- Which agents are working now (the agents map) --------------------------------------
+#
+# Each model call writes an open row when it starts and deletes it when it ends, in a finally, so
+# the row exists exactly while the call runs. A row left behind by a server that stopped mid-call
+# stops counting after the agent's longest call (OPEN_CALL_MINUTES, or its max_call_minutes), and
+# Firestore deletes it at expire_at. The rows hold only the agent and the time: no user, no text.
+
+OPEN_CALL_MINUTES = 5   # a text or speech call is far shorter; a live call uses its max_call_minutes
+OPEN_CALL_KEPT_DAYS = 1
+
+
+def _quietly(write, *args) -> None:
+    """The agents map is a view: a failed write there never stops or fails a model call."""
+    try:
+        write(*args)
+    except Exception:
+        log.warning("agents map: could not write %s", args[0], exc_info=True)
+
+
+def call_started(agent: str) -> str:
+    """Mark a model call as running; returns the id to pass to call_ended."""
+    call_id, now = new_id("cal"), time.time()
+    _quietly(store.put, "agent_open_calls", {
+        "id": call_id, "agent": agent, "at": now,
+        "expire_at": datetime.fromtimestamp(now + OPEN_CALL_KEPT_DAYS * 86400, timezone.utc)})
+    return call_id
+
+
+def call_ended(call_id: str) -> None:
+    _quietly(store.delete, "agent_open_calls", call_id)
+
+
+@contextmanager
+def working(agent: str) -> Iterator[None]:
+    """Around one model call: the agent shows as working while it runs."""
+    call_id = call_started(agent)
+    try:
+        yield
+    finally:
+        call_ended(call_id)
+
+
+def open_call_seconds(agent: str) -> int:
+    """How long an open row counts: the agent's longest call, plus a minute."""
+    return ((limit(agent, "max_call_minutes") or OPEN_CALL_MINUTES) + 1) * 60
+
+
+def paused_by(agent: str, status: dict | None = None) -> str | None:
+    """Why the gateway would refuse this agent right now, if it would: the kill switch, or the
+    service's daily ceiling (the same rules as check_call and check_allowance). `status` is
+    service_status(), when the caller already has it."""
+    entry = agent_entry(agent) or {}
+    state = kill_switch()
+    if (state == "all_paused" and not entry.get("safety_critical")) or (state == "optional_paused" and entry.get("optional")):
+        return "kill_switch"
+    if entry.get("safety_critical") or agent in OWN_KEY_ONLY:
+        return None
+    ceiling = (status or service_status()).get(_service_metric(agent), {}).get("state", "ok")
+    if ceiling == "paused" or (ceiling == "optional_paused" and entry.get("optional")):
+        return "daily_ceiling"
+    return None
 
 
 STEPS_SHOWN = 50

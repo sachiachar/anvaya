@@ -98,6 +98,74 @@ def agents_view() -> list[dict]:
     return out
 
 
+# ---- The agents map ----------------------------------------------------------------
+#
+# Each loop on the map and the agents it holds. Every registered agent is on exactly one loop
+# (a test checks this), so a new agent can't be left off the map. Loops with no agents are code
+# and people only (no model is called); the screen draws those from its own layout.
+
+LOOPS: dict[str, list[str]] = {
+    "fraud_dreamer": ["fraud.dreamer"],
+    "fraud_researcher": ["fraud.researcher"],
+    "guardian": ["guardian.detectors"],
+    "talk": ["saathi.chat", "saathi.voice", "saathi.speech"],
+    "keep": ["capture.extractor", "saathi.summary", "documents.reader"],
+    "readiness": ["readiness.planner"],
+    "planning": ["legal.needs"],
+    "certificate": ["activation.checker"],
+    "ask": ["handover.assistant"],
+    "claims": ["settlement.planner"],
+    "gateway": ["access.tester"],
+}
+FRAUD_RUN_KIND = {"fraud.dreamer": "dream", "fraud.researcher": "research"}
+ACTIVE_SECONDS = 24 * 3600
+
+
+def _run_summary(run: dict | None) -> dict | None:
+    """A fraud run for the map: its state and counts only (no steps, no text)."""
+    if not run:
+        return None
+    return {k: run.get(k) for k in ("id", "kind", "status", "stage", "started_at", "finished_at", "counts")}
+
+
+def agents_live(who: Actor | None = None) -> dict:
+    """What each agent is doing now, for the agents map: working (a call is running, or its fraud
+    run is), paused (the kill switch or the daily ceiling), active (a call in the last 24 hours),
+    idle or planned; with its last call and today's use. Service-wide counts, like the rest of
+    this page; blocked calls and guardian events are filtered for a demo admin as elsewhere."""
+    now, today_id = time.time(), core._today()
+    open_calls = store.list("agent_open_calls")
+    pulse = {p["id"]: p for p in store.list("agent_pulse")}
+    today = (store.get("usage_days", today_id) or {}).get("agents", {})
+    blocked = store.list("gateway_blocked", day=today_id)
+    if who is not None and who.role == "demo_admin":
+        blocked = [b for b in blocked if b.get("user_key") == who.key]
+    runs = sorted(store.list("fraud_runs"), key=lambda r: -r["started_at"])
+    status = core.service_status()
+    agents = {}
+    for a in registry():
+        aid = a["id"]
+        running = sum(1 for c in open_calls if c["agent"] == aid and now - c["at"] < core.open_call_seconds(aid))
+        kind = FRAUD_RUN_KIND.get(aid)
+        run = next((r for r in runs if r["kind"] == kind), None) if kind else None
+        run_on = bool(run and run["status"] == "running")
+        paused, last = core.paused_by(aid, status), pulse.get(aid)
+        state = ("planned" if a["status"] != "active" else "working" if running or run_on else
+                 "paused" if paused else "active" if last and now - last["at"] < ACTIVE_SECONDS else "idle")
+        use = today.get(aid, {})
+        agents[aid] = {
+            "state": state, "running_calls": running, "paused_by": paused,
+            "last": {"at": last["at"], "model": last["model"], "result": last["result"]} if last else None,
+            "today": {"calls": use.get("calls", 0), "tokens": use.get("tokens_in", 0) + use.get("tokens_out", 0),
+                      "minutes": round(use.get("minutes", 0.0), 1), "errors": use.get("errors", 0),
+                      "blocked": sum(1 for b in blocked if b["agent"] == aid)},
+            "last_run": _run_summary(run),
+        }
+    return {"at": now, "loops": LOOPS, "agents": agents, "kill_switch": core.kill_switch(),
+            "ceiling": status.get("state", "ok"),
+            "guardian_open": len([e for e in store.list("guardian_events", status="open") if _sees_event(who, e)])}
+
+
 # ---- Routes ---------------------------------------------------------------------
 
 router = APIRouter(prefix="/platform")
@@ -122,6 +190,12 @@ def get_agents(who: Actor = Depends(actor)) -> dict:
     if who.role == "demo_admin":  # only calls refused for their own copy
         blocked = [b for b in blocked if b.get("user_key") == who.key]
     return {"agents": agents_view(), "blocked": sorted(blocked, key=lambda b: -b["at"])}
+
+
+@router.get("/agents/live")
+def get_agents_live(who: Actor = Depends(actor)) -> dict:
+    """The agents map's live status; the page asks for it every 15 seconds."""
+    return agents_live(who)
 
 
 def _sees_event(who: Actor | None, event: dict) -> bool:

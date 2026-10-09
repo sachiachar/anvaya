@@ -218,13 +218,15 @@ jobs:
       # Records that expire: Firestore deletes each at its expire_at. The agents panel's trace keeps
       # each line two days (PR-15.7, agents/app/governance/core.py); the guardian's action records
       # 30 days (PR-2.7, agents/app/governance/guardian.py); the family's conversation with the
-      # assistant 30 days (PR-15.8, agents/app/executor_agent.py). Turned on once, then skipped.
-      # Needs roles/datastore.indexAdmin on the deployer (infra/setup-github-actions.sh).
+      # assistant 30 days (PR-15.8, agents/app/executor_agent.py); a model call's open row on the
+      # agents map 1 day, if a stopped server never deleted it (agents/app/governance/core.py).
+      # Turned on once, then skipped. Needs roles/datastore.indexAdmin on the deployer
+      # (infra/setup-github-actions.sh).
       - name: Firestore TTL for the agents trace, the guardian's records and the family's conversation
         env:
           PROJECT: ${{ vars.GCP_PROJECT_ID }}
         run: |
-          for group in agent_steps guardian_actions handover_turns handover_conversations; do
+          for group in agent_steps guardian_actions handover_turns handover_conversations agent_open_calls; do
             ttls=$(gcloud firestore fields ttls list --collection-group="$group" --project "$PROJECT" \
               --format 'value(name.basename(),ttlConfig.state)') || {
               echo "Can't read Firestore TTL settings. Run infra/setup-github-actions.sh again: it gives the deployer roles/datastore.indexAdmin."

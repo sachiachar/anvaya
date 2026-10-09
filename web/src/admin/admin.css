@@ -19,6 +19,16 @@
   --pa-danger-soft: #f8e5de;
   --pa-bar: #2c4a7a;
   --pa-bar-over: #0b132b;
+  /* The agents map: one colour per autonomy level, and blue for code and people only. */
+  --lm-acts: #2f7a6b;
+  --lm-proposes: #a8701f;
+  --lm-assists: #96366a;
+  --lm-rule: #3a4bc0;
+  --lm-group: #eef1f5;
+  --lm-node: #ffffff;
+  --lm-edge: #a3aec0;
+  --lm-ink: #1b2033;
+  --lm-on-chip: #ffffff;
   color-scheme: light;
 }
 
@@ -38,6 +48,15 @@
     --pa-danger-soft: #3a221a;
     --pa-bar: #9fb3d1;
     --pa-bar-over: #d4af37;
+    --lm-acts: #6cc4b0;
+    --lm-proposes: #e3b265;
+    --lm-assists: #e58bb7;
+    --lm-rule: #8f9cff;
+    --lm-group: #1a2340;
+    --lm-node: #151d33;
+    --lm-edge: #56648a;
+    --lm-ink: #e8ebf2;
+    --lm-on-chip: #0e1424;
     color-scheme: dark;
   }
 }
@@ -254,3 +273,62 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .crash { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 24px; text-align: center; background: var(--pa-bg); color: var(--pa-text); }
 .crash-note { color: var(--pa-muted); }
 .crash button { min-height: 44px; padding: 10px 20px; border-radius: 10px; border: 0; background: var(--pa-navy); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+
+/* ---- The agents map ------------------------------------------------------------- */
+.lm { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; margin-bottom: 16px; }
+.lm-map { background: var(--pa-surface); border: 1px solid var(--pa-line); border-radius: 16px; padding: 12px; min-width: 0; }
+.lm-bar { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; padding: 4px 8px 10px; font-weight: 600; }
+.lm-bar .pa-muted { font-weight: 400; font-size: 0.85rem; }
+.lm-scroll { overflow-x: auto; }
+.lm-canvas { position: relative; min-width: 720px; }
+.lm-canvas svg { display: block; width: 100%; height: auto; font-family: Inter, system-ui, sans-serif; }
+.lm-hit { position: absolute; min-height: 0; padding: 0; background: transparent; border: none; border-radius: 14px; cursor: pointer; }
+.lm-hit-round { border-radius: 50%; }
+.lm-hit:hover { background: color-mix(in srgb, var(--pa-accent) 8%, transparent); }
+.lm-hit:focus-visible { outline: 3px solid var(--pa-accent); outline-offset: 4px; }
+.lm-group { fill: var(--lm-group); }
+.lm-group-label { fill: var(--pa-muted); font: 600 14px ui-monospace, Menlo, monospace; letter-spacing: 0.12em; }
+.lm-edge { stroke: var(--lm-edge); stroke-width: 1.6; }
+.lm-arrowhead { fill: var(--lm-edge); }
+.lm-edge-label { fill: var(--pa-muted); font-size: 13px; text-anchor: middle; paint-order: stroke; stroke: var(--lm-group); stroke-width: 6px; stroke-linejoin: round; }
+.lm-gate rect { fill: var(--lm-rule); }
+.lm-gate text { fill: var(--lm-on-chip); font-size: 13px; font-weight: 700; text-anchor: middle; }
+.lm-node .lm-shape { fill: var(--lm-node); stroke-width: 3.5; transition: stroke-width 0.15s; }
+.lm-node .lm-title { fill: var(--lm-ink); font-size: 17px; font-weight: 700; text-anchor: middle; }
+.lm-node .lm-tag { font: 700 13px ui-monospace, Menlo, monospace; letter-spacing: 0.06em; text-anchor: middle; }
+.lm-node .lm-state { fill: var(--pa-muted); font-size: 12px; font-weight: 600; text-anchor: middle; }
+.lm-acts .lm-shape, .lm-acts .lm-pulse { stroke: var(--lm-acts); } .lm-acts .lm-tag { fill: var(--lm-acts); }
+.lm-proposes .lm-shape, .lm-proposes .lm-pulse { stroke: var(--lm-proposes); } .lm-proposes .lm-tag { fill: var(--lm-proposes); }
+.lm-assists .lm-shape, .lm-assists .lm-pulse { stroke: var(--lm-assists); } .lm-assists .lm-tag { fill: var(--lm-assists); }
+.lm-rule .lm-shape { stroke: var(--lm-rule); } .lm-rule .lm-tag { fill: var(--lm-rule); }
+.lm-selected .lm-shape { stroke-width: 6; }
+.lm-state-working .lm-state { fill: var(--pa-ok); }
+.lm-state-paused .lm-state { fill: var(--pa-danger); }
+.lm-state-paused .lm-shape { stroke-dasharray: 8 6; }
+.lm-state-idle .lm-shape { opacity: 0.55; }
+.lm-pulse { fill: none; stroke-width: 3; stroke-dasharray: 10 14; animation: lm-spin 2.4s linear infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes lm-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .lm-pulse { animation: none; stroke-dasharray: none; opacity: 0.6; } }
+.lm-gateway rect { fill: var(--pa-navy); stroke: var(--pa-line); stroke-width: 1.5; }
+.lm-gateway text { fill: #f7f5ef; font-size: 15px; font-weight: 700; text-anchor: middle; }
+.lm-gateway.lm-selected rect { stroke: var(--pa-gold); stroke-width: 3; }
+.lm-panel { background: var(--pa-surface); border: 1px solid var(--pa-line); border-radius: 16px; padding: 18px 20px; position: sticky; top: 12px; }
+.lm-panel h3 { font-family: Lora, Georgia, serif; font-size: 1.3rem; margin: 0 0 8px; }
+.lm-panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.lm-eyebrow { font: 600 0.75rem ui-monospace, Menlo, monospace; letter-spacing: 0.12em; color: var(--pa-muted); margin: 0 0 6px; }
+.lm-legend { display: grid; grid-template-columns: auto 1fr; gap: 10px 12px; align-items: start; margin: 12px 0; }
+.lm-legend dd { margin: 0; font-size: 0.9rem; }
+.lm-chip { font-size: 0.78rem; font-weight: 700; color: var(--lm-on-chip); padding: 3px 10px; border-radius: 999px; white-space: nowrap; text-align: center; }
+.lm-chip.lm-acts { background: var(--lm-acts); } .lm-chip.lm-proposes { background: var(--lm-proposes); }
+.lm-chip.lm-assists { background: var(--lm-assists); } .lm-chip.lm-rule, .lm-chip.lm-gatechip { background: var(--lm-rule); }
+.lm-agent { border-top: 1px solid var(--pa-line); padding-top: 12px; margin-top: 12px; }
+.lm-agent-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.lm-agent .pa-sub { margin: 4px 0 0; }
+.lm-figures { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 10px 0 0; font-size: 0.88rem; }
+.lm-figures dt { color: var(--pa-muted); }
+.lm-figures dd { margin: 0; }
+.pa-status-idle, .pa-status-planned { color: var(--pa-muted); background: transparent; }
+@media (max-width: 1100px) {
+  .lm { grid-template-columns: minmax(0, 1fr); } /* the map scrolls inside its box, not the page */
+  .lm-panel { position: static; }
+}

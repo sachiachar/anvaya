@@ -166,7 +166,8 @@ async def generate_json(
                     retry_options=no_429(cfg.http_options.retry_options))})
             else:
                 cfg_here = cfg
-            return await c.aio.models.generate_content(model=model_name, contents=contents, config=cfg_here)
+            with governance.working(agent):  # the agents map shows it working while it runs
+                return await c.aio.models.generate_content(model=model_name, contents=contents, config=cfg_here)
         return call
 
     used = model

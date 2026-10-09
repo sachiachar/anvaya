@@ -6,6 +6,7 @@ import {
   type Spend, type Use, type KeyPerson, type KeyPolicy, type KeySource, type KeyUse,
 } from "./api";
 import type { KeyFeature, KeyKind } from "../api";
+import { LoopMap } from "./loopMap";
 
 // ---- Shared pieces --------------------------------------------------------------
 
@@ -325,6 +326,8 @@ export function AgentsPage() {
   if (!data) return <Loading error={error} />;
   return (
     <>
+      <p className="pa-lede">Each circle is a loop: an AI step that takes something in and gives something back. People stand at every gate where something becomes real. The map shows which agents are working now; select a loop for its numbers.</p>
+      <LoopMap agents={data.agents} />
       <p className="pa-lede">Every agent is registered with what it is (<span className="pa-mono">registry.yaml</span>) and has one policy for what it may do: its autonomy level, and only its allowed models and tools (<span className="pa-mono">policies.yaml</span>). The gateway refuses anything else and records it below.</p>
       <Section title="Agent registry and use, 30 days">
         <div className="pa-scroll">
