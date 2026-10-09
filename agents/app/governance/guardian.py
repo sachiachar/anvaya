@@ -41,7 +41,9 @@ from . import core
 POLICY_PATH = pathlib.Path(__file__).resolve().parents[2] / "guardian.yaml"
 RISKS = ("none", "low", "medium", "high")
 RESPONSES = ("continue", "add_check", "reduce_autonomy", "pause", "block")
-ACTIONS = ("next_step", "model_call", "review_confirmation", "certificate_check")
+ACTIONS = ("next_step", "model_call", "review_confirmation", "certificate_check",
+           # Part 2: the actions people care about ask first and obey (PR-2.7.4).
+           "keep_card", "recipient_change", "release", "family_question")
 CHANNELS = ("app", "live_call", "background")
 KEPT_DAYS = 30  # each action record's expire_at; a Firestore TTL policy removes it (deploy.yml)
 
@@ -154,12 +156,55 @@ def warning_signs(facts: dict) -> Finding | None:
                    floor="add_check")  # always a reviewer's look at least
 
 
+def risky_card(facts: dict) -> Finding | None:
+    """A card that would help with a risky route: asking for or passing on a secret, or paying
+    because someone else asked (step_guard.reply_problem, worked out by the caller)."""
+    if problem := facts.get("problem"):
+        return Finding("card_rule", "high", f"A card was not kept: rule {problem}", floor="block")
+    return None
+
+
+def recipient_change(facts: dict) -> Finding | None:
+    """Changing who receives the vault: a second change within a day is held for a reviewer;
+    replacing the recipient of a vault that's already sealed gets a reviewer's look."""
+    if facts.get("changed_recently"):
+        return Finding("recipient_change", "high", "The vault recipient was changed twice within a day")
+    if facts.get("replaces_sealed"):
+        return Finding("recipient_change", "medium", "The recipient of a sealed vault was changed")
+    return None
+
+
+def release_risk(facts: dict) -> Finding | None:
+    """The release after the waiting period: held for a risk reviewer when a document check found
+    warning signs or a reviewer went against a "not valid" check (the owner's rule, so a floor)."""
+    reasons = []
+    if n := facts.get("signs_found", 0):
+        reasons.append(f"the document checks found {n} warning sign{'s' if n > 1 else ''}")
+    if facts.get("override"):
+        reasons.append("a reviewer went against the AI's 'not valid'")
+    if reasons:
+        return Finding("release_risk", "high", "Release held: " + " and ".join(reasons), floor="pause")
+    return None
+
+
+def family_secret(facts: dict) -> Finding | None:
+    """A family question asking for a secret (a password, an OTP, a PIN): the vault is released to
+    the named recipient separately, and the assistant never sees it."""
+    if facts.get("asks_secret"):
+        return Finding("family_secret", "high", "A family question asked for a secret", floor="block")
+    return None
+
+
 # Which detectors watch which action. A new detector, fixed or a Gemini signal, is added here.
 DETECTORS: dict[str, list[Detector]] = {
     "next_step": [next_step_rule],
     "model_call": [daily_limit],
     "review_confirmation": [review_override],
     "certificate_check": [warning_signs],
+    "keep_card": [risky_card],
+    "recipient_change": [recipient_change],
+    "release": [release_risk],
+    "family_question": [family_secret],
 }
 
 
@@ -172,6 +217,7 @@ class Decision:
     risk: str
     findings: list[Finding] = field(default_factory=list)
     action_id: str = ""
+    event_id: str | None = None  # the intervention a reviewer decides, when there is one
 
     @property
     def goes_ahead(self) -> bool:
@@ -201,9 +247,60 @@ def decide(action: str, agent: str, facts: dict | None = None, *, refs: dict[str
     record = store.put("guardian_actions", {
         "id": record_id or new_id("gac"), "at": now, "day": datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%d"),
         "expire_at": datetime.fromtimestamp(now + KEPT_DAYS * 86400, timezone.utc),
-        "user_key": user, "action": action, "agent": agent, "autonomy": core.autonomy(agent), "channel": channel,
+        "user_key": user, "action": action, "agent": agent, "channel": channel,
+        # A person acting for themselves ("person:owner") has no agent autonomy.
+        "autonomy": "person" if agent.startswith("person:") else core.autonomy(agent),
         "refs": refs or {}, "risk": risk, "response": response, "detectors": [f.detector for f in findings]})
+    event = None
     if response != "continue":
         reason = "; ".join(f.reason for f in findings) or f"The policy's response for risk {risk}"
-        core.record_intervention(agent, response, reason, case_key, user_key=event_key or user, once=once)
-    return Decision(response, risk, findings, record["id"])
+        event = core.record_intervention(agent, response, reason, case_key, user_key=event_key or user, once=once)
+    return Decision(response, risk, findings, record["id"], (event or {}).get("id"))
+
+
+# ---- Held actions (PR-2.7.4, PR-2.7.6) ------------------------------------------------------
+#
+# A paused action waits, with what it needs to finish, until a risk reviewer decides its event on
+# the portal's Guardian page. "Reverse" (the guardian was wrong) finishes it; "confirm" (the
+# guardian was right) cancels it. The owner sees each held or cancelled action in the app. The
+# code that owns an action registers how to finish and how to cancel it (on_review).
+
+HELD_MESSAGES = {
+    "recipient_change": {"held": "A change to your vault recipient is waiting for a check by our team.",
+                         "cancelled": "Our team stopped a change to your vault recipient. Your vault is as it was."},
+    "release": {"held": "The release of the vault is waiting for a check by our team.",
+                "cancelled": "Our team stopped the release of the vault after a check."},
+}
+_HANDLERS: dict[str, tuple[Callable[[dict], None], Callable[[dict], None]]] = {}
+
+
+def on_review(action: str, finish: Callable[[dict], None], cancel: Callable[[dict], None]) -> None:
+    _HANDLERS[action] = (finish, cancel)
+
+
+def hold(decision: Decision, action: str, owner_id: str, payload: dict) -> dict:
+    """Keep a paused action until its event is decided. The payload is what's needed to finish
+    it, kept on the server only; the owner and the portal see only the action and its status."""
+    if action not in HELD_MESSAGES or not decision.event_id:
+        raise ValueError(f"{action} can't be held without an event")
+    return store.put("guardian_holds", {"id": new_id("ghd"), "at": time.time(), "action": action,
+                                        "owner_id": owner_id, "user_key": core.current_user(),
+                                        "event_id": decision.event_id, "payload": payload, "status": "held"})
+
+
+def resolve(event_id: str, decision: Literal["confirm", "reverse"]) -> None:
+    """A reviewer decided an event: finish (reverse) or cancel (confirm) what it held."""
+    for held in store.list("guardian_holds", event_id=event_id, status="held"):
+        finish, cancel = _HANDLERS[held["action"]]
+        (finish if decision == "reverse" else cancel)(held["payload"])
+        store.update("guardian_holds", held["id"], {"status": "finished" if decision == "reverse" else "cancelled",
+                                                    "decided_at": time.time()})
+
+
+def held_for(owner_id: str) -> list[dict]:
+    """What the owner sees: actions held now, and ones cancelled in the last week, newest first."""
+    week = time.time() - 7 * 86400
+    rows = [h for h in store.list("guardian_holds", owner_id=owner_id)
+            if h["status"] == "held" or (h["status"] == "cancelled" and h.get("decided_at", 0) > week)]
+    return [{"id": h["id"], "at": h["at"], "action": h["action"], "status": h["status"],
+             "message": HELD_MESSAGES[h["action"]][h["status"]]} for h in sorted(rows, key=lambda h: -h["at"])]

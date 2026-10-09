@@ -39,6 +39,7 @@ function VaultRecipient({ onVault }: { onVault: () => void }) {
   const { busy, error, run } = useAction();
 
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [heldNote, setHeldNote] = useState<string | null>(null);  // a change the guardian holds for our team
   // Each part on its own: a slow or failed family list never blocks approving or sealing.
   const refresh = () => run(async () => {
     setLoadError(null);
@@ -56,7 +57,8 @@ function VaultRecipient({ onVault }: { onVault: () => void }) {
   useEffect(() => { refresh(); }, []);
 
   const sendInvite = () => run(async () => {
-    await api.inviteRecipient(choice.name.trim(), choice.relationship.trim());
+    const r = await api.inviteRecipient(choice.name.trim(), choice.relationship.trim());
+    setHeldNote(r.held ? r.message ?? null : null);
     setChoice({ name: "", relationship: "" });
     await refresh();
   });
@@ -151,6 +153,7 @@ function VaultRecipient({ onVault }: { onVault: () => void }) {
           {sealed && <button className="v2-link" onClick={onVault}>Open your vault</button>}
         </>
       )}
+      {heldNote && <p className="v2-muted" role="status">{heldNote}</p>}
       {error && <p className="v2-error" role="alert">{friendlyError(new Error(error))}</p>}
     </section>
   );

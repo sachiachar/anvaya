@@ -104,6 +104,12 @@
   - calls that were refused;
   - budget requests to approve or reject;
   - guardian interventions to confirm or reverse. The guardian now records four things: a next step Saathi didn't pursue because it could be part of a fraud, a reviewer going against a "not valid" check, a call stopped by a daily limit, and warning signs found on a certificate. Each says why in a few fixed words, with no names and nothing anyone said. Each judge sees their own demo's records and the ones for the whole demo. All four now go through one guardian: it writes each action down first, runs its checks, and picks its response from a policy file people can read and change through code review;
+  - **the guardian now steps in where it matters:**
+    - a card that passes on a password, a PIN or a code someone asked for isn't kept, and Vikram sees why;
+    - a second change of the vault recipient within a day waits for our team, and Vikram sees a notice;
+    - if a certificate showed warning signs, or a reviewer went against a "not valid" check, the vault doesn't open when the waiting period ends: it waits for our team;
+    - when Priya asks for a password or a PIN, she gets a plain answer that the vault comes to the person Vikram named.
+  - On the Guardian page, "Reverse" lets a held change or release go ahead, and "Confirm" stops it. Vikram is told either way;
   - behind the scenes, a list of the AI's recent steps in your own demo: which helper ran, with which model, how many tokens it used, how much it may do on its own, and whether it finished, failed or was stopped. It never shows anything anyone said. The screen for it comes with the new design's agents panel;
   - the fraud coverage map and reference guides;
   - every private demo copy, with when it was last used and today's allowance used; your own is marked, and a platform admin can restore any copy to the start;

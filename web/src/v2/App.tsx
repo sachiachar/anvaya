@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AuthError, api, setActingAs, type Case, type DemoPerson, type PersonId } from "../api";
+import { AuthError, api, setActingAs, type Case, type DemoPerson, type GuardianHeld, type PersonId } from "../api";
 import { authEnabled, signInWithGoogle, signOutUser, watchUser } from "../auth";
 import { useAction } from "../ui";
 import { ROLE_TEXT, friendlyError } from "./copy";
@@ -143,6 +143,7 @@ function screen(person: DemoPerson, owner: OwnerNav) {
       return (
         <>
           <AliveAlert />
+          <GuardianNotice />
           <OwnerTabScreen owner={owner} />
         </>
       );
@@ -195,6 +196,23 @@ function AliveAlert() {
         I'm well, cancel this
       </button>
       {error && <p className="v2-error" role="alert">{friendlyError(new Error(error))}</p>}
+    </section>
+  );
+}
+
+/** What the guardian is holding for our team to check, or stopped this week (PR-2.7). */
+function GuardianNotice() {
+  const [held, setHeld] = useState<GuardianHeld[]>([]);
+  useEffect(() => {
+    const check = () => api.guardianHeld().then((r) => setHeld(r.held)).catch(() => {});
+    check();
+    const t = setInterval(check, 15000);
+    return () => clearInterval(t);
+  }, []);
+  if (!held.length) return null;
+  return (
+    <section className="v2-alert" role="status">
+      {held.map((h) => <p key={h.id}>{h.message}</p>)}
     </section>
   );
 }

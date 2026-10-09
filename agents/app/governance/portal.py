@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 from .. import demo, fraud_cues, fraud_guides, fraud_pipeline, model_access
 from ..store import store
-from . import billing, core, keys
+from . import billing, core, guardian, keys
 from .core import Actor, actor, audit, need, platform_settings, registry, small
 from .seed import ensure_current
 
@@ -205,9 +205,11 @@ def decide_guardian(event_id: str, body: GuardianDecision, who: Actor = Depends(
     if event["status"] != "open":
         raise HTTPException(409, "This intervention has already been reviewed.")
     audit(who, f"guardian.{body.decision}", event_id, body.reason, response=event["response"])
-    return store.update("guardian_events", event_id, {
+    decided = store.update("guardian_events", event_id, {
         "status": "confirmed" if body.decision == "confirm" else "reversed", "decided_at": time.time(),
         "decided_by": who.email or "local", "decision_reason": body.reason})
+    guardian.resolve(event_id, body.decision)  # a held action finishes (reverse) or is cancelled (confirm)
+    return decided
 
 
 @router.get("/fraud")

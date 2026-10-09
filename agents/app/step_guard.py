@@ -156,6 +156,12 @@ def reply_problem(reply: str) -> str | None:
     return None
 
 
+def asks_for_secret(text: str) -> bool:
+    """Whether a question asks for a secret (a password, an OTP, a PIN). A postal PIN code alone
+    doesn't count. For the family's questions (PR-2.7): the vault is released separately."""
+    return _secret(_plain(text))
+
+
 def typed(task: dict) -> dict:
     """A readiness next step with its type and channel, from its action."""
     kind, channel = ACTION_TYPES.get(task.get("action", ""), (None, None))

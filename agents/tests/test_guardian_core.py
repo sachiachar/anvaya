@@ -131,7 +131,9 @@ def test_the_guardian_never_reaches_the_vault():
                         "typing", "yaml", "pydantic", "store", ""}, imported
     tree.body = tree.body[1:]  # the code only, without the module's explanation (comments are dropped too)
     code = ast.unparse(tree)
-    for forbidden in ("vault", "escrow", "media", "knowledge"):
+    # The vault's data and the modules that hold it. The guardian may say "vault recipient" in a
+    # message; it may never read the vault's items, its escrow, media or the kept knowledge.
+    for forbidden in ("vault_items", "vault_escrow", "escrow", "release-bundle", "release_bundle", "media", "knowledge"):
         assert forbidden not in code, forbidden
 
 

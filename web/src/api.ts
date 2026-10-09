@@ -86,6 +86,14 @@ export type SignFinding = {
   projection: boolean;
 };
 
+export type GuardianHeld = {
+  id: string;
+  at: number;
+  action: "recipient_change" | "release";
+  status: "held" | "cancelled";
+  message: string;
+};
+
 export type Case = {
   id: string;
   owner_id: string;
@@ -293,7 +301,9 @@ export const api = {
     request<{ name: string; relationship: string; public_key_jwk: JsonWebKey; key_backup: KeyBackup; vault_sealed: boolean;
       status: "pending_owner" | "approved" }>(o("/vault/recipient")),
   decideRecipient: (decision: "approve" | "decline") => request(o("/vault/recipient/decision"), json({ decision })),
-  inviteRecipient: (name: string, relationship: string) => request(o("/vault/invite"), json({ name, relationship })),
+  // held: the guardian holds the change for our team to check (PR-2.7), with a message to show.
+  inviteRecipient: (name: string, relationship: string) =>
+    request<{ invited?: string; held?: boolean; message?: string }>(o("/vault/invite"), json({ name, relationship })),
   getInvite: () => request<{ name: string; relationship: string }>(o("/vault/invite")),
   setEscrow: (recipient_wrapped_key: string) =>
     request<{ stored: boolean; kms: boolean }>(o("/vault/escrow"), json({ recipient_wrapped_key })),
@@ -306,6 +316,8 @@ export const api = {
   submitAuthority: (proof: File) =>
     request<{ case: Case }>(o("/release/authority"), upload("proof", proof, proof.name)),
   releaseStatus: () => request<{ case: Case | null }>(o("/release")),
+  // What the guardian holds for a risk reviewer, or stopped this week (PR-2.7): a fixed message each.
+  guardianHeld: () => request<{ held: GuardianHeld[] }>(o("/guardian/held")),
   ownerAlive: () => request<{ case?: Case }>(o("/alive"), { method: "POST" }),
   releaseBundle: () => request<{ recipient_wrapped_key: string; items: VaultItem[] }>(o("/vault/release-bundle")),
 
