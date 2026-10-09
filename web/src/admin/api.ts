@@ -46,6 +46,9 @@ export type Overview = {
   spend: Spend;
   usage: {
     daily: ({ day: string } & Use)[];
+    /** For the dashboard's charts: each day (30) and each hour (14 days), per agent. */
+    daily_by_agent: { day: string; agents: Record<string, Use> }[];
+    hourly: { hour: string; agents: Record<string, Use> }[];
     by_agent: Record<string, Use>;
     by_model: Record<string, Use>;
     by_tenant: Record<string, Use & { active_users_today: number | null }>;

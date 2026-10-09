@@ -546,6 +546,12 @@ def record_usage(agent: str, model: str, tenant: str, *, tokens_in: int = 0, tok
         "tenants": {tenant: {"calls": 1, "tokens": tokens_in + tokens_out, "minutes": minutes}},
         "key_sources": {key_source: {"calls": 1, "tokens": tokens_in + tokens_out, "minutes": minutes}},
     }, {"day": day_id})
+    # The same call by hour, for the dashboard's hourly chart. Kept HOURS_KEPT_DAYS: each row's
+    # expire_at is fixed from its hour, so Firestore deletes it then.
+    hour = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    _quietly(store.increment, "usage_hours", hour.strftime("%Y-%m-%dT%H"), {
+        "agents": {agent: {"calls": 1, "tokens": tokens_in + tokens_out, "minutes": minutes, "errors": int(error)}},
+    }, {"hour": hour.strftime("%Y-%m-%dT%H"), "expire_at": hour + timedelta(days=HOURS_KEPT_DAYS)})
     if user := current_user():  # per person and key source, for the portal's Model keys report
         store.increment("key_usage", f"{day_id}:{user}", {key_source: {
             "calls": 1, "tokens": tokens_in + tokens_out, "minutes": minutes, "errors": int(error)}},
@@ -572,6 +578,7 @@ def record_usage(agent: str, model: str, tenant: str, *, tokens_in: int = 0, tok
 # stops counting after the agent's longest call (OPEN_CALL_MINUTES, or its max_call_minutes), and
 # Firestore deletes it at expire_at. The rows hold only the agent and the time: no user, no text.
 
+HOURS_KEPT_DAYS = 14   # the dashboard's hourly chart can go back this far
 OPEN_CALL_MINUTES = 5   # a text or speech call is far shorter; a live call uses its max_call_minutes
 OPEN_CALL_KEPT_DAYS = 1
 

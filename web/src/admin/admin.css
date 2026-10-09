@@ -332,3 +332,20 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .lm { grid-template-columns: minmax(0, 1fr); } /* the map scrolls inside its box, not the page */
   .lm-panel { position: static; }
 }
+
+/* ---- Usage charts on the dashboard ------------------------------------------------ */
+.uc-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 8px; }
+.uc-head p { margin: 0; font-size: 0.85rem; }
+.uc-switch { display: inline-flex; border: 1px solid var(--pa-line); border-radius: 999px; padding: 3px; gap: 2px; margin: 0; }
+.uc-switch label { display: inline-flex; align-items: center; min-height: 34px; padding: 4px 14px; border-radius: 999px; color: var(--pa-text); font-weight: 600; cursor: pointer; }
+.uc-switch label.on { background: var(--pa-navy); color: #f7f5ef; }
+.uc-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.uc-switch label:has(input:focus-visible) { outline: 3px solid var(--pa-accent); outline-offset: 2px; }
+.uc-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.uc-pair { display: grid; gap: 20px; }
+.uc-pair figure { margin: 0; min-width: 0; }
+.uc-pair figcaption { font-size: 0.9rem; margin-bottom: 4px; }
+.uc-chart { width: 100%; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .uc-switch label.on { background: var(--pa-gold); color: #0b132b; }
+}
