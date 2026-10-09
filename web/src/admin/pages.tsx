@@ -864,6 +864,10 @@ export function ModelKeysPage({ me }: { me: Me }) {
         <p className="pa-muted">{data.platform_key.failed_at
           ? `Our key last failed ${fmt.when(data.platform_key.failed_at)} (${data.platform_key.code}).`
           : "Our key hasn't failed."} Spend on people's own keys is billed to them, so it isn't in our Cloud Billing figures.</p>
+        {(data.service.platform?.calls ?? 0) > 0 && (
+          <p className="pa-muted">Ours includes our own scheduled work, the hourly fraud cycle: {fmt.num(data.service.platform?.calls ?? 0)} calls
+            and {fmt.num(data.service.platform?.tokens ?? 0)} tokens. It isn't a person, so it isn't listed under People.</p>
+        )}
       </Section>
       <Section title={`People (${data.people.length})`}>
         {data.people.length === 0 ? <Empty>Nobody has added a key or used one yet.</Empty> : <table>

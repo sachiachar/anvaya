@@ -157,6 +157,8 @@ export type KeyPolicy = { enabled: boolean; kinds: KeyKind[]; set_by_admin?: boo
 export type KeyPerson = { user_key: string; is_you: boolean; nickname?: string | null; policy: KeyPolicy;
   access: ModelAccess | null; usage_30d: Partial<Record<KeySource, KeyUse>> };
 export type ModelKeys = { days: number; totals: Partial<Record<KeySource, KeyUse>>; people: KeyPerson[];
+  /** The service's own scheduled work (the hourly fraud cycle): in the totals, never a person. */
+  service: Partial<Record<KeySource, KeyUse>>;
   default: KeyPolicy; platform_key: { failed_at?: number; code?: number }; ready: boolean; kinds: KeyKind[];
   can_manage: boolean };
 

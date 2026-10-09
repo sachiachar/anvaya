@@ -681,6 +681,12 @@ def record_blocked(agent: str, kind: str, attempted: str, reason: str, user: str
 
 
 SERVICE = "service"  # an event about the whole service (the daily ceiling), not one demo copy
+
+
+def is_service(key: str | None) -> bool:
+    """A key for the service's own work, not a person: SERVICE, or "service:…" (e.g. the hourly
+    fraud cycle, which runs as service:fraud-scheduler)."""
+    return bool(key) and (key == SERVICE or key.startswith(f"{SERVICE}:"))
 LIMIT_EVENT_IDS = ("gev_allowance_", "gev_ceiling_")  # the daily-limit refusals' events, by their stable ids
 
 

@@ -32,7 +32,7 @@
 - **Test** shows what works with the key (typing, the family's questions, voice calls, spoken replies, fraud research) before **Save**. Saving tests it again.
 - The key is stored encrypted and is never shown again, to its owner or anyone else: only its last 4 characters. Nobody else's calls ever use it.
 - Calls on your own key don't count against today's allowance.
-- A new **Model keys** page in the admin portal shows whose key answered each call, failovers, and each person's key status. Platform admins can turn the feature off or limit the kinds of key, for everyone or one person, test a saved key again, or remove it, with a reason that's logged. They never see a key.
+- A new **Model keys** page in the admin portal shows whose key answered each call, failovers, and each person's key status. The hourly fraud cycle counts in the totals, but it isn't listed as a person. Platform admins can turn the feature off or limit the kinds of key, for everyone or one person, test a saved key again, or remove it, with a reason that's logged. They never see a key.
 
 **Talking to Saathi (owner)**
 - Saathi and the suggested topics talk about life and the family, never about the owner's death: no "final wishes" or "after you're gone". This is checked on the server; a next step worded that way is written again or left out. Saathi can still talk about loved ones who have left us.
