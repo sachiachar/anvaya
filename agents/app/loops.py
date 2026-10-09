@@ -416,8 +416,23 @@ def _named_signs(check: DocumentCheck, guide: Guide | None) -> list[dict]:
             seen = f" The check had said: {row['note']}" if row["note"] and row["note"] != "Not reported" else ""
             row.update(result="ruled_out",
                        note=f"Doesn't apply: registered {registered:%d %B %Y}, before {since:%d %B %Y}.{seen}")
+        # Some signs are also checked in code, from what the model read. These can only add a sign,
+        # never rule one out (PR-15.5 found the model missed a registration number from another year).
+        if s.id in CODE_CHECKS and row["result"] != "found" and (found := CODE_CHECKS[s.id](check, registered)):
+            row.update(result="found", note=found)
         rows.append(row)
     return rows
+
+
+def _registration_year(check: DocumentCheck, registered: date | None) -> str | None:
+    """The year in the registration number (D-2022:29-…, 1234/2022) differs from the year of registration."""
+    years = re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", check.registration_number or "")
+    if registered is None or len(set(years)) != 1 or int(years[0]) == registered.year:
+        return None  # nothing to compare, or more than one year in the number: the model's result stands
+    return f"The registration number's year ({years[0]}) doesn't match the date of registration ({registered:%d %B %Y})"
+
+
+CODE_CHECKS = {"registration_details": _registration_year}
 
 
 # Printed dates, most precise first. Day/month numbers that could be read either way (10/03/2023) are

@@ -105,3 +105,32 @@ def test_a_bad_date_in_a_guide_is_refused_when_it_loads():
     sign = _guide().signs[0].model_dump() | {"applies_from": "1 October 2023"}
     with pytest.raises(ValueError):
         fraud_guides.Sign.model_validate(sign)
+
+
+# ---- A registration number from another year (PR-15.5) ------------------------------------
+
+def _numbered(number, registration_date="2022-03-16", result="ruled_out"):
+    from app.schemas import SignResult
+    return check(registration_date=registration_date, death_date="2022-03-14", registration_number=number,
+                 signs=[SignResult(sign_id="registration_details", result=result, note="Looks fine")])
+
+
+def test_a_registration_number_from_another_year_is_found_in_code():
+    """The re-run: a number with 2019 on a 2022 registration passed as likely valid."""
+    summary = review_summary(_numbered("D-2019:29-90514-000231"), _guide())
+    row = _row(summary, "registration_details")
+    assert row["result"] == "found" and "2019" in row["note"] and "16 March 2022" in row["note"]
+    assert summary["verdict"] == "needs_attention"
+
+
+def test_a_matching_or_unreadable_number_leaves_the_models_result():
+    for number in ("D-2022:29-90514-000231", "1234/2022", "", None, "D-29-90514-000231",  # no year
+                   "2019/2022-000231"):  # two years: nothing certain to compare
+        assert _row(review_summary(_numbered(number), _guide()), "registration_details")["result"] == "ruled_out", number
+    no_date = _numbered("D-2019:29-90514-000231", registration_date=None)
+    assert _row(review_summary(no_date, _guide()), "registration_details")["result"] == "ruled_out"
+
+
+def test_code_never_rules_out_what_the_model_found():
+    found = _numbered("D-2022:29-90514-000231", result="found")
+    assert _row(review_summary(found, _guide()), "registration_details")["result"] == "found"
