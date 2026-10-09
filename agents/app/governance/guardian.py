@@ -168,9 +168,9 @@ def recipient_change(facts: dict) -> Finding | None:
     """Changing who receives the vault: a second change within a day is held for a reviewer;
     replacing the recipient of a vault that's already sealed gets a reviewer's look."""
     if facts.get("changed_recently"):
-        return Finding("recipient_change", "high", "The vault recipient was changed twice within a day")
+        return Finding("recipient_change", "high", "The vault recipient was changed twice within a day", floor="pause")
     if facts.get("replaces_sealed"):
-        return Finding("recipient_change", "medium", "The recipient of a sealed vault was changed")
+        return Finding("recipient_change", "medium", "The recipient of a sealed vault was changed", floor="add_check")
     return None
 
 
@@ -278,14 +278,32 @@ def on_review(action: str, finish: Callable[[dict], None], cancel: Callable[[dic
     _HANDLERS[action] = (finish, cancel)
 
 
-def hold(decision: Decision, action: str, owner_id: str, payload: dict) -> dict:
+def hold(decision: Decision, action: str, owner_id: str, payload: dict, *, hold_id: str | None = None,
+         event_id: str | None = None) -> dict:
     """Keep a paused action until its event is decided. The payload is what's needed to finish
-    it, kept on the server only; the owner and the portal see only the action and its status."""
-    if action not in HELD_MESSAGES or not decision.event_id:
+    it, kept on the server only; the owner and the portal see only the action and its status.
+    With a stable `hold_id` (and the event's stable id, from `once`), two requests at the same
+    moment hold it once: the second gets the first one's hold."""
+    event_id = event_id or decision.event_id
+    if action not in HELD_MESSAGES or not event_id:
         raise ValueError(f"{action} can't be held without an event")
-    return store.put("guardian_holds", {"id": new_id("ghd"), "at": time.time(), "action": action,
-                                        "owner_id": owner_id, "user_key": core.current_user(),
-                                        "event_id": decision.event_id, "payload": payload, "status": "held"})
+    doc = {"id": hold_id or new_id("ghd"), "at": time.time(), "action": action, "owner_id": owner_id,
+           "user_key": core.current_user(), "event_id": event_id, "payload": payload, "status": "held"}
+    if hold_id and not store.create("guardian_holds", doc):
+        return store.get("guardian_holds", hold_id)
+    return store.put("guardian_holds", doc) if not hold_id else doc
+
+
+def close(hold_id: str) -> None:
+    """The action no longer applies (e.g. the owner answered "I'm well", so the case was cancelled):
+    the owner stops seeing it, and a reviewer's later decision changes nothing."""
+    held = store.get("guardian_holds", hold_id)
+    if held and held["status"] == "held":
+        store.update("guardian_holds", hold_id, {"status": "closed", "decided_at": time.time()})
+
+
+def waiting(owner_id: str, action: str) -> bool:
+    return any(h["action"] == action for h in store.list("guardian_holds", owner_id=owner_id, status="held"))
 
 
 def resolve(event_id: str, decision: Literal["confirm", "reverse"]) -> None:

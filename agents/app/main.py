@@ -123,12 +123,17 @@ def _refresh(case: dict) -> dict:
         signs = sum(1 for check in ("certificate_check", "authority_check")
                     for s in (case.get(check) or {}).get("signs") or [] if s.get("result") == "found")
         override = any("OVERRIDE of AI" in h["event"] for h in case["history"])
+        # Stable ids: two requests at the same moment (Priya's app and the reviewers' list) make one
+        # event and one hold for the case, never two that could be decided differently.
+        event_id, hold_id = f"gev_release_{case['id']}", f"ghd_release_{case['id']}"
         decision = guardian.decide("release", CHECKER, {"signs_found": signs, "override": override},
-                                   refs={"case": case["id"]}, case_key=case["id"])
+                                   refs={"case": case["id"]}, case_key=case["id"], once=event_id,
+                                   record_id=f"gac_release_{case['id']}")
         if decision.goes_ahead:
             case["release_cleared"] = True
         else:
-            case["release_hold"] = guardian.hold(decision, "release", case["owner_id"], {"case_id": case["id"]})["id"]
+            guardian.hold(decision, "release", case["owner_id"], {"case_id": case["id"]}, hold_id=hold_id, event_id=event_id)
+            case["release_hold"] = hold_id
             case["history"].append({"at": time.time(), "event": "release held for a check by a risk reviewer"})
     return release.refresh(case)
 
@@ -407,9 +412,11 @@ def decide(doc_id: str, body: Decision) -> dict:
         replaces = kept["id"]
     # Keeping asks the guardian first (PR-2.7.4): a card that passes on a secret or pays because
     # someone asked is never kept. It reads the card as it would be kept, edits included.
+    # Each field on its own, so a "never" in one field can't clear an instruction in another.
     card = {**doc, **safe_edits}
-    words = " ".join(v for k, v in card.items() if k not in NOT_WORDS and isinstance(v, str))
-    decision = guardian.decide("keep_card", CARDS, {"problem": step_guard.reply_problem(words)}, refs={"card": doc_id})
+    problem = next((p for k, v in card.items() if k not in NOT_WORDS and isinstance(v, str)
+                    and (p := step_guard.reply_problem(v))), None)
+    decision = guardian.decide("keep_card", CARDS, {"problem": problem}, refs={"card": doc_id})
     if not decision.goes_ahead:
         raise HTTPException(409, "This can't be kept: it passes on a secret or a payment someone asked for. "
                                  "Passwords and PINs belong in your vault.")
@@ -727,6 +734,8 @@ def invite_recipient(owner_id: str, body: Invite) -> dict:
     owner = owner_or_404(owner_id)
     if open_case(owner_id):
         raise HTTPException(409, "The vault recipient can't be changed while a release case is open.")
+    if guardian.waiting(owner_id, "recipient_change"):  # one at a time, so the order is never in doubt
+        raise HTTPException(409, guardian.HELD_MESSAGES["recipient_change"]["held"])
     previous = owner.get("vault_invite") or {}
     if previous and previous.get("name") != body.name:  # a change, not the first choice
         last_change = owner.get("vault_recipient_changed_at") or 0
@@ -734,27 +743,34 @@ def invite_recipient(owner_id: str, body: Invite) -> dict:
                                    {"changed_recently": time.time() - last_change < 86400,
                                     "replaces_sealed": bool(owner.get("vault_escrow"))})
         if not decision.goes_ahead:
-            guardian.hold(decision, "recipient_change", owner_id, {"owner_id": owner_id, "invite": body.model_dump()})
+            # What it changes from, so a reviewer's later "reverse" never undoes a newer choice.
+            guardian.hold(decision, "recipient_change", owner_id,
+                          {"owner_id": owner_id, "from": previous.get("name"), "invite": body.model_dump()})
             return {"autonomy": PROPOSE, "held": True, "message": guardian.HELD_MESSAGES["recipient_change"]["held"]}
-    _apply_invite(owner_id, body.model_dump())
+    _apply_invite(owner, body.model_dump())
     return {"autonomy": PROPOSE, "invited": body.name}
 
 
-def _apply_invite(owner_id: str, invite: dict) -> None:
-    owner = owner_or_404(owner_id)
+def _apply_invite(owner: dict, invite: dict) -> None:
     previous, current = owner.get("vault_invite") or {}, owner.get("vault_recipient") or {}
     changes: dict = {"vault_invite": {**invite, "at": time.time()}}
     if previous and previous.get("name") != invite["name"]:
         changes["vault_recipient_changed_at"] = time.time()
     if current and current.get("name") != invite["name"]:
         changes.update(vault_recipient=None, vault_recipient_name=None, vault_escrow=None)
-    store.update("owners", owner_id, changes)
+    store.update("owners", owner["id"], changes)
 
 
 def _finish_recipient_change(payload: dict) -> None:
-    """A reviewer reversed the hold: make the change, unless a release case has opened since."""
-    if store.get("owners", payload["owner_id"]) and not open_case(payload["owner_id"]):
-        _apply_invite(payload["owner_id"], payload["invite"])
+    """A reviewer reversed the hold: make the change, but only if the owner's choice is still the
+    one it changes from, and no release case has opened since. Read plainly, so no release decision
+    starts from the reviewer's request."""
+    owner = store.get("owners", payload["owner_id"])
+    if not owner or (owner.get("vault_invite") or {}).get("name") != payload.get("from"):
+        return
+    if any(c["state"] != "cancelled" for c in store.list("cases", owner_id=owner["id"])):
+        return
+    _apply_invite(owner, payload["invite"])
 
 
 @api.get("/owners/{owner_id}/vault/invite")
@@ -953,7 +969,10 @@ def owner_alive(owner_id: str) -> dict:
     case = open_case(owner_id)
     if not case:
         return {"status": "no open case"}
-    return _transition(case["id"], release.owner_responded)
+    out = _transition(case["id"], release.owner_responded)
+    if case.get("release_hold"):  # nothing left to release: the owner no longer sees it as waiting
+        guardian.close(case["release_hold"])
+    return out
 
 
 def _transition(case_id: str, step) -> dict:
@@ -1015,7 +1034,7 @@ async def ask_question(owner_id: str, body: Question) -> dict:
         first = (owner.get("name") or "the owner").split()[0]
         return {"autonomy": ACT, "blocked": True, "sources": [], "tools_used": [], "session_id": body.session_id,
                 "answer": f"I can't help with passwords, PINs or codes. Anything {first} kept in the vault is "
-                          "released separately to the person he named, and I can't see it."}
+                          f"released separately to the person {first} named, and I can't see it."}
     try:
         # The asker is the family within the caller's own copy, so sessions never cross copies.
         return {"autonomy": ACT, **await ask(owner, f"family:{demo.current()}", body.question, body.session_id)}

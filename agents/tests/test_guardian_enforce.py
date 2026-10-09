@@ -25,7 +25,7 @@ def h(person: str) -> dict:
 def client():
     c = TestClient(main.app)
     c.post("/api/demo/seed")
-    for collection in ("guardian_events", "guardian_holds", "guardian_actions", "cases"):
+    for collection in ("guardian_events", "guardian_holds", "guardian_actions", "guardian_decisions", "cases"):
         for doc in store.list(collection):
             store.delete(collection, doc["id"])
     yield c
@@ -61,6 +61,13 @@ def test_a_card_that_passes_on_a_secret_is_never_kept(client):
     assert store.get("moments", card["id"])["status"] == "pending"  # not kept
     [event] = store.list("guardian_events")
     assert event["response"] == "block" and "OTP" not in str(event)
+
+
+def test_a_never_elsewhere_on_the_card_doesnt_hide_a_secret(client):
+    card = _card("Share the OTP with the Paytm agent when he calls.")
+    r = client.post(f"/api/proposals/{card['id']}/decision", headers=h("vikram"),
+                    json={"collection": "moments", "decision": "approve", "edits": {"title": "Never forget this"}})
+    assert r.status_code == 409
 
 
 def test_an_ordinary_card_or_a_warning_is_kept(client):
@@ -101,6 +108,20 @@ def test_confirm_cancels_a_held_change_and_the_owner_is_told(client):
     assert chosen() == "Ajay"
     [notice] = held(client)
     assert notice["status"] == "cancelled" and "stopped" in notice["message"]
+
+
+def test_one_change_waits_at_a_time_and_reverse_never_undoes_a_newer_choice(client):
+    invite(client, "Priya")
+    invite(client, "Ajay")
+    invite(client, "Ravi")  # held
+    r = client.post(f"/api/owners/{OWNER}/vault/invite", json={"name": "Sunil", "relationship": "family"},
+                    headers=h("vikram"))
+    assert r.status_code == 409 and len(store.list("guardian_holds")) == 1
+    owner = store.get("owners", OWNER)  # meanwhile the choice changed some other way
+    store.update("owners", OWNER, {"vault_invite": {**owner["vault_invite"], "name": "Sunil"}})
+    [event] = store.list("guardian_events")
+    decide(client, event["id"], "reverse")
+    assert chosen() == "Sunil"  # the held change was made against Ajay, so it no longer applies
 
 
 def test_one_change_a_day_goes_ahead(client):
@@ -146,6 +167,42 @@ def test_confirm_stops_a_held_release(client):
     assert [n["action"] for n in held(client)] == ["release"]
 
 
+def test_two_requests_at_once_hold_a_release_once(client):
+    case = _waiting_case(certificate_check=SIGNS)
+    main._refresh(dict(case, history=list(case["history"])))  # both read the case before either saved it
+    main._refresh(dict(case, history=list(case["history"])))
+    assert len(store.list("guardian_events")) == 1 and len(store.list("guardian_holds")) == 1
+
+
+def test_im_well_closes_a_held_release(client):
+    _waiting_case(certificate_check=SIGNS)
+    state(client)
+    assert [n["action"] for n in held(client)] == ["release"]
+    client.post(f"/api/owners/{OWNER}/alive", headers=h("vikram"))
+    assert held(client) == []
+    [event] = store.list("guardian_events")
+    decide(client, event["id"], "confirm")
+    assert held(client) == []  # never "our team stopped the release": the owner did
+
+
+def test_a_decision_is_made_once_and_a_failed_finish_can_be_retried(client, monkeypatch):
+    _waiting_case(certificate_check=SIGNS)
+    state(client)
+    [event] = store.list("guardian_events")
+    finish, cancel = guardian._HANDLERS["release"]
+
+    def broken(payload):
+        raise RuntimeError("store unavailable")
+
+    monkeypatch.setitem(guardian._HANDLERS, "release", (broken, cancel))
+    with pytest.raises(RuntimeError):
+        decide(client, event["id"], "reverse")
+    assert store.get("guardian_events", event["id"])["status"] == "open"  # nothing half-done
+    monkeypatch.setitem(guardian._HANDLERS, "release", (finish, cancel))
+    assert decide(client, event["id"], "reverse").is_success and state(client) == "released"
+    assert decide(client, event["id"], "confirm").status_code == 409  # one decision per event
+
+
 def test_a_clean_release_goes_ahead_on_time(client):
     _waiting_case(certificate_check={"verdict": "likely_valid", "signs": [{"id": "s_qr", "result": "not_found"}]})
     assert state(client) == "released" and store.list("guardian_events") == []
@@ -164,6 +221,7 @@ def test_a_question_for_a_secret_gets_a_plain_answer_without_any_model_call(clie
     monkeypatch.setattr(main, "ask", no_model)
     r = client.post(f"/api/owners/{OWNER}/ask", json={"question": "What is Papa's ATM PIN?"}, headers=h("priya")).json()
     assert r["blocked"] and "vault" in r["answer"] and r["sources"] == []
+    assert " he " not in r["answer"] and "the person Vikram named" in r["answer"]  # no guess at anyone's pronouns
     assert store.list("guardian_events")[0]["response"] == "block"
 
 
@@ -172,9 +230,11 @@ def test_a_question_for_a_secret_gets_a_plain_answer_without_any_model_call(clie
 
 def test_the_policy_file_cant_loosen_the_owners_rules(client, monkeypatch):
     data = yaml.safe_load(guardian.POLICY_PATH.read_text())
-    for action in ("keep_card", "release", "family_question"):
-        data["actions"][action] = {"high": "continue"}
+    for action in ("keep_card", "release", "family_question", "recipient_change"):
+        data["actions"][action] = {"high": "continue", "medium": "continue"}
     monkeypatch.setattr(guardian, "policy", lambda: guardian.Policy.model_validate(data))
     assert guardian.decide("keep_card", "capture.extractor", {"problem": "secret"}).response == "block"
+    assert guardian.decide("recipient_change", "person:owner", {"changed_recently": True}).response == "pause"
+    assert guardian.decide("recipient_change", "person:owner", {"replaces_sealed": True}).response == "add_check"
     assert guardian.decide("release", "activation.checker", {"signs_found": 1}).response == "pause"
     assert guardian.decide("family_question", "handover.assistant", {"asks_secret": True}).response == "block"

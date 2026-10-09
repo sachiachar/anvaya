@@ -129,12 +129,23 @@ def test_the_guardian_never_reaches_the_vault():
                {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
     assert imported <= {"__future__", "pathlib", "time", "collections.abc", "dataclasses", "datetime", "functools",
                         "typing", "yaml", "pydantic", "store", ""}, imported
-    tree.body = tree.body[1:]  # the code only, without the module's explanation (comments are dropped too)
+    # Text may mention the vault in plain words ("A change to your vault recipient..."), never as a
+    # name of its data: no vault_ or vault- key or collection, no escrow, release bundle, media or
+    # kept knowledge. Comments are dropped by the parser.
+    docstrings = {id(n.body[0].value) for n in ast.walk(tree)
+                  if isinstance(n, (ast.Module, ast.FunctionDef, ast.ClassDef)) and n.body
+                  and isinstance(n.body[0], ast.Expr) and isinstance(n.body[0].value, ast.Constant)}
+    strings = [n.value for n in ast.walk(tree)
+               if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docstrings]
+    data_name = re.compile(r"vault[_\-./]|escrow|release.bundle|\bmedia\b|knowledge", re.I)
+    assert not [s for s in strings if data_name.search(s)], [s for s in strings if data_name.search(s)]
+    # And the code itself, with every string blanked, names none of it at all, not even "vault".
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            node.value = ""
     code = ast.unparse(tree)
-    # The vault's data and the modules that hold it. The guardian may say "vault recipient" in a
-    # message; it may never read the vault's items, its escrow, media or the kept knowledge.
-    for forbidden in ("vault_items", "vault_escrow", "escrow", "release-bundle", "release_bundle", "media", "knowledge"):
-        assert forbidden not in code, forbidden
+    for forbidden in ("vault", "escrow", "media", "knowledge"):
+        assert forbidden not in code.lower(), forbidden
 
 
 def test_the_container_has_every_policy_file_the_api_reads_at_start_up():

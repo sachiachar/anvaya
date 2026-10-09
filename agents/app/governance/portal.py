@@ -204,12 +204,19 @@ def decide_guardian(event_id: str, body: GuardianDecision, who: Actor = Depends(
         raise HTTPException(404, "intervention not found")
     if event["status"] != "open":
         raise HTTPException(409, "This intervention has already been reviewed.")
+    # One decision per event, even if two reviewers press at the same moment. A held action finishes
+    # (reverse) or is cancelled (confirm) first; if that fails, the claim is let go so it can be retried.
+    if not store.create("guardian_decisions", {"id": event_id, "at": time.time()}):
+        raise HTTPException(409, "This intervention has already been reviewed.")
+    try:
+        guardian.resolve(event_id, body.decision)
+    except Exception:
+        store.delete("guardian_decisions", event_id)
+        raise
     audit(who, f"guardian.{body.decision}", event_id, body.reason, response=event["response"])
-    decided = store.update("guardian_events", event_id, {
+    return store.update("guardian_events", event_id, {
         "status": "confirmed" if body.decision == "confirm" else "reversed", "decided_at": time.time(),
         "decided_by": who.email or "local", "decision_reason": body.reason})
-    guardian.resolve(event_id, body.decision)  # a held action finishes (reverse) or is cancelled (confirm)
-    return decided
 
 
 @router.get("/fraud")
