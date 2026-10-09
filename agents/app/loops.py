@@ -416,8 +416,29 @@ def _named_signs(check: DocumentCheck, guide: Guide | None) -> list[dict]:
             seen = f" The check had said: {row['note']}" if row["note"] and row["note"] != "Not reported" else ""
             row.update(result="ruled_out",
                        note=f"Doesn't apply: registered {registered:%d %B %Y}, before {since:%d %B %Y}.{seen}")
+        # A sign the guide also checks in code (Sign.code_check), from what the model read. Code can only
+        # add the sign, never rule it out, and never against the date rule above (PR-15.5 found the model
+        # missed a registration number from another year).
+        elif s.code_check in CODE_CHECKS and row["result"] != "found" and (
+                found := CODE_CHECKS[s.code_check](check, registered, died)):
+            seen = f" The check had said: {row['note']}" if row["note"] and row["note"] != "Not reported" else ""
+            row.update(result="found", note=f"{found}.{seen}")
         rows.append(row)
     return rows
+
+
+def _registration_year(check: DocumentCheck, registered: date | None, died: date | None) -> str | None:
+    """The year in the registration number matches neither the year of registration nor the year of
+    the death (some schemes number a late registration by the year of the event). Only the year is
+    read, never the number itself, so no ID number is kept (rule 5)."""
+    year = check.registration_number_year
+    if year is None or registered is None or year in {registered.year, died.year if died else registered.year}:
+        return None  # nothing certain to compare: the model's result stands
+    death = f" nor the year of the death ({died.year})" if died else ""
+    return f"The registration number's year ({year}) matches neither the date of registration ({registered:%d %B %Y}){death}"
+
+
+CODE_CHECKS = {"registration_year": _registration_year}
 
 
 # Printed dates, most precise first. Day/month numbers that could be read either way (10/03/2023) are

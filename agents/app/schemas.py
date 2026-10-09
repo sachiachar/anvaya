@@ -242,6 +242,9 @@ class DocumentCheck(BaseModel):
         default=None, description="The date of registration printed on the document, written as YYYY-MM-DD; empty if none")
     death_date: str | None = Field(
         default=None, description="The date of death printed on the document, written as YYYY-MM-DD; empty if none")
+    registration_number_year: int | None = Field(
+        default=None, description="Only the year that appears inside the registration number (for example 2022 in "
+        "D-2022:29-…), if it shows one. Never the number itself")
     issuing_authority: str | None = None
     concerns: list[str] = Field(default=[], description="Anything a human reviewer should look at")
     signs: list[SignResult] = Field(default=[], description="One result for each warning sign in the guide")
