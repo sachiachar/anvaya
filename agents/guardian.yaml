@@ -13,8 +13,9 @@
 # a next step that could be part of a fraud is always blocked). This file can never let through
 # something the code forbids.
 #
-# Actions: next_step, model_call, review_confirmation, certificate_check. Each lists only the
-# levels where it differs from the default.
+# Actions: next_step, model_call, review_confirmation, certificate_check, keep_card,
+# recipient_change, release, family_question. Each lists only the levels where it differs from
+# the default.
 
 version: 1
 
@@ -25,3 +26,8 @@ actions:
   model_call: {}
   review_confirmation: {}
   certificate_check: {}
+  # Part 2: these ask before they happen, and obey.
+  keep_card: {high: block}        # Vikram keeps a card
+  recipient_change: {}            # Vikram changes who receives the vault (high: pause, medium: add a check)
+  release: {}                     # the vault opens after the waiting period (high: pause)
+  family_question: {high: block}  # Priya asks the family's assistant

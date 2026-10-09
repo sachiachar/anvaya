@@ -92,8 +92,11 @@ def owner_responded(case: dict[str, Any]) -> dict[str, Any]:
 
 
 def refresh(case: dict[str, Any], now: float | None = None) -> dict[str, Any]:
-    """Advance `waiting` to `released` once the waiting period has passed."""
+    """Advance `waiting` to `released` once the waiting period has passed, unless the guardian is
+    holding the release for a risk reviewer (`release_hold`, PR-2.7)."""
     now = time.time() if now is None else now
+    if case.get("release_hold"):
+        return case
     if case["state"] == "waiting" and case["wait_until"] is not None and now >= case["wait_until"]:
         case["state"] = "released"
         _log(case, "waiting period ended with no response from owner; vault released to recipient")
