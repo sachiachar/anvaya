@@ -57,6 +57,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
         await ws.close()
         return
     started: float | None = None
+    open_call: str | None = None
     reserved, reserved_on = 0.0, None
     reply_tokens: dict[int, tuple[int, int]] = {}  # tokens in and out for each model reply
     saves: set[asyncio.Task] = set()  # exchanges still being saved (their cards worked out)
@@ -90,6 +91,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
                     keys.failed(AGENT, source, getattr(e, "code", None))
             keys.worked(source)
             started = time.time()
+            open_call = governance.call_started(AGENT)  # the agents map shows the call while it lasts
             await ws.send_json({"type": "ready"})
             upstream = asyncio.create_task(_from_browser(ws, session))
             downstream = asyncio.create_task(_to_browser(ws, session, owner, expand, reply_tokens, saves))
@@ -134,6 +136,8 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
         except Exception:
             pass
     finally:
+        if open_call:
+            governance.call_ended(open_call)
         if reserved:  # give back the held minutes; the actual minutes are counted below
             governance.release(AGENT, reserved, reserved_on)  # on the day it was held, even after midnight
         if started is not None:  # record the call's minutes and tokens in the usage ledger

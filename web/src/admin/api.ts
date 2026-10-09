@@ -75,6 +75,17 @@ export type Agent = {
     error_rate: number; blocked: number };
 };
 
+/** The agents map's live status (polled every 15 seconds). Counts only: no user and no text. */
+export type AgentState = "working" | "active" | "idle" | "paused" | "planned";
+export type FraudRunSummary = { id: string; kind: "dream" | "research"; status: Run["status"]; stage?: string | null;
+  started_at: number; finished_at?: number | null; counts?: Record<string, number> | null };
+export type AgentLive = { state: AgentState; running_calls: number; paused_by: "kill_switch" | "daily_ceiling" | null;
+  last: { at: number; model: string; result: "done" | "failed" } | null;
+  today: { calls: number; tokens: number; minutes: number; errors: number; blocked: number };
+  last_run: FraudRunSummary | null };
+export type AgentsLive = { at: number; loops: Record<string, string[]>; agents: Record<string, AgentLive>;
+  kill_switch: KillSwitchState; ceiling: CeilingState; guardian_open: number };
+
 export type Blocked = { id: string; at: number; agent: string; kind: string; attempted: string; reason: string;
   user_key: string | null };
 
@@ -158,6 +169,7 @@ export const platform = {
   me: () => request<Me>(p("/me")),
   overview: (fresh = false) => request<Overview>(p(fresh ? "/overview?fresh=true" : "/overview")),
   agents: () => request<{ agents: Agent[]; blocked: Blocked[] }>(p("/agents")),
+  agentsLive: () => request<AgentsLive>(p("/agents/live")),
   approvals: () => request<{ pending: BudgetRequest[]; active: BudgetRequest[]; history: BudgetRequest[] }>(p("/approvals")),
   decideApproval: (id: string, decision: "approve" | "reject", reason: string, hours?: number) =>
     request<BudgetRequest>(p(`/approvals/${id}/decision`), json({ decision, reason, hours })),

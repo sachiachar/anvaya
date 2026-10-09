@@ -207,11 +207,12 @@ class KeyedGemini(Gemini):
             model = Gemini(model=self.model, retry_options=retry, client=client_for(kind, key))
             yielded = False
             try:
-                async with Aclosing(model.generate_content_async(llm_request, stream)) as responses:
-                    async for response in responses:
-                        yielded = True
-                        response.custom_metadata = {**(response.custom_metadata or {}), "key_source": source}
-                        yield response
+                with governance.working(AGENT):  # the agents map shows it working while it runs
+                    async with Aclosing(model.generate_content_async(llm_request, stream)) as responses:
+                        async for response in responses:
+                            yielded = True
+                            response.custom_metadata = {**(response.custom_metadata or {}), "key_source": source}
+                            yield response
             except errors.APIError as e:
                 # Once part of a reply has gone out, it's this key's turn: never splice two keys.
                 if yielded or last or not keys.fails_over(e):

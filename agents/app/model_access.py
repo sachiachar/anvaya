@@ -60,6 +60,11 @@ def _result(e: Exception) -> str:
 async def _try_model(client, model: str) -> tuple[str, int, int]:
     """One tiny call on one model: (result, tokens in, tokens out)."""
     governance.check_call(AGENT, model)
+    with governance.working(AGENT):  # the agents map shows it working while it runs
+        return await _one_call(client, model)
+
+
+async def _one_call(client, model: str) -> tuple[str, int, int]:
     if governance.model_kind(model) == "live":
         async with client.aio.live.connect(model=model, config=types.LiveConnectConfig(response_modalities=["AUDIO"])):
             pass  # connected: the key reaches the live model; nothing is said

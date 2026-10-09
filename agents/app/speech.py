@@ -84,7 +84,8 @@ async def speak(text: str) -> bytes:
             async def call(client, _last, model=model, config=config):
                 # Plain text only: these models read any style instruction aloud, and they
                 # don't accept a system instruction. The warmth comes from the chosen voice.
-                return await client.aio.models.generate_content(model=model, contents=text, config=config)
+                with governance.working(AGENT):  # the agents map shows it working while it runs
+                    return await client.aio.models.generate_content(model=model, contents=text, config=config)
 
             response, source = await with_keys(AGENT, call, platform=lambda: _client())
             audio = response.candidates[0].content.parts[0].inline_data
