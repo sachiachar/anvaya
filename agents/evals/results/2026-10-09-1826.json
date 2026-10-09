@@ -1,0 +1,543 @@
+{
+  "date": "2026-10-09",
+  "at": "2026-10-09T18:26",
+  "steps": {
+    "certificates": {
+      "agent": "activation.checker",
+      "model": "gemini-3.1-flash-lite",
+      "totals": {
+        "forgeries_flagged": {
+          "count": 7,
+          "of": 7,
+          "share": 1.0
+        },
+        "forgeries_flagged_by_a_sign": {
+          "count": 7,
+          "of": 7,
+          "share": 1.0
+        },
+        "right_sign_named": {
+          "count": 5,
+          "of": 7,
+          "share": 0.714
+        },
+        "genuine_passed": {
+          "count": 0,
+          "of": 6,
+          "share": 0.0
+        },
+        "wrong_person_or_type_caught": {
+          "count": 2,
+          "of": 2,
+          "share": 1.0
+        }
+      },
+      "cases": [
+        {
+          "id": "genuine-1",
+          "expect": "genuine",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "qr_missing"
+          ],
+          "passed": false,
+          "flagged_by_a_sign": null,
+          "sign_named": null
+        },
+        {
+          "id": "genuine-2",
+          "expect": "genuine",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "qr_missing"
+          ],
+          "passed": false,
+          "flagged_by_a_sign": null,
+          "sign_named": null
+        },
+        {
+          "id": "genuine-3",
+          "expect": "genuine",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "qr_missing"
+          ],
+          "passed": false,
+          "flagged_by_a_sign": null,
+          "sign_named": null
+        },
+        {
+          "id": "genuine-4",
+          "expect": "genuine",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "qr_missing"
+          ],
+          "passed": false,
+          "flagged_by_a_sign": null,
+          "sign_named": null
+        },
+        {
+          "id": "genuine-5",
+          "expect": "genuine",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "qr_missing"
+          ],
+          "passed": false,
+          "flagged_by_a_sign": null,
+          "sign_named": null
+        },
+        {
+          "id": "genuine-6",
+          "expect": "genuine",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "qr_missing"
+          ],
+          "passed": false,
+          "flagged_by_a_sign": null,
+          "sign_named": null
+        },
+        {
+          "id": "forged-dates",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "dates_impossible"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": true
+        },
+        {
+          "id": "forged-no-registration",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "registration_details"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": true
+        },
+        {
+          "id": "forged-registration-year",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "qr_missing"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": false
+        },
+        {
+          "id": "forged-wrong-office",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "wrong_office"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": true
+        },
+        {
+          "id": "forged-altered-name",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "qr_missing"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": false
+        },
+        {
+          "id": "forged-link",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "qr_missing",
+            "qr_wrong_site"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": true
+        },
+        {
+          "id": "forged-no-signature",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "qr_missing",
+            "signature_replica"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": true
+        },
+        {
+          "id": "wrong-person",
+          "expect": "wrong_person",
+          "verdict": "needs_attention",
+          "signs_found": [],
+          "passed": true,
+          "flagged_by_a_sign": null,
+          "sign_named": null
+        },
+        {
+          "id": "wrong-type",
+          "expect": "wrong_type",
+          "verdict": "not_valid",
+          "signs_found": [],
+          "passed": true,
+          "flagged_by_a_sign": null,
+          "sign_named": null
+        }
+      ]
+    },
+    "questions": {
+      "agent": "handover.assistant",
+      "model": "gemini-3.1-flash-lite",
+      "totals": {
+        "right_source_cited": {
+          "count": 14,
+          "of": 14,
+          "share": 1.0
+        },
+        "says_never_recorded": {
+          "count": 4,
+          "of": 6,
+          "share": 0.667
+        },
+        "made_up_citations": 0
+      },
+      "cases": [
+        {
+          "q": "Where are Papa's property papers?",
+          "expect": [
+            "papers"
+          ],
+          "cited": [
+            "papers"
+          ],
+          "made_up_citations": 0,
+          "passed": true
+        },
+        {
+          "q": "Did Papa make a will? Where is it?",
+          "expect": [
+            "will"
+          ],
+          "cited": [
+            "will",
+            "desai"
+          ],
+          "made_up_citations": 0,
+          "passed": true
+        },
+        {
+          "q": "Is there any gold, and where is it kept?",
+          "expect": [
+            "gold"
+          ],
+          "cited": [
+            "gold"
+          ],
+          "made_up_citations": 0,
+          "passed": true
+        },
+        {
+          "q": "Who is the nominee on the LIC policy?",
+          "expect": [
+            "lic"
+          ],
+          "cited": [
+            "lic"
+          ],
+          "made_up_citations": 0,
+          "passed": true
+        },
+        {
+          "q": "Which account did he have with HDFC?",
+          "expect": [
+            "hdfc"
+          ],
+          "cited": [
+            "hdfc"
+          ],
+          "made_up_citations": 0,
+          "passed": true
+        },
+        {
+          "q": "Did Papa have a PPF account?",
+          "expect": [
+            "ppf"
+          ],
+          "cited": [
+            "ppf"
+          ],
+          "made_up_citations": 0,
+          "passed": true
+        },
+        {
+          "q": "What advice did he leave about money?",
+          "expect": [
+            "advice"
+          ],
+          "cited": [
+            "advice"
+          ],
+          "made_up_citations": 0,
+          "passed": true
+        },
+        {
+          "q": "Tell me about the scooter trip.",
+          "expect": [
+            "story"
+          ],
+          "cited": [
+            "story"
+          ],
+          "made_up_citations": 0,
+          "passed": true
+        },
+        {
+          "q": "What did Papa want done with the Mysore flat?",
+          "expect": [
+            "flat"
+          ],
+          "cited": [
+            "flat"
+          ],
+          "made_up_citations": 0,
+          "passed": true
+        },
+        {
+          "q": "Who is Mrs Desai?",
+          "expect": [
+            "desai",
+            "will"
+          ],
+          "cited": [
+            "will",
+            "desai"
+          ],
+          "made_up_citations": 0,
+          "passed": true
+        },
+        {
+          "q": "पापा के ज़रूरी कागज़ कहाँ रखे हैं?",
+          "expect": [
+            "papers"
+          ],
+          "cited": [
+            "papers"
+          ],
+          "made_up_citations": 0,
+          "passed": true
+        },
+        {
+          "q": "क्या पापा ने वसीयत बनाई थी?",
+          "expect": [
+            "will"
+          ],
+          "cited": [
+            "will",
+            "desai"
+          ],
+          "made_up_citations": 0,
+          "passed": true
+        },
+        {
+          "q": "Where would I find the key to the locker?",
+          "expect": [
+            "gold"
+          ],
+          "cited": [
+            "gold"
+          ],
+          "made_up_citations": 0,
+          "passed": true
+        },
+        {
+          "q": "Who should I call about the will?",
+          "expect": [
+            "will",
+            "desai"
+          ],
+          "cited": [
+            "will"
+          ],
+          "made_up_citations": 0,
+          "passed": true
+        },
+        {
+          "q": "Did Papa have any loans?",
+          "expect": "never",
+          "cited": [
+            "desai"
+          ],
+          "made_up_citations": 0,
+          "passed": false
+        },
+        {
+          "q": "Did he own shares or mutual funds?",
+          "expect": "never",
+          "cited": [],
+          "made_up_citations": 0,
+          "passed": true
+        },
+        {
+          "q": "Where is the car's registration certificate?",
+          "expect": "never",
+          "cited": [
+            "desai"
+          ],
+          "made_up_citations": 0,
+          "passed": false
+        },
+        {
+          "q": "Did he get a pension?",
+          "expect": "never",
+          "cited": [],
+          "made_up_citations": 0,
+          "passed": true
+        },
+        {
+          "q": "Who was his doctor?",
+          "expect": "never",
+          "cited": [],
+          "made_up_citations": 0,
+          "passed": true
+        },
+        {
+          "q": "Did he want to be cremated or buried?",
+          "expect": "never",
+          "cited": [],
+          "made_up_citations": 0,
+          "passed": true
+        }
+      ]
+    },
+    "cards": {
+      "agent": "saathi.chat",
+      "model": "gemini-3.1-flash-lite",
+      "totals": {
+        "cases_with_unsaid_detail_before_check": {
+          "count": 1,
+          "of": 15,
+          "share": 0.067
+        },
+        "cases_with_unsaid_detail_after_check": {
+          "count": 1,
+          "of": 15,
+          "share": 0.067
+        },
+        "said_details_kept": {
+          "count": 23,
+          "of": 23,
+          "share": 1.0
+        }
+      },
+      "cases": [
+        {
+          "id": "papers-almirah",
+          "unsaid_before_check": [],
+          "unsaid_after_check": [],
+          "said_and_kept": "2/2"
+        },
+        {
+          "id": "watch-for-priya",
+          "unsaid_before_check": [],
+          "unsaid_after_check": [],
+          "said_and_kept": "2/2"
+        },
+        {
+          "id": "yes-to-nominee",
+          "unsaid_before_check": [],
+          "unsaid_after_check": [],
+          "said_and_kept": "1/1"
+        },
+        {
+          "id": "not-yet-locker",
+          "unsaid_before_check": [],
+          "unsaid_after_check": [],
+          "said_and_kept": "0/0"
+        },
+        {
+          "id": "ooty-trip",
+          "unsaid_before_check": [],
+          "unsaid_after_check": [],
+          "said_and_kept": "2/2"
+        },
+        {
+          "id": "sbi-last-four",
+          "unsaid_before_check": [
+            "savings"
+          ],
+          "unsaid_after_check": [
+            "savings"
+          ],
+          "said_and_kept": "2/2"
+        },
+        {
+          "id": "papers-with-lawyer",
+          "unsaid_before_check": [],
+          "unsaid_after_check": [],
+          "said_and_kept": "2/2"
+        },
+        {
+          "id": "ravi-sell-car",
+          "unsaid_before_check": [],
+          "unsaid_after_check": [],
+          "said_and_kept": "2/2"
+        },
+        {
+          "id": "lic-policy-only",
+          "unsaid_before_check": [],
+          "unsaid_after_check": [],
+          "said_and_kept": "1/1"
+        },
+        {
+          "id": "never-borrow",
+          "unsaid_before_check": [],
+          "unsaid_after_check": [],
+          "said_and_kept": "1/1"
+        },
+        {
+          "id": "fd-receipt-hindi",
+          "unsaid_before_check": [],
+          "unsaid_after_check": [],
+          "said_and_kept": "2/2"
+        },
+        {
+          "id": "books-for-priya",
+          "unsaid_before_check": [],
+          "unsaid_after_check": [],
+          "said_and_kept": "2/2"
+        },
+        {
+          "id": "flat-answer",
+          "unsaid_before_check": [],
+          "unsaid_after_check": [],
+          "said_and_kept": "2/2"
+        },
+        {
+          "id": "passwords-in-vault",
+          "unsaid_before_check": [],
+          "unsaid_after_check": [],
+          "said_and_kept": "0/0"
+        },
+        {
+          "id": "brother-in-pune",
+          "unsaid_before_check": [],
+          "unsaid_after_check": [],
+          "said_and_kept": "2/2"
+        }
+      ]
+    }
+  }
+}

@@ -97,7 +97,7 @@ def score_question(case: dict, answer: str, cited_keys: list[str], unknown_citat
     else:
         passed = bool(set(cited_keys) & set(case["expect"]))
     return {"q": case["q"], "expect": case["expect"], "cited": cited_keys, "made_up_citations": unknown_citations,
-            "passed": passed}
+            "passed": passed, "answer": answer}  # the answer is synthetic, kept so a failure can be read
 
 
 def question_totals(rows: list[dict]) -> dict:
