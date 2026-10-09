@@ -1,0 +1,243 @@
+{
+  "date": "2026-10-09",
+  "at": "2026-10-09T19:57",
+  "steps": {
+    "certificates": {
+      "agent": "activation.checker",
+      "model": "gemini-3.1-flash-lite",
+      "totals": {
+        "forgeries_flagged": {
+          "count": 7,
+          "of": 7,
+          "share": 1.0
+        },
+        "forgeries_flagged_by_a_sign": {
+          "count": 6,
+          "of": 7,
+          "share": 0.857
+        },
+        "right_sign_named": {
+          "count": 6,
+          "of": 7,
+          "share": 0.857
+        },
+        "genuine_passed": {
+          "count": 2,
+          "of": 6,
+          "share": 0.333
+        },
+        "wrong_person_or_type_caught": {
+          "count": 2,
+          "of": 2,
+          "share": 1.0
+        }
+      },
+      "cases": [
+        {
+          "id": "genuine-1",
+          "expect": "genuine",
+          "verdict": "needs_attention",
+          "signs_found": [],
+          "passed": false,
+          "flagged_by_a_sign": null,
+          "sign_named": null,
+          "confidence": 0.95,
+          "concerns": [
+            "The document lacks a visible QR code, which is common for older digital certificates but should be noted."
+          ]
+        },
+        {
+          "id": "genuine-2",
+          "expect": "genuine",
+          "verdict": "needs_attention",
+          "signs_found": [],
+          "passed": false,
+          "flagged_by_a_sign": null,
+          "sign_named": null,
+          "confidence": 0.85,
+          "concerns": [
+            "The document lacks a visible QR code, which is standard for modern digitally signed certificates from this system."
+          ]
+        },
+        {
+          "id": "genuine-3",
+          "expect": "genuine",
+          "verdict": "likely_valid",
+          "signs_found": [],
+          "passed": true,
+          "flagged_by_a_sign": null,
+          "sign_named": null,
+          "confidence": 0.95,
+          "concerns": []
+        },
+        {
+          "id": "genuine-4",
+          "expect": "genuine",
+          "verdict": "likely_valid",
+          "signs_found": [],
+          "passed": true,
+          "flagged_by_a_sign": null,
+          "sign_named": null,
+          "confidence": 0.95,
+          "concerns": []
+        },
+        {
+          "id": "genuine-5",
+          "expect": "genuine",
+          "verdict": "needs_attention",
+          "signs_found": [],
+          "passed": false,
+          "flagged_by_a_sign": null,
+          "sign_named": null,
+          "confidence": 0.85,
+          "concerns": [
+            "The document lacks a QR code, which is typically expected for digital verification on modern CRS certificates."
+          ]
+        },
+        {
+          "id": "genuine-6",
+          "expect": "genuine",
+          "verdict": "needs_attention",
+          "signs_found": [],
+          "passed": false,
+          "flagged_by_a_sign": null,
+          "sign_named": null,
+          "confidence": 0.85,
+          "concerns": [
+            "The document lacks a visible QR code, which is standard for digitally signed certificates from the Civil Registration System."
+          ]
+        },
+        {
+          "id": "forged-dates",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "dates_impossible"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": true,
+          "confidence": 0.5,
+          "concerns": [
+            "The date of registration (10-03-2022) is four days before the date of death (14-03-2022)."
+          ]
+        },
+        {
+          "id": "forged-no-registration",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "registration_details"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": true,
+          "confidence": 0.85,
+          "concerns": [
+            "The registration number field is empty."
+          ]
+        },
+        {
+          "id": "forged-registration-year",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "registration_details"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": true,
+          "confidence": 0.85,
+          "concerns": [
+            "The registration number contains the year 2019, while the registration date is in 2022."
+          ]
+        },
+        {
+          "id": "forged-wrong-office",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "wrong_office"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": true,
+          "confidence": 0.6,
+          "concerns": [
+            "The document states it is issued by the Mysuru City Corporation, but the digital signature is from the BBMP East Zone (Bengaluru).",
+            "The document lacks a QR code, which is expected for a computer-generated certificate from this system."
+          ]
+        },
+        {
+          "id": "forged-altered-name",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [],
+          "passed": true,
+          "flagged_by_a_sign": false,
+          "sign_named": false,
+          "confidence": 0.85,
+          "concerns": [
+            "The document lacks a QR code, which is standard for modern digital certificates."
+          ]
+        },
+        {
+          "id": "forged-link",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "qr_wrong_site"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": true,
+          "confidence": 0.7,
+          "concerns": [
+            "The document directs verification to a non-government website (crs-certificate-verify.com) rather than the official crsorgi.gov.in portal."
+          ]
+        },
+        {
+          "id": "forged-no-signature",
+          "expect": "forgery",
+          "verdict": "needs_attention",
+          "signs_found": [
+            "qr_missing"
+          ],
+          "passed": true,
+          "flagged_by_a_sign": true,
+          "sign_named": true,
+          "confidence": 0.6,
+          "concerns": [
+            "The document lacks a QR code or digital signature, which is required for certificates registered after October 1, 2023."
+          ]
+        },
+        {
+          "id": "wrong-person",
+          "expect": "wrong_person",
+          "verdict": "needs_attention",
+          "signs_found": [],
+          "passed": true,
+          "flagged_by_a_sign": null,
+          "sign_named": null,
+          "confidence": 0.3,
+          "concerns": [
+            "The name on the document (Suresh Kulkarni) does not match the expected person (Ramesh Kulkarni)."
+          ]
+        },
+        {
+          "id": "wrong-type",
+          "expect": "wrong_type",
+          "verdict": "not_valid",
+          "signs_found": [],
+          "passed": true,
+          "flagged_by_a_sign": null,
+          "sign_named": null,
+          "confidence": 0.0,
+          "concerns": [
+            "The document is a birth certificate, but a death certificate was requested."
+          ]
+        }
+      ]
+    }
+  }
+}

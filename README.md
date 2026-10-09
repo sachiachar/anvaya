@@ -164,27 +164,29 @@ Three Gemini steps are measured on a small synthetic test set, against real Gemi
 - **Priya's questions:** 20 questions about synthetic kept items. 14 have their answer in a kept item, some reworded or in Hindi, and 6 ask about things never recorded. We count the right source cited, "never recorded" said when it should be, and made-up sources.
 - **Cards say only what was said:** 15 short exchanges with traps, such as a detail implied but not said, or a "yes" to Saathi's question. We count cards with a detail nobody said, before and after the grounding check, and how many true details were kept.
 
-**Results, 9 October 2026,** primary model `gemini-3.1-flash-lite`. The certificate check was run twice: before and after the fix for older certificates (#175). Full results: [first run](agents/evals/results/2026-10-09-1826.json) (all three steps; the free-tier quota ran out on the last four questions, which used the fallback `gemini-3.5-flash-lite`) and [certificates after the fix](agents/evals/results/2026-10-09-1913.json).
+**Results, 9 October 2026,** primary model `gemini-3.1-flash-lite`. The certificate check was run again after each fix: older certificates and the QR code (#175), then a registration number from another year (#177). Full results: [first run](agents/evals/results/2026-10-09-1826.json) (all three steps; the free-tier quota ran out on the last four questions, which used the fallback `gemini-3.5-flash-lite`), [after #175](agents/evals/results/2026-10-09-1913.json), and after #177 ([run 1](agents/evals/results/2026-10-09-1945.json), [run 2](agents/evals/results/2026-10-09-1957.json), the same numbers).
 
-| Step | Measure | First run | After the fix |
-| --- | --- | --- | --- |
-| Certificate check | Forgeries flagged | 7 of 7 | 6 of 7 |
-| | Flagged because a warning sign was found | 7 of 7 | 5 of 7 |
-| | The right sign named | 5 of 7 | 5 of 7 |
-| | Genuine certificates passed | **0 of 6** | **3 of 6** |
-| | Wrong person or wrong kind of document caught | 2 of 2 | 2 of 2 |
-| Priya's questions | Right source cited | 14 of 14 | |
-| | "Never recorded" when nothing was kept | 4 of 6 | |
-| | Made-up sources | 0 | |
-| Cards | Cases with a detail nobody said, before / after the grounding check | 1 of 15 / 1 of 15 | |
-| | True details kept | 23 of 23 | |
+| Step | Measure | First run | After #175 | After #177 |
+| --- | --- | --- | --- | --- |
+| Certificate check | Forgeries flagged | 7 of 7 | 6 of 7 | 7 of 7 |
+| | Flagged because a warning sign was found | 7 of 7 | 5 of 7 | 6 of 7 |
+| | The right sign named | 5 of 7 | 5 of 7 | 6 of 7 |
+| | Genuine certificates passed | **0 of 6** | **3 of 6** | **2 of 6** |
+| | Wrong person or wrong kind of document caught | 2 of 2 | 2 of 2 | 2 of 2 |
+| Priya's questions | Right source cited | 14 of 14 | | |
+| | "Never recorded" when nothing was kept | 4 of 6 | | |
+| | Made-up sources | 0 | | |
+| Cards | Cases with a detail nobody said, before / after the grounding check | 1 of 15 / 1 of 15 | | |
+| | True details kept | 23 of 23 | | |
 
-**What the misses show:**
-- **The first run flagged every genuine certificate** for "no QR code". The guide's sign applies only to certificates registered from 1 October 2023, but the check applied it to older ones too. #175 fixed this in code, and after it no genuine certificate was flagged for that sign.
-- **Three genuine certificates still need "a closer look"** with no warning sign found, so it comes from the model's confidence or a concern it wrote. The results now keep both, to see which on the next run.
-- **The fix showed a forgery the check misses:** a registration number whose year (2019) differs from the year of registration (2022). In the first run it was "caught" only by the false QR alarm. The check doesn't compare the two yet.
-- **Two "never recorded" questions cited Mrs Desai, the lawyer** (about loans and the car's registration), probably as someone to ask. The next run keeps each answer's text, to confirm.
-- **One card added "savings"** to "my SBI account ends 4410". The grounding check doesn't yet check the kind of account.
+**Known limitations** (from these runs; not fixed for the prototype release):
+- **Genuine certificates are often flagged for a closer look.** The model notes a missing QR code as a free-text concern on certificates registered before 1 October 2023. The guide's "no QR code" sign doesn't apply to them, and code rules that sign out (#175), but any concern still means "needs a closer look". So 4 of 6 genuine certificates were flagged, and the count moves between runs. A reviewer always decides, so this costs the reviewer time but never releases anything.
+- **An altered name isn't seen.** The forgery with its name in a different font was flagged only for the QR concern, not for the name.
+- **Two "never recorded" questions cited Mrs Desai, the lawyer** (about loans and the car's registration), probably as someone to ask rather than as a source.
+- **One card added "savings"** to "my SBI account ends 4410". The grounding check doesn't check the kind of account.
+- **The test set is small:** 15 to 20 cases per step, all synthetic, and certificates as text PDFs (no photos, stamps or real QR codes). With six genuine certificates, one case moves the result by 17 points.
+
+What the runs fixed along the way: the first run's "no QR code" false alarm on every older certificate (#175), and a registration number from another year, now flagged with the right sign (#177).
 
 To run it, with a Gemini key in `GOOGLE_API_KEY`: `cd agents && uv run python -m evals.run`. It makes about 50 calls and writes `agents/evals/results/<date>.json` and a short `.md` summary. The cases are in `agents/evals/cases/`. The unit tests check the cases and the scoring without the cloud.
 
