@@ -199,7 +199,7 @@ jobs:
         env:
           PROJECT: ${{ vars.GCP_PROJECT_ID }}
         run: |
-          for group in agent_steps guardian_actions handover_turns; do
+          for group in agent_steps guardian_actions handover_turns handover_conversations; do
             ttls=$(gcloud firestore fields ttls list --collection-group="$group" --project "$PROJECT" \
               --format 'value(name.basename(),ttlConfig.state)') || {
               echo "Can't read Firestore TTL settings. Run infra/setup-github-actions.sh again: it gives the deployer roles/datastore.indexAdmin."

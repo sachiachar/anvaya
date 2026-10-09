@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field, ValidationError
 from . import (auth, demo, escrow, fraud_guides, gaps, grounding, knowledge, knowledge_map, live, loops, media, model_access,
                proposals, release, speech, step_guard, tasks, tone)
 from .config import settings
+from . import executor_agent
 from .executor_agent import UnknownSession, ask
 from .governance import core as governance_core
 from .governance import guardian
@@ -1032,9 +1033,13 @@ async def ask_question(owner_id: str, body: Question) -> dict:
     decision = guardian.decide("family_question", ASSISTANT, {"asks_secret": step_guard.asks_for_secret(body.question)})
     if not decision.goes_ahead:
         first = (owner.get("name") or "the owner").split()[0]
-        return {"autonomy": ACT, "blocked": True, "sources": [], "tools_used": [], "session_id": body.session_id,
-                "answer": f"I can't help with passwords, PINs or codes. Anything {first} kept in the vault is "
-                          f"released separately to the person {first} named, and I can't see it."}
+        answer = (f"I can't help with passwords, PINs or codes. Anything {first} kept in the vault is "
+                  f"released separately to the person {first} named, and I can't see it.")
+        # Recorded like any other turn (PR-15.8), so a review sees the attempt.
+        session_id = await asyncio.to_thread(executor_agent.record_blocked, owner_id, f"family:{demo.current()}",
+                                             body.question, answer, body.session_id)
+        return {"autonomy": ACT, "blocked": True, "sources": [], "tools_used": [], "session_id": session_id,
+                "answer": answer}
     try:
         # The asker is the family within the caller's own copy, so sessions never cross copies.
         return {"autonomy": ACT, **await ask(owner, f"family:{demo.current()}", body.question, body.session_id)}
