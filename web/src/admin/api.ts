@@ -102,7 +102,8 @@ export type Scenario = { id: string; at: number; scenario: string; safeguard: st
   /** If approved, this becomes a warning sign the certificate check uses, so a reviewer sees both parts. */
   document_sign?: { look_for: string; genuine: string } | null };
 
-export type Draft = { id: string; at: number; guide_key: string; kind: "tactic"; tactic: string;
+export type Draft = { id: string; at: number; guide_key: string; kind: "tactic" | "sign"; tactic: string;
+  tactic_id?: string;
   steps: { step: string; caught_by: string }[]; sign: { look_for: string; genuine: string } | null;
   claim: string; sources: Source[]; source_note: string; review: "pending" | "approved" | "discarded" };
 

@@ -240,7 +240,8 @@ def get_fraud(_: Actor = Depends(actor)) -> dict:
             "guides": fraud_guides.summaries(),
             # What the pipeline added on its own (PR-2.7.y): a person can remove any of it, and 1 in 10
             # is marked for an optional spot check. Adding pauses for a guide after 2 removals in a week.
-            "added": sorted(store.list("fraud_auto", status="active"), key=lambda a: -a["at"])[:30],
+            # Every active one, spot checks first, so nothing added is ever out of a person's reach.
+            "added": sorted(store.list("fraud_auto", status="active"), key=lambda a: (not a["spot_check"], -a["at"])),
             "adding_paused": sorted(a["id"] for a in store.list("fraud_autonomy") if a.get("paused"))}
 
 

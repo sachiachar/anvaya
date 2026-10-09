@@ -681,18 +681,19 @@ export function FraudPage({ me }: { me: Me }) {
           ))}
         </ul>
       </Section>
-      <Section title="New tactics to review">
-        {data.drafts.length === 0 && <Empty>None waiting. Tactics only one website confirms appear here.</Empty>}
+      <Section title="New tactics and warning signs to review">
+        {data.drafts.length === 0 && <Empty>None waiting. Tactics only one website confirms, and the warning signs of tactics added on their own, appear here.</Empty>}
         <ul className="pa-list">
           {data.drafts.map((d: Draft) => (
             <li key={d.id}>
-              <p><strong>{d.tactic}</strong></p>
+              <p><strong>{d.kind === "sign" ? `Warning sign for “${d.tactic}”` : d.tactic}</strong></p>
+              {d.kind === "sign" && <p className="pa-muted">The tactic is already in the guide. Adding this sign puts it into every certificate check.</p>}
               <ol className="pa-muted">{d.steps.map((x) => <li key={x.step}>{x.step} <em>(caught by: {x.caught_by})</em></li>)}</ol>
               {d.sign && <SignPreview sign={d.sign} />}
               {d.source_note && <p className="pa-muted">What sources say: {d.source_note}</p>}
               <Sources sources={d.sources} />
               {reviewer ? (
-                <DecisionForm actions={[{ value: "approve", label: "Add to the guide" }, { value: "discard", label: "Discard", tone: "danger" }]}
+                <DecisionForm actions={[{ value: "approve", label: d.kind === "sign" ? "Add the sign" : "Add to the guide" }, { value: "discard", label: "Discard", tone: "danger" }]}
                   onDecide={(v, reason) => platform.decideDraft(d.id, v as "approve" | "discard", reason).then(reload)} />
               ) : <p className="pa-muted">Waiting for a risk reviewer.</p>}
             </li>

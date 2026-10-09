@@ -176,8 +176,10 @@ def _similar(a: str, b: str) -> bool:
 # text from the web must read as a description of a document, never as instructions.
 MAX_SIGN_CHARS = 300
 _INSTRUCTION = re.compile(
-    r"\b(ignore|disregard|instruction|prompt|system|you must|you should|rule out|confidence|verdict|approve|"
-    r"likely[_ ]valid|report (?:every|all)|always|never)\b", re.IGNORECASE)
+    r"\b(ignore|disregard|instruction|prompt|system|you must|you should|rul(?:e|ed|ing) out|confidence|verdict|"
+    r"approve|likely[_ ]valid|report (?:every|all)|always|never|not applicable|does not apply|doesn't apply|"
+    r"other signs?|remaining signs?|these signs|listed signs?|treat (?:it |this )?as|skip|is normal|are normal)\b",
+    re.IGNORECASE)
 
 
 def _safe_sign(sign: DocumentSign) -> bool:
@@ -557,12 +559,19 @@ async def dream(run: dict) -> dict:
                 counts["confirmed" if evidence.confirmed else "unconfirmed"] += 1
                 added = can_add(guide.key, evidence)
                 if added:  # 2 independent websites report it: validated on its own (PR-2.7.y)
-                    approve_scenario(saved, auto=True)
-                    store.update("fraud_scenarios", saved["id"], {"review": "added", "label": "validated"})
-                    _record_added(guide.key, "scenario", saved["id"], scenario.title, [saved["id"]],
-                                  independent_sources(evidence.sources))
-                    counts["added"] = counts.get("added", 0) + 1
-                if coverage == "gap":  # the sign of something new: the team is told; nothing waits on it
+                    try:
+                        approve_scenario(saved, auto=True)
+                        store.update("fraud_scenarios", saved["id"], {"review": "added", "label": "validated"})
+                        _record_added(guide.key, "scenario", saved["id"], scenario.title, [saved["id"]],
+                                      independent_sources(evidence.sources))
+                        counts["added"] = counts.get("added", 0) + 1
+                    except Exception as e:  # it stays a confirmed scenario for a reviewer; the run goes on
+                        log.exception("fraud dreaming run %s: adding a scenario failed", run["id"])
+                        not_checked(f"add “{scenario.title}”", e, title=scenario.title)
+                        added = False
+                # A gap sources confirm is the sign of something new: the team is told; nothing waits on it.
+                # Imagined gaps no source reports stay on the coverage map only.
+                if coverage == "gap" and evidence.confirmed:
                     governance.record_intervention(
                         DREAMER, "add_check", f"Dreaming found a gap: no safeguard catches an attack on the {scenario.targets}",
                         user_key=governance.SERVICE, once=f"gev_gap_{saved['id']}")
@@ -610,7 +619,8 @@ def _slug(text: str) -> str:
 def subjects(guide: Guide) -> list[dict]:
     """Every research subject for a guide, in priority order: gaps, signs, safeguards, open subjects, tactics."""
     gaps = [s for s in store.list("fraud_scenarios", guide_key=guide.key)
-            if s.get("coverage") == "gap" and s.get("review") != "faded" and s.get("status") != "retired"]
+            if s.get("coverage") == "gap" and s.get("label") != "invalidated"
+            and s.get("review") not in ("faded", "discarded", "removed")]
     return [
         *({"id": f"gap:{s['id']}", "kind": "gap", "about": s["claim"]} for s in sorted(gaps, key=lambda s: s["at"])),
         *({"id": f"sign:{s.id}", "kind": "sign", "about": f"how forgers fake or get around this: {s.look_for}"}
@@ -633,8 +643,11 @@ def pick_subjects(guide: Guide, n: int, now: float | None = None) -> list[dict]:
     now = now or time.time()
     state = _subject_state(guide.key)
     ready = [s for s in subjects(guide) if state.get(s["id"], {}).get("rested_until", 0) <= now]
-    ready.sort(key=lambda s: (not (s["kind"] == "gap" and s["id"] not in state), state.get(s["id"], {}).get("last_at", 0)))
-    return ready[:n]
+    ready.sort(key=lambda s: state.get(s["id"], {}).get("last_at", 0))  # least recently researched first
+    # A new gap goes first, but only one a run, so dreaming's gaps never crowd out the other subjects.
+    new_gap = next((s for s in ready if s["kind"] == "gap" and s["id"] not in state), None)
+    rest = [s for s in ready if s is not new_gap and not (s["kind"] == "gap" and s["id"] not in state)]
+    return ([new_gap] if new_gap else [])[:n] + rest[: n - (1 if new_gap else 0)]
 
 
 def subject_done(guide_key: str, subject: dict, found_new: bool, now: float | None = None) -> None:
@@ -663,10 +676,33 @@ PAUSE_AFTER_REMOVALS = 2
 REMOVAL_WINDOW_SECONDS = 7 * 86400
 
 
+# Second-level suffixes where a site's own name is the third label (tribune.co.in, gov.in sites).
+_SECOND_LEVEL = {"co", "com", "net", "org", "gov", "ac", "edu", "nic", "res", "gen", "firm", "ind", "ltd", "mil"}
+# Hosts where anyone can publish under their own subdomain or page: they never count as independent.
+_OPEN_HOSTS = {"blogspot.com", "medium.com", "wordpress.com", "github.io", "substack.com", "wixsite.com",
+               "weebly.com", "tumblr.com", "notion.site", "sites.google.com", "google.com", "linkedin.com",
+               "facebook.com", "x.com", "twitter.com", "quora.com", "reddit.com", "youtube.com", "instagram.com",
+               "telegram.me", "t.me", "scribd.com", "slideshare.net", "pinterest.com"}
+
+
+def _site(url: str) -> str | None:
+    """The website a page belongs to: its registrable domain (a.x.com and b.x.com are one site), or
+    None for a host anyone can publish on."""
+    host = (urlparse(url).hostname or "").lower().rstrip(".")
+    labels = host.split(".")
+    if len(labels) < 2:
+        return None
+    take = 3 if len(labels) >= 3 and labels[-2] in _SECOND_LEVEL and len(labels[-1]) == 2 else 2
+    site = ".".join(labels[-take:])
+    if site in _OPEN_HOSTS or ".".join(labels[-3:]) in _OPEN_HOSTS:
+        return None
+    return site
+
+
 def independent_sources(sources: list[dict]) -> int:
-    """How many different websites confirm it (www. ignored); two pages of one site count once."""
-    hosts = {(urlparse(s.get("url", "")).hostname or "").removeprefix("www.") for s in sources}
-    return len(hosts - {""})
+    """How many different websites confirm it. Pages of one site, or of one site's subdomains, count
+    once; blogs and social sites anyone can publish on don't count at all."""
+    return len({site for s in sources if (site := _site(s.get("url", "")))})
 
 
 def adding_paused(guide_key: str) -> bool:
@@ -679,7 +715,8 @@ def can_add(guide_key: str, evidence: Evidence) -> bool:
 
 def _record_added(guide_key: str, kind: str, item_id: str, name: str, retires: list[str], sources: int) -> dict:
     """The portal's list of what the pipeline added on its own, each with a way to retire it."""
-    count = len(store.list("fraud_auto", guide_key=guide_key)) + 1
+    store.increment("fraud_auto_counts", guide_key, {"added": 1}, {"guide_key": guide_key})
+    count = (store.get("fraud_auto_counts", guide_key) or {}).get("added", 1)
     return store.put("fraud_auto", {
         "id": item_id, "at": time.time(), "guide_key": guide_key, "kind": kind, "name": name, "retires": retires,
         "sources": sources, "spot_check": count % SPOT_CHECK_EVERY == 1, "status": "active"})
@@ -692,9 +729,12 @@ def remove_added(item_id: str) -> dict:
         raise KeyError(item_id)
     fraud_guides.retire_items(item["guide_key"], set(item["retires"]))
     item = store.update("fraud_auto", item_id, {"status": "removed", "removed_at": time.time()})
-    since = time.time() - REMOVAL_WINDOW_SECONDS
+    if item["kind"] == "scenario" and store.get("fraud_scenarios", item_id):  # ruled out from now on (rule 6)
+        store.update("fraud_scenarios", item_id, {"review": "removed", "label": "invalidated"})
+    resumed = (store.get("fraud_autonomy", item["guide_key"]) or {}).get("resumed_at", 0)
+    since = max(time.time() - REMOVAL_WINDOW_SECONDS, resumed)  # removals before a resume don't count again
     removed = [a for a in store.list("fraud_auto", guide_key=item["guide_key"], status="removed")
-               if a.get("removed_at", 0) >= since]
+               if a.get("removed_at", 0) > since]
     if len(removed) >= PAUSE_AFTER_REMOVALS:
         store.put("fraud_autonomy", {"id": item["guide_key"], "paused": True, "paused_at": time.time()})
     return item
@@ -801,14 +841,19 @@ async def research(run: dict) -> dict:
                          "sign": tactic.sign.model_dump() if tactic.sign else None, "claim": tactic.claim,
                          "label": "derived", "sources": evidence.sources, "source_note": evidence.summary,
                          "subject": subject["id"]}
+                sites = independent_sources(evidence.sources)
                 if can_add(guide.key, evidence):
-                    added = _add_tactic(draft, trust="machine-confirmed", auto=True)
+                    # The tactic is added on its own; its warning sign, written from one page's text,
+                    # would go into every certificate check, so it always waits for a reviewer.
+                    added = _add_tactic({**draft, "sign": None}, trust="machine-confirmed", auto=True)
                     store.put("fraud_drafts", {**draft, "review": "added", "added_as": added})
-                    _record_added(guide.key, "tactic", added["tactic"], tactic.name, [added["tactic"], *added["signs"]],
-                                  independent_sources(evidence.sources))
+                    if draft["sign"]:
+                        store.put("fraud_drafts", {**draft, "id": new_id("drf"), "kind": "sign",
+                                                   "tactic_id": added["tactic"], "review": "pending"})
+                    _record_added(guide.key, "tactic", added["tactic"], tactic.name, [added["tactic"]], sites)
                     counts["added"] += 1
-                    guard.say("save", f"Added to the guide: “{tactic.name}” ({independent_sources(evidence.sources)} "
-                                      "independent sources)", title=tactic.name)
+                    guard.say("save", f"Added to the guide: “{tactic.name}” ({sites} independent sources)"
+                              + ("; its warning sign waits for a reviewer" if draft["sign"] else ""), title=tactic.name)
                 else:
                     store.put("fraud_drafts", {**draft, "review": "pending"})
                     counts["drafts"] += 1
@@ -857,6 +902,13 @@ def _add_tactic(draft: dict, *, trust: str, auto: bool = False) -> dict:
 def approve_draft(draft: dict) -> Guide:
     """A reviewer approved a researched tactic: add it, and its warning sign, as a new guide version.
     Approved items count as human-reviewed."""
+    if draft.get("kind") == "sign":  # the warning sign of a tactic the pipeline added on its own
+        sources = _sources_of(draft["sources"])
+        if _safe_sign(DocumentSign(**draft["sign"])):
+            fraud_guides.add_items(draft["guide_key"], sources=sources, signs=[fraud_guides.Sign(
+                id=f"{draft['tactic_id']}_sign", look_for=draft["sign"]["look_for"], genuine=draft["sign"]["genuine"],
+                label="derived", trust="human-reviewed", sources=[x.id for x in sources])])
+        return fraud_guides.current(draft["guide_key"])
     _add_tactic(draft, trust="human-reviewed")
     return fraud_guides.current(draft["guide_key"])
 
