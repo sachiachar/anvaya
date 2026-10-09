@@ -25,6 +25,7 @@ PROVIDER="github-oidc"
 DEPLOYER="github-deployer"
 DEPLOYER_SA="${DEPLOYER}@${PROJECT_ID}.iam.gserviceaccount.com"
 RUNTIME_SA="life-after-agents@${PROJECT_ID}.iam.gserviceaccount.com"
+SCHEDULER_SA="fraud-scheduler@${PROJECT_ID}.iam.gserviceaccount.com"  # calls the hourly fraud cycle
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format 'value(projectNumber)')
 BUILD_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"  # what source deploys build as
 SOURCE_BUCKET="run-sources-${PROJECT_ID}-${REGION}"                  # where source deploys upload
@@ -37,11 +38,20 @@ MEMBER="serviceAccount:${DEPLOYER_SA}"
 
 gcloud config set project "$PROJECT_ID" >/dev/null
 gcloud services enable iamcredentials.googleapis.com sts.googleapis.com cloudresourcemanager.googleapis.com \
-  firebasehosting.googleapis.com firebaserules.googleapis.com
+  firebasehosting.googleapis.com firebaserules.googleapis.com cloudscheduler.googleapis.com
 
 echo "== Deployer service account"
 gcloud iam service-accounts describe "$DEPLOYER_SA" >/dev/null 2>&1 || \
   gcloud iam service-accounts create "$DEPLOYER" --display-name "GitHub Actions deployer"
+
+echo "== The hourly fraud cycle: its own caller, and the API may ask it to run now"
+# The release workflow creates the Cloud Scheduler job; the job calls the API as this account, which
+# has no roles of its own: the API checks its ID token (agents/app/scheduler.py).
+gcloud iam service-accounts describe "$SCHEDULER_SA" >/dev/null 2>&1 || \
+  gcloud iam service-accounts create fraud-scheduler --display-name "Anvaya hourly fraud cycle"
+# "Run now" in the admin portal: the API asks the job to run at once (cloudscheduler.jobs.run only).
+gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "serviceAccount:${RUNTIME_SA}" \
+  --role roles/cloudscheduler.jobRunner --condition=None >/dev/null
 
 # Narrow grants first; the broad roles are removed only at the very end, and only once every narrow
 # grant is in place, so a missing piece never leaves the deployer unable to deploy.
@@ -49,9 +59,11 @@ NARROW_READY=true
 
 echo "== Project-wide roles: only what has no narrower place to grant it"
 # datastore.indexAdmin: Firestore indexes and TTL policies (the agents panel's trace expires, PR-15.7);
-# it can't read or write documents.
+# it can't read or write documents. cloudscheduler.admin: the hourly fraud cycle's job, kept up to date
+# by each release; it can't run anything as itself.
 for role in roles/run.developer roles/cloudbuild.builds.editor roles/serviceusage.serviceUsageConsumer \
-            roles/firebasehosting.admin roles/firebaserules.admin roles/datastore.indexAdmin; do
+            roles/firebasehosting.admin roles/firebaserules.admin roles/datastore.indexAdmin \
+            roles/cloudscheduler.admin; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "$MEMBER" --role "$role" --condition=None >/dev/null
 done
 # A source deploy lists the project's buckets to find its upload bucket. No predefined role gives only
@@ -77,6 +89,9 @@ for sa in "$RUNTIME_SA" "$BUILD_SA"; do
     echo "   ! service account ${sa} doesn't exist"; NARROW_READY=false
   fi
 done
+# The scheduler job runs as the fraud cycle's account, so the release must be allowed to name it (and no other).
+gcloud iam service-accounts add-iam-policy-binding "$SCHEDULER_SA" --member "$MEMBER" \
+  --role roles/iam.serviceAccountUser >/dev/null
 if gcloud storage buckets describe "gs://${SOURCE_BUCKET}" >/dev/null 2>&1; then
   gcloud storage buckets add-iam-policy-binding "gs://${SOURCE_BUCKET}" --member "$MEMBER" --role roles/storage.admin >/dev/null
 else

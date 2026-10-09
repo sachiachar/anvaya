@@ -20,8 +20,8 @@ from google.auth.exceptions import DefaultCredentialsError
 from google.genai import errors as genai_errors
 from pydantic import BaseModel, Field, ValidationError
 
-from . import (auth, demo, escrow, fraud_guides, gaps, grounding, knowledge, knowledge_map, live, loops, media, model_access,
-               proposals, release, speech, step_guard, tasks, tone)
+from . import (auth, demo, escrow, fraud_guides, fraud_pipeline, gaps, grounding, knowledge, knowledge_map, live, loops,
+               media, model_access, proposals, release, scheduler, speech, step_guard, tasks, tone)
 from .config import settings
 from . import executor_agent
 from .executor_agent import UnknownSession, ask
@@ -1126,6 +1126,15 @@ def decide_access(request_id: str, body: AccessDecision) -> dict:
 @app.get("/api/healthz")
 def healthz() -> dict:
     return {"ok": True, "store": settings.store, "kms": bool(settings.kms_key_name), "auth": settings.auth_required}
+
+
+@app.post("/internal/fraud/cycle")
+async def fraud_cycle(request: Request) -> dict:
+    """The hourly fraud cycle (Cloud Scheduler, scheduler.py). Outside /api: no person signs in here;
+    only the scheduler's own service account, by its Google-signed ID token. The runs happen inside
+    this request, so Cloud Run keeps the CPU on until they finish."""
+    await asyncio.to_thread(scheduler.verify, request.headers.get("authorization", ""), auth._request)
+    return {"runs": await fraud_pipeline.cycle()}
 
 
 @api.get("/agents/steps")

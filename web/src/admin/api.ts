@@ -113,7 +113,7 @@ export type RunStep = { at: number; stage: RunStage; line: string; title?: strin
   coverage?: "covered" | "partly" | "gap" };
 
 export type Run = { id: string; kind: "dream" | "research"; guide_key: string;
-  status: "running" | "done" | "failed" | "stopped"; started_at: number; finished_at?: number;
+  status: "queued" | "running" | "done" | "failed" | "stopped"; started_at: number; finished_at?: number;
   counts: Record<string, number>; error?: string | null; stage?: RunStage; steps?: RunStep[];
   /** Model calls used so far, per agent, and the caps from the registry. */
   calls?: Record<string, number>; limits?: Record<string, number | null>;

@@ -14,13 +14,19 @@
     "firebasehosting.sites.update",
     "firebaserules.rulesets.create",
     "firebaserules.releases.create",
-    "firebaserules.releases.update"
+    "firebaserules.releases.update",
+    "cloudscheduler.jobs.get",
+    "cloudscheduler.jobs.create",
+    "cloudscheduler.jobs.update"
   ],
   "service_accounts": {
     "life-after-agents@{project}.iam.gserviceaccount.com": [
       "iam.serviceAccounts.actAs"
     ],
     "{number}-compute@developer.gserviceaccount.com": [
+      "iam.serviceAccounts.actAs"
+    ],
+    "fraud-scheduler@{project}.iam.gserviceaccount.com": [
       "iam.serviceAccounts.actAs"
     ]
   },

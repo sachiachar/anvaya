@@ -232,10 +232,10 @@ LOCK = ("fraud_run_lock", "active")
 
 
 def expire_stale(now: float | None = None) -> None:
-    """A run still 'running' after the timeout (for example after a server restart) is marked
-    failed and its lock released, so new runs can start."""
+    """A run still 'running' or 'queued' after the timeout (for example after a server restart, or a
+    scheduler that never called) is marked failed and its lock released, so new runs can start."""
     now = now or time.time()
-    for run in store.list("fraud_runs", status="running"):
+    for run in [*store.list("fraud_runs", status="running"), *store.list("fraud_runs", status="queued")]:
         if now - run["started_at"] >= RUN_TIMEOUT_SECONDS:
             store.update("fraud_runs", run["id"], {"status": "failed", "error": "timed out", "finished_at": now})
     lock = store.get(*LOCK)
@@ -243,9 +243,10 @@ def expire_stale(now: float | None = None) -> None:
         store.delete(*LOCK)
 
 
-def start_run(kind: Literal["dream", "research"], guide_key: str, by: str) -> dict:
+def start_run(kind: Literal["dream", "research"], guide_key: str, by: str, *, queued: bool = False) -> dict:
     """Record a run before it starts. One at a time: a create-only lock, so two requests at
-    the same moment can't both start one."""
+    the same moment can't both start one. `queued`: the scheduled cycle will run it (a reviewer's
+    "Run now" on Google Cloud), so it holds the lock until then."""
     now = time.time()
     expire_stale(now)
     run_id = new_id("run")
@@ -256,13 +257,51 @@ def start_run(kind: Literal["dream", "research"], guide_key: str, by: str) -> di
         (RESEARCHER, "max_new_patterns_per_run"))}
     limits |= {f"{a}.max_model_calls_per_run": governance.limit(a, "max_model_calls_per_run") for a in (DREAMER, RESEARCHER)}
     return store.put("fraud_runs", {"id": run_id, "kind": kind, "guide_key": guide_key, "by": by,
-                                    "status": "running", "started_at": now, "limits": limits, "counts": {},
-                                    "calls": {}, "stop_requested": False})
+                                    "status": "queued" if queued else "running", "started_at": now, "limits": limits,
+                                    "counts": {}, "calls": {}, "stop_requested": False})
+
+
+# ---- The scheduled cycle (hourly, Cloud Scheduler) ------------------------------------------
+#
+# Runs happen inside the scheduler's request, so Cloud Run keeps the CPU on until they finish. A run
+# started in the background after a reply gets almost no CPU there and stalls until it times out.
+
+SCHEDULER = "service:fraud-scheduler"  # who starts the hourly runs: no person, so the platform key
+
+
+async def execute(run: dict) -> dict:
+    """Run one recorded run to the end, here and now."""
+    run = store.update("fraud_runs", run["id"], {"status": "running", "started_at": time.time()})
+    return await (dream if run["kind"] == "dream" else research)(run)
+
+
+async def cycle() -> dict:
+    """One scheduled cycle: the runs a reviewer queued with "Run now" if there are any, otherwise
+    research and then dreaming for each guide. A guide whose run can't start (one is already going)
+    is skipped until the next hour."""
+    expire_stale()
+    queued = store.list("fraud_runs", status="queued")
+    if queued:
+        return {run["id"]: (await execute(run))["status"] for run in sorted(queued, key=lambda r: r["started_at"])}
+    out = {}
+    for key, built_in in fraud_guides.BUILT_IN.items():
+        if not store.get("fraud_guides", key):
+            fraud_guides.save_version(built_in)  # first run for a built-in guide: save it as version 1
+        for kind in ("research", "dream"):
+            try:
+                run = start_run(kind, key, SCHEDULER)
+            except Busy:
+                out[f"{kind}:{key}"] = "skipped: a run is in progress"
+                continue
+            out[f"{kind}:{key}"] = (await execute(run))["status"]
+    return out
 
 
 def request_stop(run_id: str) -> dict:
     """Ask a running run to stop. It finishes the scenario in hand, then stops."""
     run = store.get("fraud_runs", run_id)
+    if run and run["status"] == "queued":  # not begun yet: stop it now, and free the lock
+        return _finish(run, {}, stopped="stopped by a reviewer before it began")
     if not run or run["status"] != "running":
         raise KeyError(run_id)
     return store.update("fraud_runs", run_id, {"stop_requested": True})

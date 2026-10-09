@@ -7,17 +7,21 @@ anyone's name: users appear as hashed keys, and counts under 5 are hidden.
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import demo, fraud_cues, fraud_guides, fraud_pipeline, model_access
+from .. import demo, fraud_cues, fraud_guides, fraud_pipeline, model_access, scheduler
+from ..config import settings
 from ..store import store
 from . import billing, core, guardian, keys
 from .core import Actor, actor, audit, need, platform_settings, registry, small
 from .seed import ensure_current
+
+log = logging.getLogger(__name__)
 
 # ---- Read models ----------------------------------------------------------------
 
@@ -292,14 +296,25 @@ def _start(kind: Literal["dream", "research"], guide_id: str, who: Actor, backgr
         if not built_in:
             raise HTTPException(404, "guide not found")
         fraud_guides.save_version(built_in)  # first run for a built-in guide: save it as version 1
+    # On Google Cloud the run is queued and the hourly job is asked to run now: a run started in the
+    # background after this reply would get almost no CPU from Cloud Run and stall (scheduler.py).
+    on_cloud = bool(settings.fraud_scheduler_job)
     try:
-        run = fraud_pipeline.start_run(kind, guide_id, who.key)
+        run = fraud_pipeline.start_run(kind, guide_id, who.key, queued=on_cloud)
     except fraud_pipeline.Busy as e:
         raise HTTPException(409, str(e)) from e
     audit(who, f"fraud.{kind}_requested", guide_id)
     if kind == "research":
         store.update("fraud_guides", guide_id, {"status": "research_requested", "requested_at": time.time()})
-    background.add_task(fraud_pipeline.dream if kind == "dream" else fraud_pipeline.research, run)
+    if on_cloud:
+        try:
+            scheduler.run_now()
+        except Exception as e:
+            log.exception("couldn't ask the scheduler to run now")
+            fraud_pipeline._finish(run, {}, f"Couldn't start the run: {type(e).__name__}")
+            raise HTTPException(502, "The run couldn't be started. Try again, or wait for the hourly run.") from e
+    else:  # local development: this machine keeps its CPU
+        background.add_task(fraud_pipeline.execute, run)
     return run
 
 
