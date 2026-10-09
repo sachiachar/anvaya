@@ -179,12 +179,14 @@ Three Gemini steps are measured on a small synthetic test set, against real Gemi
 | Cards | Cases with a detail nobody said, before / after the grounding check | 1 of 15 / 1 of 15 | | |
 | | True details kept | 23 of 23 | | |
 
-**What the misses show:**
-- **"No QR code" on older certificates.** The first run flagged every genuine certificate for it, although the guide's sign applies only to certificates registered from 1 October 2023. #175 rules the sign out in code for older certificates. But the model then wrote the same point as a free-text concern ("the document lacks a visible QR code..."), and any concern means "needs a closer look". That's why 4 genuine certificates are still flagged, and why the count moves between runs. A fix should keep concerns from repeating a sign that code ruled out.
-- **The altered name isn't seen.** The forgery with its name in a different font was flagged only for that same QR concern, not for the name.
-- **A registration number from another year** (2019 on a 2022 registration) was missed after #175. In the first run it was "caught" only by the false QR alarm. #177 checks the year in code, and it is now flagged with the right sign.
-- **Two "never recorded" questions cited Mrs Desai, the lawyer** (about loans and the car's registration), probably as someone to ask. The next run of the questions keeps each answer's text, to confirm.
-- **One card added "savings"** to "my SBI account ends 4410". The grounding check doesn't yet check the kind of account.
+**Known limitations** (from these runs; not fixed for the prototype release):
+- **Genuine certificates are often flagged for a closer look.** The model notes a missing QR code as a free-text concern on certificates registered before 1 October 2023. The guide's "no QR code" sign doesn't apply to them, and code rules that sign out (#175), but any concern still means "needs a closer look". So 4 of 6 genuine certificates were flagged, and the count moves between runs. A reviewer always decides, so this costs the reviewer time but never releases anything.
+- **An altered name isn't seen.** The forgery with its name in a different font was flagged only for the QR concern, not for the name.
+- **Two "never recorded" questions cited Mrs Desai, the lawyer** (about loans and the car's registration), probably as someone to ask rather than as a source.
+- **One card added "savings"** to "my SBI account ends 4410". The grounding check doesn't check the kind of account.
+- **The test set is small:** 15 to 20 cases per step, all synthetic, and certificates as text PDFs (no photos, stamps or real QR codes). With six genuine certificates, one case moves the result by 17 points.
+
+What the runs fixed along the way: the first run's "no QR code" false alarm on every older certificate (#175), and a registration number from another year, now flagged with the right sign (#177).
 
 To run it, with a Gemini key in `GOOGLE_API_KEY`: `cd agents && uv run python -m evals.run`. It makes about 50 calls and writes `agents/evals/results/<date>.json` and a short `.md` summary. The cases are in `agents/evals/cases/`. The unit tests check the cases and the scoring without the cloud.
 
