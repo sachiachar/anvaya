@@ -154,6 +154,7 @@ flowchart LR
   - A warning sign that our team has reviewed, if found, caps the score at 50 %.
   - Any concern or any warning sign found means "Needs a closer look".
   - Every sign in the guide gets a result (found, ruled out or can't tell). Signs the model invents are dropped.
+  - A sign can apply only from a date (`applies_from`, e.g. "no QR code" from 1 October 2023). The check reads the dates of registration and of death (asked as YYYY-MM-DD). Code rules the sign out, whatever the model said, only when the registration is before the sign's date and on or after the death. A forger who backdates the registration to before the death doesn't get the sign ruled out, and "dates impossible" catches that. An unreadable date, or one that could be read two ways (10/03/2023), leaves the model's result as it is. The model's note stays visible beside the reason. A guide version saved before this change takes the date from the built-in sign with the same id. A version that clears it on purpose keeps it cleared, and a malformed date is refused when the guide loads.
   - Imagined (`simulated`) signs never reach the check. Projections are at most a third of its signs.
 - *Next steps* (`tasks`): near-duplicates are merged, except when they name different institutions (LIC vs SBI). Done or dismissed steps never come back, even reworded. At most 5 steps are open.
 - *Structured output*: every Gemini call returns a Pydantic schema. So the app never parses free text.
