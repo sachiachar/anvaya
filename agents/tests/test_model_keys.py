@@ -431,6 +431,16 @@ def test_platform_admins_see_everyones_usage_but_never_a_key(client, fake):
     assert KEY_A not in r.text and KEY_B not in r.text and "secret" not in r.text
 
 
+def test_the_services_own_work_counts_in_the_totals_but_is_not_a_person(client, fake):
+    core.set_current_user("service:fraud-scheduler")  # how the hourly fraud cycle runs
+    core.record_usage("fraud.researcher", "gemini-3.8-flash", "direct", tokens_in=50, tokens_out=5)
+    core.set_current_user(None)
+    page = client.get("/api/platform/model-keys", headers=h("admin")).json()
+    assert "service:fraud-scheduler" not in {p["user_key"] for p in page["people"]}
+    assert page["service"]["platform"]["calls"] >= 1 and page["totals"]["platform"]["calls"] >= 1
+    assert core.is_service("service") and core.is_service("service:fraud-scheduler") and not core.is_service("u_1")
+
+
 def test_a_demo_user_sees_only_their_own_row(client, fake):
     for who, key in (("judge-a", KEY_A), ("judge-b", KEY_B)):
         client.get("/api/me", headers=h(who))

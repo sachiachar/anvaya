@@ -584,6 +584,8 @@ def get_model_keys(who: Actor = Depends(actor)) -> dict:
         usage = [u for u in usage if u.get("user_key") == who.key]
     people_keys = {u["user_key"] for u in usage}
     people_keys |= {d["id"] for d in store.list(keys.ACCESS)} | {d["id"] for d in store.list(keys.POLICY)}
+    # The service's own work (the hourly fraud cycle) counts in the totals, but it isn't a person.
+    people_keys = {k for k in people_keys if not core.is_service(k)}
     if who.role == "demo_admin":
         people_keys = {who.key}
     elif who.role != "platform_admin":
@@ -599,6 +601,7 @@ def get_model_keys(who: Actor = Depends(actor)) -> dict:
     people.sort(key=lambda r: -sum(v["calls"] for v in r["usage_30d"].values()))
     # Totals by key source: everyone's for portal roles, a demo admin's own (usage is filtered above).
     return {"days": KEY_REPORT_DAYS, "totals": _key_use(usage), "people": people,
+            "service": _key_use([u for u in usage if core.is_service(u.get("user_key"))]),
             "default": keys.default_policy(), "platform_key": keys.platform_status(), "ready": keys.ready(),
             "kinds": list(keys.KINDS), "can_manage": "manage_model_access" in who.permissions}
 
