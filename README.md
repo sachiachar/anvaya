@@ -160,7 +160,7 @@ We moved these to the [Grand finale milestone](https://github.com/sachiachar/anv
 
 Three Gemini steps are measured on a small synthetic test set, against real Gemini (PR-15.5). It is a check on our own steps, not a full benchmark:
 
-- **The certificate check:** 15 made-up certificates. Six are genuine, seven each carry one forgery sign from the fraud guide, one names the wrong person and one is the wrong kind of document. We count forgeries caught, genuine ones passed, and whether the right sign was named.
+- **The certificate check:** 15 made-up certificates. Six are genuine, seven each carry one forgery sign from the fraud guide, one names the wrong person and one is a birth certificate. We count forgeries flagged, forgeries flagged because a warning sign was found (a flag can also come from low confidence), the right sign named, and genuine ones passed. The genuine ones date from before October 2023, because a text PDF can't carry the QR code the guide expects after that.
 - **Priya's questions:** 20 questions about synthetic kept items. 14 have their answer in a kept item, some reworded or in Hindi, and 6 ask about things never recorded. We count the right source cited, "never recorded" said when it should be, and made-up sources.
 - **Cards say only what was said:** 15 short exchanges with traps, such as a detail implied but not said, or a "yes" to Saathi's question. We count cards with a detail nobody said, before and after the grounding check, and how many true details were kept.
 

@@ -39,6 +39,17 @@ def test_a_synthetic_certificate_is_a_valid_pdf_with_its_details():
         assert data[offset:].startswith(b"%d 0 obj" % number)
     altered = score.certificate({"name_font": "mono", "name": "Ramesh   Kulkarni"})
     assert b"/F3 12 Tf" in altered  # the name in Courier, as if pasted in
+    birth = score.certificate({"kind": "birth"})
+    assert b"BIRTH CERTIFICATE" in birth and b"Date of birth" in birth and b"deceased" not in birth
+
+
+def test_genuine_certificates_are_dated_before_the_guide_expects_a_qr_code():
+    """A text PDF can't carry a real QR code; from 1 October 2023 the guide expects one."""
+    for case in score.load("certificates")["cases"]:
+        if case["expect"] == "genuine":
+            details = {**score.load("certificates")["base"], **case["details"]}
+            day, month, year = (int(x) for x in details["date_of_registration"].split("-"))
+            assert (year, month, day) < (2023, 10, 1), case["id"]
 
 
 def test_certificate_scoring():
@@ -59,10 +70,23 @@ def test_question_scoring():
 
 
 def test_card_scoring():
-    case = {"id": "c", "forbidden": ["steel cupboard"], "expected": [["almirah", "cupboard"], ["LIC"]]}
-    row = score.score_cards(case, "papers in the steel cupboard (lic)", "papers in the almirah (lic)")
-    assert row["unsaid_before_check"] == ["steel cupboard"] and row["unsaid_after_check"] == []
+    case = {"id": "c", "forbidden": ["steel cupboard", "son"], "expected": [["almirah", "cupboard"], ["LIC"]]}
+    row = score.score_cards(case, "papers in the steel cupboard (lic)", "papers in the almirah (lic), for this reason")
+    assert row["unsaid_before_check"] == ["steel cupboard"] and row["unsaid_after_check"] == []  # "son" isn't in "reason"
     assert row["said_and_kept"] == "2/2"
+
+
+def test_cards_are_read_by_what_they_say_not_their_field_names():
+    turn = ConversationTurn(reply="Thanks.", reply_language="en", owner_language="en", heard="",
+                            moments=[Moment(kind="practical", title="Car", summary="Ravi should sell the car.", quote="q")],
+                            inventory=[], people=[])
+    text = score.cards_text(turn)
+    assert "ravi should sell the car." in text and "summary" not in text and "papers" not in text
+
+
+def test_the_run_switches_off_the_cloud_before_the_app_loads():
+    assert run.LOCAL_ONLY == {"STORE": "memory", "MEDIA_BUCKET": "", "GOOGLE_GENAI_USE_VERTEXAI": "false",
+                              "KMS_KEY_NAME": ""}
 
 
 @pytest.fixture()
@@ -94,7 +118,7 @@ def test_the_whole_run_works_end_to_end_with_gemini_stubbed(stubbed):
     [written] = list(stubbed.glob("*.json"))
     results = json.loads(written.read_text())
     certs = results["steps"]["certificates"]["totals"]
-    assert certs["genuine_passed"]["share"] == 1.0 and certs["forgeries_caught"]["count"] == 0  # the stub flags nothing
+    assert certs["genuine_passed"]["share"] == 1.0 and certs["forgeries_flagged"]["count"] == 0  # the stub flags nothing
     assert results["steps"]["questions"]["totals"]["says_never_recorded"]["share"] == 1.0
     assert results["steps"]["cards"]["model"]
     assert (stubbed / written.name.replace(".json", ".md")).read_text().startswith("# Measured quality")

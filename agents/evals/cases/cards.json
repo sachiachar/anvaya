@@ -1,36 +1,261 @@
 {
-  "_about": "Short exchanges with Saathi (synthetic), to check that cards say only what was said (PR-13.7). saathi: Saathi's message the owner answered, or null. forbidden: details nobody said, which must not appear in any card. expected: groups of words; each group's words are alternatives, and one of them should appear in a card (what was said is kept).",
-  "owner": {"name": "Vikram Rao", "family": ["Priya Rao (daughter)", "Sunita Rao (wife)"]},
-  "cases": [
-    {"id": "papers-almirah", "saathi": null, "owner": "My LIC policy papers are in the almirah.",
-     "forbidden": ["steel cupboard", "bedroom", "blue folder"], "expected": [["almirah", "cupboard"], ["LIC"]]},
-    {"id": "watch-for-priya", "saathi": null, "owner": "I want Priya to have my watch.",
-     "forbidden": ["gold", "rolex", "titan", "hmt"], "expected": [["watch"], ["Priya"]]},
-    {"id": "yes-to-nominee", "saathi": "Is Ajay the nominee on your HDFC account?", "owner": "Yes.",
-     "forbidden": ["priya"], "expected": [["Ajay"]]},
-    {"id": "not-yet-locker", "saathi": "Did you tell Sunita where the locker key is?", "owner": "Not yet.",
-     "forbidden": ["sunita knows", "key is in", "brass box"], "expected": []},
-    {"id": "ooty-trip", "saathi": null, "owner": "We went to Ooty in 1992, Sunita and I.",
-     "forbidden": ["honeymoon", "anniversary"], "expected": [["Ooty"], ["1992"]]},
-    {"id": "sbi-last-four", "saathi": null, "owner": "My SBI account ends 4410.",
-     "forbidden": ["nominee: priya", "savings", "fixed deposit"], "expected": [["4410"], ["SBI"]]},
-    {"id": "papers-with-lawyer", "saathi": null, "owner": "The house papers are with my lawyer.",
-     "forbidden": ["desai", "mrs "], "expected": [["lawyer"], ["papers"]]},
-    {"id": "ravi-sell-car", "saathi": null, "owner": "Tell Ravi to sell the car.",
-     "forbidden": ["brother", "son", "maruti", "honda"], "expected": [["Ravi"], ["car"]]},
-    {"id": "lic-policy-only", "saathi": null, "owner": "I have a policy with LIC.",
-     "forbidden": ["term", "4821", "endowment"], "expected": [["LIC"]]},
-    {"id": "never-borrow", "saathi": null, "owner": "My father taught me never to borrow money.",
-     "forbidden": ["ramakrishna", "loan from", "credit card"], "expected": [["borrow"]]},
-    {"id": "fd-receipt-hindi", "saathi": null, "owner": "मेरी एफडी की रसीद अलमारी में है।",
-     "forbidden": ["sbi", "hdfc", "icici", "canara"], "expected": [["almirah", "cupboard", "अलमारी"], ["FD", "fixed deposit", "एफडी"]]},
-    {"id": "books-for-priya", "saathi": null, "owner": "Priya should get my books.",
-     "forbidden": ["library", "first edition"], "expected": [["books"], ["Priya"]]},
-    {"id": "flat-answer", "saathi": "Who should get the Mysore flat?", "owner": "Priya.",
-     "forbidden": ["ajay"], "expected": [["Priya"], ["Mysore", "flat"]]},
-    {"id": "passwords-in-vault", "saathi": null, "owner": "I keep my passwords in the vault in this app.",
-     "forbidden": ["password is", "pin is"], "expected": []},
-    {"id": "brother-in-pune", "saathi": null, "owner": "My brother Ajay lives in Pune.",
-     "forbidden": ["engineer", "married", "mumbai"], "expected": [["Ajay"], ["Pune", "brother"]]}
+ "_about": "Short exchanges with Saathi (synthetic), to check that cards say only what was said (PR-13.7). saathi: Saathi's message the owner answered, or null. forbidden: details nobody said, which must not appear in any card. expected: groups of words; each group's words are alternatives, and one of them should appear in a card (what was said is kept).",
+ "owner": {
+  "name": "Vikram Rao",
+  "family": [
+   "Priya Rao (daughter)",
+   "Sunita Rao (wife)"
   ]
+ },
+ "cases": [
+  {
+   "id": "papers-almirah",
+   "saathi": null,
+   "owner": "My LIC policy papers are in the almirah.",
+   "forbidden": [
+    "steel cupboard",
+    "bedroom",
+    "blue folder"
+   ],
+   "expected": [
+    [
+     "almirah",
+     "cupboard"
+    ],
+    [
+     "LIC"
+    ]
+   ]
+  },
+  {
+   "id": "watch-for-priya",
+   "saathi": null,
+   "owner": "I want Priya to have my watch.",
+   "forbidden": [
+    "gold",
+    "rolex",
+    "titan",
+    "hmt"
+   ],
+   "expected": [
+    [
+     "watch"
+    ],
+    [
+     "Priya"
+    ]
+   ]
+  },
+  {
+   "id": "yes-to-nominee",
+   "saathi": "Is Ajay the nominee on your HDFC account?",
+   "owner": "Yes.",
+   "forbidden": [
+    "priya"
+   ],
+   "expected": [
+    [
+     "Ajay"
+    ]
+   ]
+  },
+  {
+   "id": "not-yet-locker",
+   "saathi": "Did you tell Sunita where the locker key is?",
+   "owner": "Not yet.",
+   "forbidden": [
+    "sunita knows",
+    "key is in",
+    "brass box"
+   ],
+   "expected": []
+  },
+  {
+   "id": "ooty-trip",
+   "saathi": null,
+   "owner": "We went to Ooty in 1992, Sunita and I.",
+   "forbidden": [
+    "honeymoon",
+    "anniversary"
+   ],
+   "expected": [
+    [
+     "Ooty"
+    ],
+    [
+     "1992"
+    ]
+   ]
+  },
+  {
+   "id": "sbi-last-four",
+   "saathi": null,
+   "owner": "My SBI account ends 4410.",
+   "forbidden": [
+    "priya",
+    "savings",
+    "fixed deposit"
+   ],
+   "expected": [
+    [
+     "4410"
+    ],
+    [
+     "SBI"
+    ]
+   ]
+  },
+  {
+   "id": "papers-with-lawyer",
+   "saathi": null,
+   "owner": "The house papers are with my lawyer.",
+   "forbidden": [
+    "desai",
+    "mrs"
+   ],
+   "expected": [
+    [
+     "lawyer"
+    ],
+    [
+     "papers"
+    ]
+   ]
+  },
+  {
+   "id": "ravi-sell-car",
+   "saathi": null,
+   "owner": "Tell Ravi to sell the car.",
+   "forbidden": [
+    "brother",
+    "son",
+    "maruti",
+    "honda"
+   ],
+   "expected": [
+    [
+     "Ravi"
+    ],
+    [
+     "car"
+    ]
+   ]
+  },
+  {
+   "id": "lic-policy-only",
+   "saathi": null,
+   "owner": "I have a policy with LIC.",
+   "forbidden": [
+    "term",
+    "4821",
+    "endowment"
+   ],
+   "expected": [
+    [
+     "LIC"
+    ]
+   ]
+  },
+  {
+   "id": "never-borrow",
+   "saathi": null,
+   "owner": "My father taught me never to borrow money.",
+   "forbidden": [
+    "ramakrishna",
+    "loan from",
+    "credit card"
+   ],
+   "expected": [
+    [
+     "borrow"
+    ]
+   ]
+  },
+  {
+   "id": "fd-receipt-hindi",
+   "saathi": null,
+   "owner": "मेरी एफडी की रसीद अलमारी में है।",
+   "forbidden": [
+    "sbi",
+    "hdfc",
+    "icici",
+    "canara"
+   ],
+   "expected": [
+    [
+     "almirah",
+     "cupboard",
+     "अलमारी"
+    ],
+    [
+     "FD",
+     "fixed deposit",
+     "एफडी"
+    ]
+   ]
+  },
+  {
+   "id": "books-for-priya",
+   "saathi": null,
+   "owner": "Priya should get my books.",
+   "forbidden": [
+    "library",
+    "first edition"
+   ],
+   "expected": [
+    [
+     "books"
+    ],
+    [
+     "Priya"
+    ]
+   ]
+  },
+  {
+   "id": "flat-answer",
+   "saathi": "Who should get the Mysore flat?",
+   "owner": "Priya.",
+   "forbidden": [
+    "ajay"
+   ],
+   "expected": [
+    [
+     "Priya"
+    ],
+    [
+     "Mysore",
+     "flat"
+    ]
+   ]
+  },
+  {
+   "id": "passwords-in-vault",
+   "saathi": null,
+   "owner": "I keep my passwords in the vault in this app.",
+   "forbidden": [
+    "password is",
+    "pin is"
+   ],
+   "expected": []
+  },
+  {
+   "id": "brother-in-pune",
+   "saathi": null,
+   "owner": "My brother Ajay lives in Pune.",
+   "forbidden": [
+    "engineer",
+    "married",
+    "mumbai"
+   ],
+   "expected": [
+    [
+     "Ajay"
+    ],
+    [
+     "Pune",
+     "brother"
+    ]
+   ]
+  }
+ ]
 }
