@@ -232,8 +232,8 @@ def test_one_run_at_a_time_and_a_stuck_run_times_out():
     run = fraud_pipeline.start_run("dream", KEY, "test")
     with pytest.raises(fraud_pipeline.Busy):
         fraud_pipeline.start_run("research", KEY, "test")
-    store.update("fraud_runs", run["id"], {"started_at": time.time() - 16 * 60})  # e.g. the server restarted
-    store.update("fraud_run_lock", "active", {"at": time.time() - 16 * 60})
+    store.update("fraud_runs", run["id"], {"started_at": time.time() - fraud_pipeline.RUN_TIMEOUT_SECONDS - 60})  # a restart
+    store.update("fraud_run_lock", "active", {"at": time.time() - fraud_pipeline.RUN_TIMEOUT_SECONDS - 60})
     assert fraud_pipeline.start_run("research", KEY, "test")["status"] == "running"
     assert store.get("fraud_runs", run["id"])["status"] == "failed"
 
@@ -345,8 +345,8 @@ def test_the_same_scenario_cant_be_decided_twice(client, stub):  # noqa: F811
 
 def test_a_stuck_run_is_cleared_when_the_page_loads(client):  # noqa: F811
     run = fraud_pipeline.start_run("dream", KEY, "test")
-    store.update("fraud_runs", run["id"], {"started_at": time.time() - 16 * 60})
-    store.update("fraud_run_lock", "active", {"at": time.time() - 16 * 60})
+    store.update("fraud_runs", run["id"], {"started_at": time.time() - fraud_pipeline.RUN_TIMEOUT_SECONDS - 60})
+    store.update("fraud_run_lock", "active", {"at": time.time() - fraud_pipeline.RUN_TIMEOUT_SECONDS - 60})
     page = client.get("/api/platform/fraud", headers=h("judge")).json()
     assert page["runs"][0]["status"] == "failed" and store.get("fraud_run_lock", "active") is None
 

@@ -46,6 +46,8 @@ service_ceiling:
   voice_minutes_per_day: 300
   optional_pause_at: 0.8
   safety_reserve: 0.1
+  # The hourly fraud cycle skips an hour once the fraud agents have used this share of the day's tokens.
+  scheduled_fraud_share: 0.2
 
 policies:
   - agent: saathi.chat

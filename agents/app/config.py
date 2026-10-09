@@ -18,6 +18,12 @@ class Settings:
     # Web search for the fraud research agent (Exa, exa.ai; web_search.py). Empty: research and
     # scenario checks stop with "web search isn't set up yet".
     exa_api_key: str = os.getenv("EXA_API_KEY", "")
+    # The hourly fraud cycle (Cloud Scheduler; fraud_pipeline.cycle). FRAUD_SCHEDULER_JOB is the job's
+    # full name (projects/P/locations/R/jobs/J), which "Run now" asks to run; FRAUD_SCHEDULER_SA is the
+    # only identity allowed to call the cycle. Both set by the release workflow. Empty (local
+    # development): "Run now" runs in the background on this machine, and the cycle endpoint is off.
+    fraud_scheduler_job: str = os.getenv("FRAUD_SCHEDULER_JOB", "")
+    fraud_scheduler_sa: str = os.getenv("FRAUD_SCHEDULER_SA", "")
 
     # Sign-in (Firebase Auth) and the demo allowlist; see auth.py.
     auth_required: bool = os.getenv("AUTH_REQUIRED", "false").lower() == "true"

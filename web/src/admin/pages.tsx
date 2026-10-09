@@ -490,12 +490,14 @@ const STAGE_LABEL: Record<RunStage, string> = {
 
 /** The live view: which stage the run is in, what it's doing, and what it has spent. */
 function LiveRun({ run, reviewer, onStop }: { run: Run; reviewer: boolean; onStop: () => void }) {
-  const running = run.status === "running";
+  const queued = run.status === "queued";  // waiting for the hourly job, asked to run now
+  const running = run.status === "running" || queued;
   const active = running ? (run.stage === "skip" && run.kind === "dream" ? "check" : run.stage) : null;
   const steps = [...(run.steps ?? [])].reverse();
   const calls = Object.entries(run.calls ?? {});
   return (
-    <Section title={running ? `Live: ${RUN_KIND[run.kind].toLowerCase()} in progress` : `Last run: ${RUN_KIND[run.kind].toLowerCase()}`}
+    <Section title={queued ? `Live: ${RUN_KIND[run.kind].toLowerCase()} starting` : running
+      ? `Live: ${RUN_KIND[run.kind].toLowerCase()} in progress` : `Last run: ${RUN_KIND[run.kind].toLowerCase()}`}
       aside={running ? (reviewer && (
         <button className="pa-small" disabled={run.stop_requested} onClick={onStop}>
           {run.stop_requested ? "Stopping…" : "Stop"}
@@ -583,7 +585,7 @@ export function FraudPage({ me }: { me: Me }) {
   const load = useCallback(() => platform.fraud(), []);
   const { data, error, reload } = useLoad(load);
   const [note, setNote] = useState<string | null>(null);
-  const running = data?.runs.some((r) => r.status === "running") ?? false;
+  const running = data?.runs.some((r) => r.status === "running" || r.status === "queued") ?? false;
   // Live mode: while a run is going, check every 2 seconds, so each step and each new
   // scenario appears as it happens.
   useEffect(() => {

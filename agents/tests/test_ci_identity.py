@@ -73,7 +73,9 @@ def test_the_setup_script_grants_what_the_access_list_names():
     assert 'SOURCE_BUCKET="run-sources-${PROJECT_ID}-${REGION}"' in SETUP
     assert list(ACCESS["artifact_repositories"]) == ["cloud-run-source-deploy"] and 'AR_REPO="cloud-run-source-deploy"' in SETUP
     assert set(ACCESS["service_accounts"]) == {"life-after-agents@{project}.iam.gserviceaccount.com",
-                                               "{number}-compute@developer.gserviceaccount.com"}
+                                               "{number}-compute@developer.gserviceaccount.com",
+                                               "fraud-scheduler@{project}.iam.gserviceaccount.com"}
+    assert 'SCHEDULER_SA="fraud-scheduler@${PROJECT_ID}.iam.gserviceaccount.com"' in SETUP
     assert 'RUNTIME_SA="life-after-agents@${PROJECT_ID}.iam.gserviceaccount.com"' in SETUP
     assert 'BUILD_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"' in SETUP
 
