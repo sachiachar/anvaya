@@ -149,7 +149,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .pa-status { display: inline-block; font-size: 0.75rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
 .pa-status-approved, .pa-status-confirmed, .pa-status-covered, .pa-status-verified, .pa-status-off, .pa-status-done, .pa-status-ok { color: var(--pa-ok); background: var(--pa-ok-soft); }
-.pa-status-new, .pa-status-pending, .pa-status-open, .pa-status-dreamt, .pa-status-research_requested, .pa-status-optional_paused, .pa-status-partly, .pa-status-running, .pa-status-queued, .pa-status-unconfirmed, .pa-status-stopped, .pa-status-far-fetched { color: var(--pa-warn); background: var(--pa-warn-soft); }
+.pa-status-new, .pa-status-pending, .pa-status-open, .pa-status-dreamt, .pa-status-research_requested, .pa-status-optional_paused, .pa-status-partly, .pa-status-running, .pa-status-queued, .pa-status-spot_check, .pa-status-unconfirmed, .pa-status-stopped, .pa-status-far-fetched { color: var(--pa-warn); background: var(--pa-warn-soft); }
 .pa-status-working { color: var(--pa-ok); background: var(--pa-ok-soft); }
 .pa-status-failing { color: var(--pa-danger); background: var(--pa-danger-soft); }
 .pa-status-rejected, .pa-status-reversed, .pa-status-gap, .pa-status-all_paused, .pa-status-paused, .pa-status-failed { color: var(--pa-danger); background: var(--pa-danger-soft); }

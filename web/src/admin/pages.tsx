@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  fmt, platform, type Agent, type AuditEntry, type Blocked, type BudgetRequest, type DemoCopy, type GuardianEvent,
+  fmt, platform, type Added, type Agent, type AuditEntry, type Blocked, type BudgetRequest, type DemoCopy, type GuardianEvent,
   type CuePrivacy, type Draft, type Guide, type KillSwitchState, type Me, type Permission, type Run, type RunStage, type Scenario,
   type CeilingState, type ServiceCeiling, type Source,
   type Spend, type Use, type KeyPerson, type KeyPolicy, type KeySource, type KeyUse,
@@ -600,7 +600,7 @@ export function FraudPage({ me }: { me: Me }) {
   const live = data.runs[0];
   return (
     <>
-      <p className="pa-lede">The dreaming agent imagines attacks on our safeguards, and the research agent checks each one, and new tactics, against cited sources. Only what a source confirms can be approved, and nothing changes a guide or a check until a reviewer approves it.</p>
+      <p className="pa-lede">Every hour the research agent looks into the next subjects, and the dreaming agent imagines attacks on our safeguards from each new tactic. What two independent websites confirm is added to the guide on its own; anything with one source waits for a reviewer. The pipeline only ever adds: you can remove anything it added, and two removals in a week pause it for that guide.</p>
       <div className="pa-kpis">
         <div className="pa-kpi"><span>Scenarios covered</span><strong>{data.coverage.covered}</strong><em>A safeguard catches it</em></div>
         <div className="pa-kpi"><span>Partly covered</span><strong>{data.coverage.partly}</strong><em>Caught only sometimes</em></div>
@@ -659,8 +659,30 @@ export function FraudPage({ me }: { me: Me }) {
           ))}
         </ul>
       </Section>
+      <Section title="Added on its own" aside={data.adding_paused?.length ? <Status value="paused" /> : undefined}>
+        {(data.adding_paused ?? []).map((g) => (
+          <div key={g} className="pa-row">
+            <p className="pa-warn">Adding is paused for {g} after two removals in a week. Until it resumes, new findings wait for a reviewer.</p>
+            {reviewer && <DecisionForm actions={[{ value: "resume", label: "Resume adding" }]}
+              onDecide={(_, reason) => platform.resumeAdding(g, reason).then(reload)} />}
+          </div>
+        ))}
+        {!data.added?.length && <Empty>Nothing yet. Tactics and scenarios two independent websites confirm appear here, added to the guide.</Empty>}
+        <ul className="pa-list">
+          {(data.added ?? []).map((a: Added) => (
+            <li key={a.id}>
+              <p><strong>{a.name}</strong> {a.spot_check && <Status value="spot_check" />}</p>
+              <p className="pa-muted">{fmt.label(a.kind)} · {a.sources} independent sources · added {fmt.when(a.at)}</p>
+              {reviewer && <DecisionForm actions={[
+                ...(a.spot_check ? [{ value: "keep", label: "Looks right" }] : []),
+                { value: "remove", label: "Remove from the guide", tone: "danger" as const }]}
+                onDecide={(v, reason) => (v === "keep" ? platform.keepAdded(a.id, reason) : platform.removeAdded(a.id, reason)).then(reload)} />}
+            </li>
+          ))}
+        </ul>
+      </Section>
       <Section title="New tactics to review">
-        {data.drafts.length === 0 && <Empty>None waiting. "Research now" looks for new tactics; only ones a source confirms appear here.</Empty>}
+        {data.drafts.length === 0 && <Empty>None waiting. Tactics only one website confirms appear here.</Empty>}
         <ul className="pa-list">
           {data.drafts.map((d: Draft) => (
             <li key={d.id}>

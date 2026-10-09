@@ -92,6 +92,7 @@ class RunLimits(Strict):
     max_new_patterns_per_run: int | None = None
     max_scenarios_per_sequence: int | None = None
     max_sequences_per_run: int | None = None
+    max_subjects_per_run: int | None = None  # research subjects one fraud research run covers
 
 
 class PerUser(Strict):

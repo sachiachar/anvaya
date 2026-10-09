@@ -122,8 +122,13 @@ export type Run = { id: string; kind: "dream" | "research"; guide_key: string;
 /** How many owners must share a gap before it's a cue for dreaming: a platform admin's setting, never below the floor. */
 export type CuePrivacy = { min_owners: number; floor: number; ceiling: number; changed_at: number | null; reason: string | null };
 
+/** Something the fraud pipeline added to a guide on its own (2 independent sources; PR-2.7.y). */
+export type Added = { id: string; at: number; guide_key: string; kind: "tactic" | "scenario"; name: string;
+  sources: number; spot_check: boolean; status: "active" | "removed" };
+
 export type Fraud = { scenarios: Scenario[]; drafts: Draft[]; runs: Run[]; guides: Guide[]; privacy?: CuePrivacy;
-  coverage: { covered: number; partly: number; gaps: number; faded: number } };
+  coverage: { covered: number; partly: number; gaps: number; faded: number };
+  added?: Added[]; adding_paused?: string[] };
 
 export type Guide = { id: string; title: string; version: number; trust_tier: string; sources: number;
   signals: number; researched_at: number | null; status: "current" | "research_requested" };
@@ -168,6 +173,11 @@ export const platform = {
   researchNow: (id: string) => request<{ status: string; message: string }>(p(`/fraud/guides/${id}/research`), { method: "POST" }),
   stopRun: (id: string) => request<{ message: string }>(p(`/fraud/runs/${id}/stop`), { method: "POST" }),
   dreamNow: (id: string) => request<{ status: string; message: string }>(p(`/fraud/guides/${id}/dream`), { method: "POST" }),
+  removeAdded: (id: string, reason: string) =>
+    request<{ adding_paused: boolean }>(p(`/fraud/added/${id}/remove`), json({ reason })),
+  keepAdded: (id: string, reason: string) => request<Added>(p(`/fraud/added/${id}/keep`), json({ reason })),
+  resumeAdding: (guide: string, reason: string) =>
+    request<{ adding_paused: boolean }>(p(`/fraud/guides/${guide}/resume-adding`), json({ reason })),
   demos: () => request<{ copies: DemoCopy[]; cleanup_after_days: number; nicknames_visible: boolean }>(p("/demos")),
   resetDemo: (id: string, reason: string) => request<DemoCopy>(p(`/demos/${id}/reset`), json({ reason })),
   setKillSwitch: (state: KillSwitchState, reason: string) =>

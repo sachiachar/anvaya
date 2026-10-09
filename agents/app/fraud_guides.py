@@ -47,6 +47,7 @@ class Sign(BaseModel):
     sources: list[str] = []  # Source ids
     projection: bool = False  # True for a validated scenario: a projection, not a known tactic
     status: Literal["active", "retired"] = "active"
+    auto: bool = False  # added by the fraud pipeline on its own (2 independent sources); a person can retire it
     # The sign applies only to documents registered on or after this date (YYYY-MM-DD). Code rules it
     # out for an older document, whatever the model says (loops._named_signs): the model was found to
     # ignore a date written only in look_for (PR-15.5).
@@ -104,6 +105,8 @@ class Tactic(BaseModel):
     trust: Trust
     sources: list[str] = []
     exploits: Exploits | None = None  # set by a reviewer (PR-13.6); Saathi never pursues a matching step
+    status: Literal["active", "retired"] = "active"  # a retired tactic seeds no dreaming
+    auto: bool = False  # added by the fraud pipeline on its own (2 independent sources); a person can retire it
 
 
 class Guide(BaseModel):
@@ -218,6 +221,21 @@ def add_items(key: str, *, signs: list[Sign] = (), tactics: list[Tactic] = (), s
             "tactics": [*guide.tactics, *(t for t in tactics if t.id not in known)],
             "scenarios": [*guide.scenarios, *(s for s in scenarios if s.get("id") not in listed)],
             "sources": [*guide.sources, *{s.id: s for s in sources if s.id not in cited}.values()],
+        })
+
+    return _save_next(key, build)
+
+
+def retire_items(key: str, ids: set[str]) -> Guide:
+    """A new version with these signs, tactics or scenarios retired: a person's decision (for
+    example, removing something the pipeline added on its own). Nothing is deleted: earlier versions
+    keep it, and a retired item reaches no check and seeds no dreaming."""
+    def build(latest: Guide | None) -> Guide:
+        guide = latest or BUILT_IN[key]
+        return guide.model_copy(update={
+            "signs": [s.model_copy(update={"status": "retired"}) if s.id in ids else s for s in guide.signs],
+            "tactics": [t.model_copy(update={"status": "retired"}) if t.id in ids else t for t in guide.tactics],
+            "scenarios": [{**s, "status": "retired"} if s.get("id") in ids else s for s in guide.scenarios],
         })
 
     return _save_next(key, build)
