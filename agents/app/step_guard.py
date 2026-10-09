@@ -30,6 +30,7 @@ import unicodedata
 from . import demo, fraud_guides
 from .config import settings
 from .governance import core as governance
+from .governance import guardian
 from .step_types import CHANNELS, FLAGS, STEP_TYPES
 from .store import store
 
@@ -174,20 +175,27 @@ def pursue(owner_id: str, steps: list[dict]) -> list[dict]:
     """The steps that may reach the owner. The others are dropped and counted. Raises
     TacticsUnavailable if the guides can't be read, so a caller never mistakes it for "no steps"."""
     tactics = approved_tactics()
+    # The hashed key of whoever's copy this is (what the portal shows), never a name.
+    key = demo.current_or_none() or governance.user_key(owner_id)
     kept = []
     for step in steps:
         reason = check(typed(step), tactics)
-        if reason is None:
+        # Salted hashes of the copy and the step's title (and the rule): they hold no words. The same
+        # step on a later run has the same record (replaced, not added) and is counted once.
+        step_id = _digest(key, step.get("title", ""))
+        # Every step asks the guardian (PR-2.7); a held-back one becomes an event, once per step. The
+        # rule is fixed in code: the guardian can only make it stricter, never let a step through.
+        decision = guardian.decide("next_step", PLANNER, {"rule": reason}, refs={"step": f"step_{step_id}"},
+                                   user_key=key, once=f"gev_step_{_digest(key, reason, step.get('title', ''))}",
+                                   record_id=f"gac_step_{step_id}")
+        if reason is None and decision.goes_ahead:
             kept.append(step)
         else:
-            # The hashed key of whoever's copy this is (what the portal shows), never a name. The
-            # same step dropped again on a later run is counted once: its record id is a salted
-            # hash of the copy, the rule and the step's title, and holds no words itself.
-            key = demo.current_or_none() or governance.user_key(owner_id)
-            digest = hashlib.sha256(f"{settings.user_key_salt}:{key}:{reason}:{step.get('title', '')}".encode())
-            store.put("steps_not_pursued", {"id": f"snp_{digest.hexdigest()[:16]}", "at": time.time(),
-                                            "rule": reason, "user_key": key})
-            # And a guardian event a risk reviewer decides (PR-15.6), once per step: the rule only.
-            governance.record_intervention(PLANNER, "block", f"A next step was not pursued: rule {reason}",
-                                           user_key=key, once=f"gev_step_{digest.hexdigest()[:16]}")
+            rule = reason or f"guardian:{decision.response}"
+            store.put("steps_not_pursued", {"id": f"snp_{_digest(key, rule, step.get('title', ''))}", "at": time.time(),
+                                            "rule": rule, "user_key": key})
     return kept
+
+
+def _digest(*parts) -> str:
+    return hashlib.sha256(":".join([settings.user_key_salt, *(str(p) for p in parts)]).encode()).hexdigest()[:16]

@@ -4,6 +4,7 @@ autonomy; only the caller's own copy, never any text. Each card, step and check 
 autonomy label from the agent's policy."""
 
 import pathlib
+import re
 import time
 
 import pytest
@@ -115,7 +116,9 @@ def test_the_release_turns_on_the_traces_expiry_for_the_same_field():
     run = next(s["run"] for s in workflow["jobs"]["api"]["steps"] if "ttls update" in s.get("run", ""))
     call(ME, tokens_in=1)
     stored = store.list("agent_steps", user_key=ME)[0]
-    assert "expire_at" in stored and "--collection-group=agent_steps" in run and "ttls update expire_at" in run
+    groups = re.search(r"for group in ([\w ]+); do", run).group(1).split()
+    assert "expire_at" in stored and "agent_steps" in groups and "ttls update expire_at" in run
+    assert '--collection-group="$group"' in run
     assert "roles/datastore.indexAdmin" in (repo / "infra" / "setup-github-actions.sh").read_text()
 
 

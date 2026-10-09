@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import time
 from typing import Literal
 
@@ -24,6 +25,7 @@ from . import (auth, demo, escrow, fraud_guides, gaps, grounding, knowledge, kno
 from .config import settings
 from .executor_agent import UnknownSession, ask
 from .governance import core as governance_core
+from .governance import guardian
 from .governance import keys as model_keys
 from .governance import portal
 from .store import new_id, store
@@ -32,7 +34,9 @@ from .store import new_id, store
 model_keys.install_log_redaction()
 
 # A broken registry.yaml or policies.yaml stops the API here, rather than loosening a rule.
+log = logging.getLogger(__name__)
 governance_core.check_files()
+guardian.check_policy()  # a broken guardian.yaml stops start-up too
 app = FastAPI(title="Anvaya agents", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
@@ -257,6 +261,7 @@ async def live_call(ws: WebSocket, owner_id: str, token: str | None = None, acti
     else:
         governance_core.set_current_user(governance_core.user_key(demo.LOCAL))
         demo.begin(demo.LOCAL)
+    governance_core.set_channel("live_call")  # the guardian records what this call does as a live call
     await asyncio.to_thread(demo.ensure)  # no catalog cache here: a call lasts minutes, and kept knowledge can change meanwhile
     if (acting_as or demo.DEFAULT_PERSON).strip().lower() != "vikram":  # only the owner talks with Saathi
         await ws.close(code=4403, reason="Only Vikram can call Saathi.")
@@ -477,7 +482,8 @@ async def readiness(owner_id: str) -> dict:
     if (cached := _cached("readiness", owner_id, args)) is not None:
         return {**cached, "tasks": _labelled_steps(owner_id), "cached": True}
     result = await loops.assess_readiness(owner, *args[1:])
-    tasks.refresh(owner_id, [g.model_dump() for g in result.gaps])
+    # Off the event loop: each step is checked and written down by the guardian (PR-2.7).
+    await asyncio.to_thread(tasks.refresh, owner_id, [g.model_dump() for g in result.gaps])
     store.update("owners", owner_id, {"readiness_score": result.score})
     # Running readiness updates the next steps, which are one of its own inputs, so remember
     # the inputs as they are now; an unchanged owner then gets the saved result next time.
@@ -790,29 +796,31 @@ async def report_death(owner_id: str, certificate: UploadFile = File(...)) -> di
     return {"autonomy": ASSIST, "case": case}
 
 
-# The guardian's records about document checks (PR-15.6): fixed text from code, the case id and the
-# fraud guide's sign ids only; never what a document says, a reviewer's name or their written reason.
+# Document checks and reviewer confirmations ask the guardian (PR-2.7): it records each one, and
+# warning signs or an override become an event. Only the case id and the fraud guide's sign ids go
+# in; never what a document says, a reviewer's name or their written reason.
 CHECKER = loops.CHECKER
-MAX_SIGN_IDS = 5  # a guide can grow; the reason stays short
 
 
 def _record_signs(case: dict, check: dict, what: str) -> None:
-    """Warning signs a document check found become one guardian event for a risk reviewer."""
     found = [s["id"] for s in check.get("signs") or [] if s.get("result") == "found"]
-    if found:
-        ids = ", ".join(found[:MAX_SIGN_IDS]) + (f" and {len(found) - MAX_SIGN_IDS} more" if len(found) > MAX_SIGN_IDS else "")
-        governance_core.record_intervention(
-            CHECKER, "add_check", f"The {what} check found {len(found)} warning sign{'s' if len(found) > 1 else ''}: {ids}",
-            case_key=case["id"])
+    _after_the_fact("certificate_check", {"signs_found": found, "what": what}, case)
 
 
 def _record_override(case: dict, check_field: str, what: str, override_reason: str | None) -> None:
-    """A saved confirmation that went against the AI's "not valid" (release._check_override let it
-    through only with a written reason) becomes one guardian event for a risk reviewer."""
-    if override_reason and (case.get(check_field) or {}).get("verdict") == "not_valid":
-        governance_core.record_intervention(CHECKER, "add_check",
-                                            f"A reviewer went against the AI's 'not valid' on the {what}",
-                                            case_key=case["id"])
+    """Called once a confirmation is saved. release._check_override let it through against the
+    AI's "not valid" only with a written reason."""
+    override = bool(override_reason) and (case.get(check_field) or {}).get("verdict") == "not_valid"
+    _after_the_fact("review_confirmation", {"override": override, "what": what}, case)
+
+
+def _after_the_fact(action: str, facts: dict, case: dict) -> None:
+    """These ask the guardian after the case is saved, so a failed record must not turn a saved
+    report or confirmation into an error the person would retry. It's logged instead, without text."""
+    try:
+        guardian.decide(action, CHECKER, facts, refs={"case": case["id"]}, case_key=case["id"])
+    except Exception:
+        log.exception("guardian record failed: %s for %s", action, case["id"])
 
 
 @api.post("/owners/{owner_id}/release/authority", dependencies=[Depends(demo.only("family"))])
