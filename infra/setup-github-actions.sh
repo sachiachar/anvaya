@@ -9,7 +9,8 @@
 # bucket, the Artifact Registry repository), update the API's Cloud Run service, act as the
 # API's and the build's service accounts (and no other), publish Firebase Hosting and the
 # Firestore rules, and set Firestore TTL policies. Running this again removes the broader
-# project-wide roles it used to grant.
+# project-wide roles it used to grant. Every permission the release uses is listed in
+# infra/deployer-access.json, and the release checks them all before it deploys.
 #
 # Usage: PROJECT_ID=my-project REPO=owner/repo ./infra/setup-github-actions.sh
 # Needs gcloud (project owner) and gh (repository admin), and the API deployed once
@@ -53,6 +54,19 @@ for role in roles/run.developer roles/cloudbuild.builds.editor roles/serviceusag
             roles/firebasehosting.admin roles/firebaserules.admin roles/datastore.indexAdmin; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "$MEMBER" --role "$role" --condition=None >/dev/null
 done
+# A source deploy lists the project's buckets to find its upload bucket. No predefined role gives only
+# that, so a small custom role does: it can list and look at buckets, never read or write a file in one.
+BUCKET_ROLE="sourceDeployBuckets"
+BUCKET_PERMISSIONS="storage.buckets.list,storage.buckets.get"
+if gcloud iam roles describe "$BUCKET_ROLE" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  gcloud iam roles update "$BUCKET_ROLE" --project "$PROJECT_ID" --permissions "$BUCKET_PERMISSIONS" --quiet >/dev/null
+else
+  gcloud iam roles create "$BUCKET_ROLE" --project "$PROJECT_ID" --title "Source deploy: list buckets" \
+    --description "Lets a source deploy find its upload bucket; no access to any file" \
+    --permissions "$BUCKET_PERMISSIONS" --stage GA >/dev/null
+fi
+gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "$MEMBER" \
+  --role "projects/${PROJECT_ID}/roles/${BUCKET_ROLE}" --condition=None >/dev/null
 
 echo "== Narrow grants: the API's and the build's service accounts, the source and build buckets, the image repository"
 for sa in "$RUNTIME_SA" "$BUILD_SA"; do

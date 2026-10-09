@@ -259,6 +259,8 @@ Every push to `main` deploys **what changed since each part last deployed** ([.g
 
 GitHub signs in to Google Cloud with Workload Identity Federation, so GitHub stores no keys. Google gives those credentials only to the Deploy workflow that runs on `main` in the `production` environment. The deployer can only do what the deploy needs.
 
+Before anything deploys, the workflow checks that the deployer has every permission the release uses. They are listed in [infra/deployer-access.json](infra/deployer-access.json). If one is missing, the release stops at once, names it, and deploys nothing. The deployer can't grant itself access: run `infra/setup-github-actions.sh` again, then re-run the workflow. Change the list and the setup script together.
+
 Run this setup once, and again after it changes: `PROJECT_ID=… REPO=owner/repo ./infra/setup-github-actions.sh`. It needs a project owner and a repository admin.
 
 ## Demo in three minutes

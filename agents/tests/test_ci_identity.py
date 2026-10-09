@@ -2,6 +2,7 @@
 Deploy workflow, on main, in environment "production", in this repository (by its numeric id);
 and the deployer holds only what the deploy needs, with no broad project-wide roles."""
 
+import json
 import pathlib
 import re
 
@@ -45,6 +46,36 @@ def test_the_deployer_has_no_broad_project_wide_roles():
     # Acting as service accounts only on the two the deploy uses, and storage only on its buckets.
     assert 'for sa in "$RUNTIME_SA" "$BUILD_SA"' in SETUP
     assert "gcloud storage buckets add-iam-policy-binding" in SETUP
+
+
+ACCESS = json.loads((REPO / "infra" / "deployer-access.json").read_text())
+
+
+def test_every_release_checks_the_deployers_access_before_anything_deploys():
+    """A missing permission stops the release at the start, listed, never half way through a deploy."""
+    jobs = yaml.safe_load((WORKFLOWS / "deploy.yml").read_text())["jobs"]
+    assert jobs["access"]["environment"] == "production"
+    for part in ("api", "web"):
+        assert "access" in jobs[part]["needs"], f"the {part} job must wait for the access check"
+    run = next(s["run"] for s in jobs["access"]["steps"] if s.get("name") == "Check the deployer's access")
+    assert "infra/deployer-access.json" in run
+    for section in ("project", "service_accounts", "buckets", "artifact_repositories"):
+        assert ACCESS[section], f"{section} is empty"
+
+
+def test_the_setup_script_grants_what_the_access_list_names():
+    # The one permission no predefined role gives narrowly: listing buckets, through the custom role.
+    assert "storage.buckets.list" in ACCESS["project"]
+    assert re.search(r'BUCKET_PERMISSIONS="[^"]*storage\.buckets\.list', SETUP)
+    assert 'roles/${BUCKET_ROLE}' in SETUP
+    # The same resources: the source bucket, the image repository and the two service accounts.
+    assert list(ACCESS["buckets"]) == ["run-sources-{project}-{region}"]
+    assert 'SOURCE_BUCKET="run-sources-${PROJECT_ID}-${REGION}"' in SETUP
+    assert list(ACCESS["artifact_repositories"]) == ["cloud-run-source-deploy"] and 'AR_REPO="cloud-run-source-deploy"' in SETUP
+    assert set(ACCESS["service_accounts"]) == {"life-after-agents@{project}.iam.gserviceaccount.com",
+                                               "{number}-compute@developer.gserviceaccount.com"}
+    assert 'RUNTIME_SA="life-after-agents@${PROJECT_ID}.iam.gserviceaccount.com"' in SETUP
+    assert 'BUILD_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"' in SETUP
 
 
 def test_broad_roles_are_removed_only_after_every_narrow_grant_is_in_place():
