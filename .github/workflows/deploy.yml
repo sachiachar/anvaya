@@ -85,8 +85,67 @@ jobs:
           if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null; then echo "changed=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           if git diff --quiet "$base" HEAD -- web firebase.json firestore.rules; then echo "changed=false"; else echo "changed=true"; fi >> "$GITHUB_OUTPUT"
 
-  api:
+  access:
+    # Before anything deploys: the deployer has every permission the release uses
+    # (infra/deployer-access.json). A missing one stops here, listed, instead of half way through a
+    # deploy. The deployer can't grant itself anything: a person runs infra/setup-github-actions.sh.
     needs: changes
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Check the deployer's access
+        env:
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+          REGION: ${{ vars.GCP_REGION }}
+        run: |
+          token=$(gcloud auth print-access-token)
+          number=$(gcloud projects describe "$PROJECT" --format 'value(projectNumber)')
+          spec=$(sed -e "s/{project}/$PROJECT/g" -e "s/{region}/$REGION/g" -e "s/{number}/$number/g" infra/deployer-access.json)
+          missing=()
+          # Ask Google which of these permissions the deployer has on one resource; note the rest.
+          check() {  # label, url, permissions (JSON array), method
+            local label=$1 url=$2 wanted=$3 have
+            if [ "$4" = GET ]; then
+              have=$(curl -sf -H "Authorization: Bearer $token" "$url?$(jq -r 'map("permissions=" + .) | join("&")' <<<"$wanted")")
+            else
+              have=$(curl -sf -X POST -H "Authorization: Bearer $token" -H "Content-Type: application/json" \
+                -d "{\"permissions\": $wanted}" "$url")
+            fi || { missing+=("$label (couldn't check: does it exist?)"); return; }
+            for p in $(jq -r '.[]' <<<"$wanted"); do
+              jq -e --arg p "$p" '(.permissions // []) | index($p)' <<<"$have" >/dev/null || missing+=("$label: $p")
+            done
+          }
+          check "project $PROJECT" "https://cloudresourcemanager.googleapis.com/v1/projects/$PROJECT:testIamPermissions" \
+            "$(jq -c .project <<<"$spec")" POST
+          for sa in $(jq -r '.service_accounts | keys[]' <<<"$spec"); do
+            check "service account $sa" "https://iam.googleapis.com/v1/projects/$PROJECT/serviceAccounts/$sa:testIamPermissions" \
+              "$(jq -c --arg k "$sa" '.service_accounts[$k]' <<<"$spec")" POST
+          done
+          for bucket in $(jq -r '.buckets | keys[]' <<<"$spec"); do
+            check "bucket $bucket" "https://storage.googleapis.com/storage/v1/b/$bucket/iam/testPermissions" \
+              "$(jq -c --arg k "$bucket" '.buckets[$k]' <<<"$spec")" GET
+          done
+          for repo in $(jq -r '.artifact_repositories | keys[]' <<<"$spec"); do
+            check "repository $repo" \
+              "https://artifactregistry.googleapis.com/v1/projects/$PROJECT/locations/$REGION/repositories/$repo:testIamPermissions" \
+              "$(jq -c --arg k "$repo" '.artifact_repositories[$k]' <<<"$spec")" POST
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            printf 'The deployer is missing:\n'; printf '  - %s\n' "${missing[@]}"
+            echo "Nothing was deployed. Run infra/setup-github-actions.sh (a person), then re-run this workflow."
+            exit 1
+          fi
+          echo "The deployer has every permission the release uses ($(jq '[.. | arrays | .[]] | length' <<<"$spec") checked)."
+
+  api:
+    needs: [changes, access]
     if: needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
     environment: production
@@ -174,7 +233,7 @@ jobs:
             --update-env-vars "^;^ALLOWED_EMAILS=${ALLOWED_EMAILS};OPEN_SIGN_IN=${OPEN_SIGN_IN:-false}"
 
   web:
-    needs: changes
+    needs: [changes, access]
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     environment: production  # Google credentials are given only to this environment (#110)

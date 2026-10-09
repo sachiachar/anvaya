@@ -1,0 +1,41 @@
+{
+  "_about": "Every permission the release workflow's deployer uses, where it uses it. The workflow's access job checks each one before deploying, and stops with the missing ones listed. infra/setup-github-actions.sh grants them (a person runs it). {project}, {region} and {number} are filled in by the check. Change this file and the setup script together.",
+  "project": [
+    "run.services.get",
+    "run.services.update",
+    "run.operations.get",
+    "cloudbuild.builds.create",
+    "cloudbuild.builds.get",
+    "serviceusage.services.use",
+    "storage.buckets.list",
+    "datastore.schemas.list",
+    "datastore.schemas.update",
+    "firebasehosting.sites.get",
+    "firebasehosting.sites.update",
+    "firebaserules.rulesets.create",
+    "firebaserules.releases.create",
+    "firebaserules.releases.update"
+  ],
+  "service_accounts": {
+    "life-after-agents@{project}.iam.gserviceaccount.com": [
+      "iam.serviceAccounts.actAs"
+    ],
+    "{number}-compute@developer.gserviceaccount.com": [
+      "iam.serviceAccounts.actAs"
+    ]
+  },
+  "buckets": {
+    "run-sources-{project}-{region}": [
+      "storage.buckets.get",
+      "storage.objects.create",
+      "storage.objects.get"
+    ]
+  },
+  "artifact_repositories": {
+    "cloud-run-source-deploy": [
+      "artifactregistry.repositories.get",
+      "artifactregistry.repositories.uploadArtifacts",
+      "artifactregistry.repositories.downloadArtifacts"
+    ]
+  }
+}
