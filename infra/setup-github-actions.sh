@@ -63,13 +63,18 @@ for sa in "$RUNTIME_SA" "$BUILD_SA"; do
     echo "   ! service account ${sa} doesn't exist"; NARROW_READY=false
   fi
 done
-for bucket in "$SOURCE_BUCKET" "$BUILD_BUCKET"; do
-  if gcloud storage buckets describe "gs://${bucket}" >/dev/null 2>&1; then
-    gcloud storage buckets add-iam-policy-binding "gs://${bucket}" --member "$MEMBER" --role roles/storage.admin >/dev/null
-  else
-    echo "   ! bucket ${bucket} doesn't exist yet"; NARROW_READY=false
-  fi
-done
+if gcloud storage buckets describe "gs://${SOURCE_BUCKET}" >/dev/null 2>&1; then
+  gcloud storage buckets add-iam-policy-binding "gs://${SOURCE_BUCKET}" --member "$MEMBER" --role roles/storage.admin >/dev/null
+else
+  echo "   ! bucket ${SOURCE_BUCKET} doesn't exist yet"; NARROW_READY=false
+fi
+# The older Cloud Build bucket: source deploys now upload to the bucket above, so a project may not
+# have it. Granted when it exists; never needed to finish.
+if gcloud storage buckets describe "gs://${BUILD_BUCKET}" >/dev/null 2>&1; then
+  gcloud storage buckets add-iam-policy-binding "gs://${BUILD_BUCKET}" --member "$MEMBER" --role roles/storage.admin >/dev/null
+else
+  echo "   (bucket ${BUILD_BUCKET} doesn't exist: not needed)"
+fi
 if gcloud artifacts repositories describe "$AR_REPO" --location "$REGION" >/dev/null 2>&1; then
   gcloud artifacts repositories add-iam-policy-binding "$AR_REPO" --location "$REGION" --member "$MEMBER" \
     --role roles/artifactregistry.writer >/dev/null
@@ -99,14 +104,18 @@ gcloud iam service-accounts remove-iam-policy-binding "$DEPLOYER_SA" --role role
   --member "${POOL_PATH}/attribute.repository/${REPO}" >/dev/null 2>&1 || true
 
 echo "== GitHub environment \"production\": deployments from main only (its reviewers and wait timer kept)"
-# The update replaces the environment's settings, so send back the protections it already has.
+# The update replaces the environment's settings, so send back the protections it already has. Only
+# the ones it has: GitHub refuses reviewer or wait-timer settings, even empty ones, on plans without
+# them (HTTP 422).
 ENV_SETTINGS=$(gh api "repos/${REPO}/environments/production" --jq '{
   wait_timer: ([.protection_rules[]? | select(.type == "wait_timer") | .wait_timer][0] // 0),
   prevent_self_review: ([.protection_rules[]? | select(.type == "required_reviewers") | .prevent_self_review][0] // false),
   reviewers: ([.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]? | {type: .type, id: .reviewer.id}]
               | if length == 0 then null else . end),
   deployment_branch_policy: {protected_branches: false, custom_branch_policies: true}
-}' 2>/dev/null || echo '{"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}')
+} | if .reviewers == null then del(.reviewers, .prevent_self_review) else . end
+  | if .wait_timer == 0 then del(.wait_timer) else . end' 2>/dev/null \
+  || echo '{"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}')
 gh api -X PUT "repos/${REPO}/environments/production" --input - >/dev/null <<<"$ENV_SETTINGS"
 gh api "repos/${REPO}/environments/production/deployment-branch-policies" --jq '.branch_policies[].name' | grep -qx main || \
   gh api -X POST "repos/${REPO}/environments/production/deployment-branch-policies" -f name=main -f type=branch >/dev/null
