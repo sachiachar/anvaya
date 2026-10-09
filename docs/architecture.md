@@ -154,6 +154,7 @@ flowchart LR
   - A warning sign that our team has reviewed, if found, caps the score at 50 %.
   - Any concern or any warning sign found means "Needs a closer look".
   - Every sign in the guide gets a result (found, ruled out or can't tell). Signs the model invents are dropped.
+  - A sign can apply only from a date (`applies_from`, e.g. "no QR code" from 1 October 2023). The check reads the date of registration. If that date is earlier, code rules the sign out, whatever the model said. An unreadable date leaves the model's result as it is. Saved guide versions take the date from the built-in sign with the same id.
   - Imagined (`simulated`) signs never reach the check. Projections are at most a third of its signs.
 - *Next steps* (`tasks`): near-duplicates are merged, except when they name different institutions (LIC vs SBI). Done or dismissed steps never come back, even reworded. At most 5 steps are open.
 - *Structured output*: every Gemini call returns a Pydantic schema. So the app never parses free text.

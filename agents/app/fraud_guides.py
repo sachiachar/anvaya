@@ -46,6 +46,10 @@ class Sign(BaseModel):
     sources: list[str] = []  # Source ids
     projection: bool = False  # True for a validated scenario: a projection, not a known tactic
     status: Literal["active", "retired"] = "active"
+    # The sign applies only to documents registered on or after this date (YYYY-MM-DD). Code rules it
+    # out for an older document, whatever the model says (loops._named_signs): the model was found to
+    # ignore a date written only in look_for (PR-15.5).
+    applies_from: str | None = None
 
 
 class Step(BaseModel):
@@ -137,7 +141,15 @@ def current(key: str) -> Guide | None:
     except Exception:  # Firestore unavailable: the check still runs on the built-in copy
         log.warning("fraud guide store unavailable; using the built-in copy of %s", key)
         stored = None
-    return stored or BUILT_IN.get(key)
+    return _with_built_in_dates(stored) if stored else BUILT_IN.get(key)
+
+
+def _with_built_in_dates(guide: Guide) -> Guide:
+    """A version saved before signs had `applies_from` gets it from the built-in sign with the same id."""
+    built_in = {s.id: s.applies_from for s in (BUILT_IN.get(guide.key).signs if BUILT_IN.get(guide.key) else [])}
+    signs = [s if s.applies_from or not built_in.get(s.id) else s.model_copy(update={"applies_from": built_in[s.id]})
+             for s in guide.signs]
+    return guide.model_copy(update={"signs": signs})
 
 
 def _save_next(key: str, build: Callable[[Guide | None], Guide]) -> Guide:
@@ -234,9 +246,9 @@ _IN_SOURCES = [
 ]
 
 
-def _sign(id: str, look_for: str, genuine: str, *sources: str) -> Sign:
+def _sign(id: str, look_for: str, genuine: str, *sources: str, applies_from: str | None = None) -> Sign:
     return Sign(id=id, look_for=look_for, genuine=genuine, label="derived", trust="machine-confirmed",
-                sources=list(sources))
+                sources=list(sources), applies_from=applies_from)
 
 
 _IN_DEATH = Guide(
@@ -249,7 +261,7 @@ _IN_DEATH = Guide(
               "No QR code or digital signature on a certificate registered from 1 October 2023 onwards",
               "Certificates registered on the Civil Registration System since 1 October 2023 are digitally "
               "signed and carry a QR code that can be verified on the CRS portal",
-              "crs", "rbd_wiki"),
+              "crs", "rbd_wiki", applies_from="2023-10-01"),
         _sign("qr_mismatch",
               "The QR code's details (name, registration number, date) differ from the printed ones, or the "
               "same QR code appears on another certificate",

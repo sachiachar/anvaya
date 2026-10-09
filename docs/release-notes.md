@@ -68,6 +68,7 @@
 **Checking a certificate of passing**
 - Reviewers now see the check sign by sign: for an Indian certificate of passing, it looks for eight known warning signs, such as a missing or mismatched QR code, a pasted signature, impossible dates or the wrong issuing office, and says for each whether it found it, ruled it out or couldn't tell.
 - Any warning sign found means "Needs a closer look". The signs come from a fraud reference guide with cited sources, shown on the Fraud page of the admin portal.
+- A genuine certificate registered before 1 October 2023 is no longer flagged for a missing QR code, which wasn't required then. The check now reads the date of registration, and a sign that applies only from a date is ruled out for an older certificate, decided in code. The first quality measurement found this false alarm on every genuine certificate.
 
 **Finding fraud before it happens (admin portal)**
 - "Dream now" on the Fraud page imagines new ways a fraudster could get around our safeguards, starting from known fraud tactics and what the guardian has seen. Each idea is checked against web pages found with Exa search, and a page counts only if the sentence it's quoted for is really there. It's then matched to the safeguard that would catch it, or shown as a gap.
