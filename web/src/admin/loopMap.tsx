@@ -50,7 +50,7 @@ const NODES: MapNode[] = [
     gets: "The initial plan, gaps, readiness suggestions and guardian decisions", gives: "The current step for Saathi",
     decides: "Code orders the steps, and every step passes the guardian." },
   { id: "talk", title: ["Talk with", "Saathi"], shape: "loop", x: 330, y: 430,
-    does: "Saathi talks with the owner by text, photo or voice. It carries out the planner's current step in its tone, and never picks a topic. On a call it reads the step with current_step and reports the answer with report_step.",
+    does: "Saathi talks with the owner by text, photo or voice. It carries out the planner's current step in its tone, and never picks a topic. On a call it reads the step with current_step and reports the answer with report_step. If another voice is heard, the cards are marked and Saathi warmly asks who's there.",
     gets: "The current step, and what the owner says", gives: "What the owner said, for the guardian",
     decides: "Nothing is saved here: the guardian sees each new piece of information first." },
   { id: "keep", title: ["Cards"], shape: "loop", x: 490, y: 430,

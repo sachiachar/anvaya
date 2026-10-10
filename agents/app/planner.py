@@ -110,6 +110,11 @@ def check_plan() -> None:
 # They pass the step guard like every step, so they avoid the words it watches for (a secret's name,
 # a fee): they describe the safe route without naming the risky one.
 # Steps the owner's mood puts first, for this conversation (fixed words, like the safe routes).
+# When another voice is heard (PR-2.13.2): once a conversation, warmly, without suspicion.
+VOICE_STEP = ("Who's with you", "Warmly ask who else is there with them, without any suspicion, and carry on once they "
+              "say.", "warm")
+FIRST_STEPS = ("safe_route", "voice")  # added for this conversation, kept first while it lasts
+
 MOOD_STEPS = {
     "sad": ("Listening", "Just listen. Acknowledge how they feel in a sentence, and ask nothing new unless they "
             "want to go on.", "gentle"),
@@ -155,8 +160,8 @@ def _with_mood(steps: list[dict], mood: str, turn: str) -> list[dict]:
     """The owner's mood, applied in code: sad or upset puts a listening step first and holds back
     practical steps for this conversation; tired puts an offer to stop first and makes every step
     patient; happy makes a warm step light. Safe-route steps always stay, first."""
-    safe = [s for s in steps if s["source"] == "safe_route"]
-    rest = [s for s in steps if s["source"] != "safe_route"]
+    safe = [s for s in steps if s["source"] in FIRST_STEPS]
+    rest = [s for s in steps if s["source"] not in FIRST_STEPS]
     if mood in ("sad", "upset"):
         rest = [{**s, "tone": "gentle"} for s in rest if s["tone"] != "clear"]
     elif mood == "tired":
@@ -174,7 +179,7 @@ def _with_mood(steps: list[dict], mood: str, turn: str) -> list[dict]:
 
 
 def _candidates(owner_id: str, plan: dict, now: float) -> list[dict]:
-    steps = [s for s in plan.get("steps", []) if s["source"] == "safe_route" and now - s.get("at", 0) < SAFE_STEP_SECONDS
+    steps = [s for s in plan.get("steps", []) if s["source"] in FIRST_STEPS and now - s.get("at", 0) < SAFE_STEP_SECONDS
              and s["id"] not in plan.get("finished", [])]
     finished = set(plan.get("finished", []))
     kept = _kept_kinds(owner_id)
@@ -254,7 +259,8 @@ def view(plan: dict) -> dict:
 
 
 def after_turn(owner_id: str, turn_id: str, decisions: list[tuple[str, str, str | None]], *, mood: str = "calm",
-               answered_step: str | None = None, outcome: str = "none", now: float | None = None) -> dict:
+               answered_step: str | None = None, outcome: str = "none", another_voice: bool = False,
+               now: float | None = None) -> dict:
     """Everything one turn changes, in one new version (PR-2.12.3): a deflected statement's safe
     route, a change in the owner's mood, and how they answered the step Saathi carried out. Without
     any of these the plan stays as it is (still worked out again if it's stale)."""
@@ -269,6 +275,12 @@ def after_turn(owner_id: str, turn_id: str, decisions: list[tuple[str, str, str 
             add.append(_step(f"safe:{kind}:{turn_id}", "safe_route", topic, ask, "saathi", kind, "reassuring"))
     if held:
         cause["guardian"] = held[0][0]
+    # Another voice: Saathi warmly asks who's there, once a conversation (PR-2.13.2).
+    recent_voice = any(s["source"] == "voice" and now - s.get("at", 0) < SAFE_STEP_SECONDS for s in plan.get("steps", []))
+    if another_voice and not recent_voice:
+        topic, ask, tone = VOICE_STEP
+        add.append(_step(f"voice:{turn_id}", "voice", topic, ask, "saathi", "voice", tone))
+        cause["voice"] = "another"
     mood = mood if mood in MOODS else "calm"
     if mood != mood_now(plan, now):
         store.update("conversation_plans", owner_id, {"mood": {"label": mood, "at": now, "turn": turn_id}})
@@ -280,7 +292,8 @@ def after_turn(owner_id: str, turn_id: str, decisions: list[tuple[str, str, str 
         cause.update(step=step["id"], outcome=outcome)
         # An answered safe-route or mood step has done its job; so has an initial step the owner
         # declined or put off (a kept item finishes one on its own).
-        if step["source"] in ("safe_route", "mood") or (step["source"] == "initial" and outcome in ("not_now", "declined")):
+        done_once = step["source"] in ("safe_route", "mood", "voice")
+        if done_once or (step["source"] == "initial" and outcome in ("not_now", "declined")):
             fresh = store.get("conversation_plans", owner_id) or plan
             store.update("conversation_plans", owner_id, {"finished": [*fresh.get("finished", []), step["id"]]})
     if len(cause) == 2:

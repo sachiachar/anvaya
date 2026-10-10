@@ -55,6 +55,9 @@ export default function Review({ items, summary, summaryState, meta, note = null
                     <p className="v2-review-title">{d.title}</p>
                     {!off && d.detail && <p className="v2-review-detail">{d.detail}</p>}
                     {!off && d.missing && <p className="v2-review-missing">{d.missing}</p>}
+                    {!off && p.another_voice && (
+                      <p className="v2-review-voice">Another voice was heard when this was said. Keep it only if it's what you want.</p>
+                    )}
                     {!off && canReplace(p) && p.looks_like && (
                       <fieldset className="v2-choice">
                         <legend className="v2-visually-hidden">How to save “{d.title}”</legend>

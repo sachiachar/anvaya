@@ -285,8 +285,13 @@ def _take_in(owner_id: str, text: str | None, result, attachment: dict | None, p
                                           inventory=result.inventory, people=result.people, turn_id=owner_turn_id,
                                           agent="saathi.chat")
         moments, inventory, people = proposals.save_screened(owner_id, screened, source)
+        voices = getattr(result, "voices", "one") == "more" and bool(attachment and attachment["kind"] == "voice")
+        if voices:  # another voice in a voice note (PR-2.13.2)
+            guardian_inputs.another_voice(owner_id, owner_turn_id, "saathi.chat", [
+                *[("moments", d) for d in moments], *[("inventory", d) for d in inventory], *[("people", d) for d in people]])
         plan = planner.after_turn(owner_id, owner_turn_id, screened.outcomes, mood=result.owner_mood,
-                                  answered_step=(last_said or {}).get("step"), outcome=result.step_outcome)
+                                  answered_step=(last_said or {}).get("step"), outcome=result.step_outcome,
+                                  another_voice=voices)
         owner_turn = store.put("turns", {"id": owner_turn_id, "owner_id": owner_id, "at": now, "role": "owner",
                                          "text": (text or "").strip() or result.heard, "heard": result.heard,
                                          "attachment": attachment, **({"media": path} if path else {}),
