@@ -322,7 +322,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
   }
 
 
-  // ---- Review: save the rest, or discard ------------------------------------------------------------
+  // ---- Review: keep the rest, or discard ------------------------------------------------------------
   function openReview(ids: string[], summarize: boolean, fromCall = false) {
     if (!fromCall) setCallTurns([]);
     setReviewEarlier(!summarize);
@@ -370,8 +370,8 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
       const r = await api.conversation().catch(() => null);
       if (r) setTurns(r.turns);
       setReviewError(updateRefused
-        ? "An earlier item you chose to update isn't there any more, so it couldn't be updated. Choose Save as new for it, then save again."
-        : `${failed.length === 1 ? "One item" : `${failed.length} items`} couldn't be saved. The list shows what's still waiting; try again.`);
+        ? "An earlier item you chose to update isn't there any more, so it couldn't be updated. Choose Keep as new for it, then try again."
+        : `${failed.length === 1 ? "One item" : `${failed.length} items`} couldn't be kept. The list shows what's still waiting; try again.`);
       return;
     }
     setSavedCount(saved);
@@ -398,7 +398,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
   async function later() {
     await closeConversation();
     setPhase("talk");
-    setNotice("Nothing is saved yet. These will wait for you here next time.");
+    setNotice("Nothing is kept yet. These will wait for you here next time.");
   }
 
   /** "Talk about this": Saathi asks the question first, then the call carries on from it. */
@@ -459,7 +459,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
           <div className="v2-saved-beads" aria-hidden="true">
             {Array.from({ length: Math.max(1, Math.min(savedCount, 7)) }, (_, i) => <span key={i} style={{ animationDelay: `${i * 90}ms` }} />)}
           </div>
-          <h2>{savedCount === 0 ? "Nothing was saved" : savedCount === 1 ? "Saved 1 thing for your family" : `Saved ${savedCount} things for your family`}</h2>
+          <h2>{savedCount === 0 ? "Nothing was kept" : savedCount === 1 ? "Kept 1 thing for your family" : `Kept ${savedCount} things for your family`}</h2>
           <p className="v2-muted">{savedCount ? "They're in your book, under Kept. You can remove anything there later." : "That's fine. You can talk again whenever you like."}</p>
           <button className="v2-btn" onClick={() => setPhase("talk")}>Back to Talk</button>
         </section>
@@ -531,7 +531,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
       {!live && phase === "talk" && session.length === 0 && earlierWaiting.length > 0 && (
         <button className="v2-waiting" onClick={() => openReview(earlier.filter((t) => pending([t]).length).map((t) => t.id), false)}>
           <b>{earlierWaiting.length === 1 ? "1 thing from earlier is" : `${earlierWaiting.length} things from earlier are`} waiting</b>
-          <span>Review and save them</span>
+          <span>Review and keep them</span>
         </button>
       )}
 
@@ -555,7 +555,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
             <div className="v2-review-bar">
               <span>{sessionWaiting.length ? `${sessionWaiting.length === 1 ? "1 thing" : `${sessionWaiting.length} things`} to review` : "When you're done"}</span>
               <button className="v2-btn" onClick={() => openReview(session.map((t) => t.id), true)}>
-                <Check />{sessionWaiting.length ? "Review and save" : "Finish"}
+                <Check />{sessionWaiting.length ? "Review and keep" : "Finish"}
               </button>
             </div>
           )}
