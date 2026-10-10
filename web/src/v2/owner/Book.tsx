@@ -23,6 +23,9 @@ const CHAPTERS: Chapter[] = [
 ];
 
 const LEGAL_PARTNER = "Demo Legal Partner";
+// What the owner sees after sending (PR-14.7). The server's status says the partner is a demo
+// stand-in in its own words; the screen says it plainly instead.
+const LEGAL_SENT = `Sent to ${LEGAL_PARTNER}. They reply within 2 working days (demo).`;
 
 export default function Book({ onTalkAbout, onReview }: { onTalkAbout: (question: string) => void; onReview: () => void }) {
   const showHow = useContext(ShowHow);
@@ -226,7 +229,7 @@ function WishTools({ onAdded }: { onAdded: () => void }) {
                 I agree to share this summary, never my vault, with {LEGAL_PARTNER}.
               </label>
               <button className="v2-btn" disabled={!consent || busy}
-                onClick={() => run(async () => setSent((await api.legalHandoff(LEGAL_PARTNER, consent, needs)).status))}>
+                onClick={() => run(async () => { await api.legalHandoff(LEGAL_PARTNER, consent, needs); setSent(LEGAL_SENT); })}>
                 Send to {LEGAL_PARTNER}
               </button>
             </>
