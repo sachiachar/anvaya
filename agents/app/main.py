@@ -446,6 +446,10 @@ def decide(doc_id: str, body: Decision) -> dict:
         kept = proposals.approve(body.collection, doc)
     except knowledge.Removed as e:
         raise HTTPException(409, "You removed the item this card updates, so it can't be kept.") from e
+    # The audit chain (PR-2.12.5): the card is gone now, so the Keep decision remembers the decision
+    # that allowed the card and the item it became.
+    store.update("guardian_actions", decision.action_id, {"refs": {"card": doc_id, "kept": kept["id"],
+                 **({"statement": doc["guardian_action"]} if doc.get("guardian_action") else {})}})
     planner.refresh(doc["owner_id"], {"kind": "keep", "ref": doc_id})  # a kept item can finish a step
     return kept
 

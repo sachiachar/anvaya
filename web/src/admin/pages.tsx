@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   fmt, platform, type Added, type Agent, type AuditEntry, type Blocked, type BudgetRequest, type DemoCopy, type GuardianEvent,
-  type CuePrivacy, type Draft, type Guide, type KillSwitchState, type Me, type Permission, type Run, type RunStage, type Scenario,
+  type Chain, type ChainRow, type CuePrivacy, type Draft, type Guide, type KillSwitchState, type Me, type Permission, type Run, type RunStage, type Scenario,
   type CeilingState, type ServiceCeiling, type Source,
   type Spend, type Use, type KeyPerson, type KeyPolicy, type KeySource, type KeyUse,
 } from "./api";
@@ -439,9 +439,55 @@ export function ApprovalsPage({ me }: { me: Me }) {
 
 // ---- Guardian --------------------------------------------------------------------
 
+/** Why a plan version was made, in a few words: its kind, then the ids and labels behind it. */
+function causeWords(cause: Record<string, string>): string {
+  const extras = Object.entries(cause).filter(([k]) => k !== "kind" && k !== "turn").map(([k, v]) => `${k} ${v}`);
+  return `${fmt.label(cause.kind ?? "change")}${extras.length ? ` (${extras.join(", ")})` : ""}`;
+}
+
+/** One conversation's audit chain (PR-2.12.5): turn → guardian decision → card → Keep → plan → next step. */
+function ChainView({ chain, onClose }: { chain: Chain; onClose: () => void }) {
+  const t = chain.turn;
+  return (
+    <Section title="One conversation, step by step" aside={<button type="button" className="pa-link" onClick={onClose}>Close</button>}>
+      <p className="pa-muted">Ids and decisions only: what was said stays in the owner's own copy.</p>
+      <ol className="pa-chain">
+        <li><strong>Owner's turn</strong> · {fmt.when(t.at)} · {t.channel}{t.user_key ? <> · <span className="pa-mono">{t.user_key}</span></> : null}
+          <div className="pa-sub pa-mono">{t.id}</div></li>
+        <li><strong>Guardian</strong> · {chain.statements.length} decision{chain.statements.length === 1 ? "" : "s"}{t.held_back ? `, ${t.held_back} held back` : ""}
+          <ul>{chain.statements.map((s) => (
+            <li key={s.id}><Status value={s.response === "continue" ? "ok" : s.response} /> {fmt.label(s.response)}
+              {s.card ? ` · card ${s.card}` : " · what was said"}{s.detectors.length ? ` · ${s.detectors.join(", ")}` : ""}
+              <div className="pa-sub pa-mono">{s.id}{s.event_id ? ` · event ${s.event_id}` : ""}</div></li>
+          ))}</ul></li>
+        <li><strong>Cards and Keep</strong>{chain.cards.length === 0 ? " · none made" : ""}
+          <ul>{chain.cards.map((c) => (
+            <li key={c.id}>{fmt.label(c.collection)} card · <Status value={c.status === "kept" ? "ok" : c.status === "waiting" ? "pending" : "failed"} /> {c.status}
+              <div className="pa-sub pa-mono">{c.id}{c.statement ? ` · allowed by ${c.statement}` : ""}
+                {c.keep ? ` · Keep ${c.keep.id}${c.keep.kept ? ` → ${c.keep.kept}` : ""}` : ""}</div></li>
+          ))}</ul></li>
+        <li><strong>Plan</strong>{chain.plans.length === 0 ? " · unchanged by this turn" : ""}
+          <ul>{chain.plans.map((pl) => (
+            <li key={pl.version}>Version {pl.version} · {fmt.when(pl.at)} · because of {causeWords(pl.cause)}
+              <div className="pa-sub">Current step: <span className="pa-mono">{pl.current ?? "none"}</span>
+                {pl.steps[0] ? ` · ${pl.steps[0].opens === "saathi" ? "Saathi opens" : "waits for the owner"} · ${pl.steps[0].tone}` : ""}</div></li>
+          ))}</ul></li>
+        <li><strong>Next step</strong> · {chain.reply ? <>Saathi carried out <span className="pa-mono">{chain.reply.step ?? "no step"}</span> · {fmt.when(chain.reply.at)}</> : "no reply yet"}</li>
+      </ol>
+    </Section>
+  );
+}
+
 export function GuardianPage({ me }: { me: Me }) {
-  const load = useCallback(() => platform.guardian(), []);
+  const load = useCallback(() => Promise.all([platform.guardian(), platform.conversations()])
+    .then(([g, c]) => ({ ...g, conversations: c.conversations })), []);
   const { data, error, reload } = useLoad(load);
+  const [chain, setChain] = useState<Chain | null>(null);
+  const [chainError, setChainError] = useState<string | null>(null);
+  const follow = (get: Promise<Chain>) => {
+    setChainError(null);
+    get.then(setChain).catch((e) => setChainError(String(e.message ?? e)));
+  };
   if (!data) return <Loading error={error} />;
   return (
     <>
@@ -450,6 +496,21 @@ export function GuardianPage({ me }: { me: Me }) {
         {Object.entries(data.by_response).map(([k, v]) => <div className="pa-kpi" key={k}><span>{fmt.label(k)}</span><strong>{v}</strong></div>)}
         <div className="pa-kpi"><span>False alarms</span><strong>{data.false_alarm_rate === null ? "—" : fmt.pct(data.false_alarm_rate)}</strong><em>Reversed after review</em></div>
       </div>
+      {chainError && <p className="pa-error" role="alert">{chainError}</p>}
+      {chain && <ChainView chain={chain} onClose={() => setChain(null)} />}
+      <Section title="Follow a conversation">
+        {data.conversations.length === 0 && <Empty>No conversation turns yet. Each turn the guardian decides on appears here.</Empty>}
+        <ul className="pa-list">
+          {data.conversations.map((c: ChainRow) => (
+            <li key={c.turn} className="pa-row">
+              <span className="pa-muted">{fmt.when(c.at)}</span>
+              <span className="pa-mono">{c.user_key ?? "unknown"}</span>
+              <span>{c.decisions} decision{c.decisions === 1 ? "" : "s"}{c.held ? `, ${c.held} held back` : ""}</span>
+              <button type="button" className="pa-link" onClick={() => follow(platform.chain(c.turn))}>Follow</button>
+            </li>
+          ))}
+        </ul>
+      </Section>
       <Section title="Interventions">
         {data.events.length === 0 && <Empty>No interventions yet. They appear here when the guardian adds a check, reduces autonomy, pauses or blocks a step.</Empty>}
         <ul className="pa-list">
@@ -462,6 +523,9 @@ export function GuardianPage({ me }: { me: Me }) {
                 <span className="pa-muted">{fmt.when(e.at)}{e.case_key ? ` · case ${e.case_key}` : ""}</span>
               </div>
               <p>{e.reason}</p>
+              {e.id.startsWith("gev_st_") && (
+                <button type="button" className="pa-link" onClick={() => follow(platform.eventChain(e.id))}>Follow this conversation</button>
+              )}
               {e.status === "open" ? (
                 can(me, "review_guardian") ? (
                   <DecisionForm actions={[{ value: "confirm", label: "Confirm" }, { value: "reverse", label: "Reverse", tone: "danger" }]}

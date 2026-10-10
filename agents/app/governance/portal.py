@@ -14,7 +14,7 @@ from typing import Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import demo, fraud_cues, fraud_guides, fraud_pipeline, model_access, scheduler
+from .. import audit_chain, demo, fraud_cues, fraud_guides, fraud_pipeline, model_access, scheduler
 from ..config import settings
 from ..store import store
 from . import billing, core, guardian, keys
@@ -278,6 +278,32 @@ def get_guardian(who: Actor = Depends(actor)) -> dict:
         by_response[e["response"]] = by_response.get(e["response"], 0) + 1
     return {"events": events, "by_response": by_response,
             "false_alarm_rate": round(len(reversed_) / len(decided), 3) if decided else None}
+
+
+@router.get("/guardian/conversations")
+def get_conversations(who: Actor = Depends(actor)) -> dict:
+    """The latest owner turns the guardian decided on (PR-2.12.5), to follow one through its chain.
+    Hashed keys and counts only; a demo admin sees their own copy's."""
+    return {"conversations": audit_chain.recent(who.key if who.role == "demo_admin" else None)}
+
+
+def _chain_or_404(chain: dict | None, who: Actor) -> dict:
+    if not chain or (who.role == "demo_admin" and chain["turn"]["user_key"] != who.key):
+        raise HTTPException(404, "No such conversation turn.")
+    return chain
+
+
+@router.get("/guardian/chain/{turn_id}")
+def get_chain(turn_id: str, who: Actor = Depends(actor)) -> dict:
+    """One conversation's audit chain: turn → guardian decision → card → Keep → plan version → next
+    step, by ids and decisions only, never words."""
+    return _chain_or_404(audit_chain.for_turn(turn_id), who)
+
+
+@router.get("/guardian/events/{event_id}/chain")
+def get_event_chain(event_id: str, who: Actor = Depends(actor)) -> dict:
+    """The chain behind a guardian event about something the owner said."""
+    return _chain_or_404(audit_chain.for_event(event_id), who)
 
 
 class GuardianDecision(BaseModel):
