@@ -222,6 +222,8 @@ flowchart LR
 
 The portal is a separate entry point (`web/admin.html`). Its own Firebase Hosting site, `anvaya-admin`, serves it.
 
+**Avatar trial (v3).** `web/v3.html` (`web/src/v3/`) is a separate trial of Saathi as a talking face, served at `/v3.html` on the app's site. The app doesn't link to it and it links nowhere. It shares only the API client, sign-in and the live call. The face is an SVG drawn in code, with no library: its mouth follows Saathi's voice frame by frame from an analyser on the call's playback (`LiveCall.saathiAnalyser`; loudness opens it, brightness shapes it). It nods and its gold rings swell while the owner speaks, and it glances up while thinking. Its expression follows the tone of the plan's current step, which the page reads again after each exchange. Nothing about the face is sent anywhere.
+
 **Rules for the guardian:**
 - It never approves or rejects a case; people decide.
 - Hard rules are fixed rules, never the model's judgment.

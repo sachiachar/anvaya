@@ -132,7 +132,9 @@ export type Turn = {
 
 /** A step of the conversation plan (PR-2.12.2), and who starts it: Saathi, or the owner when ready. */
 export type PlanStep = { id: string; source: "initial" | "gap" | "suggestion" | "safe_route"; topic: string; ask: string;
-  opens: "saathi" | "owner" };
+  opens: "saathi" | "owner";
+  /** How Saathi speaks on it, and those words (PR-2.12.3). */
+  tone?: "warm" | "gentle" | "light" | "clear" | "reassuring" | "patient"; tone_words?: string };
 
 export type Task = {
   id: string;

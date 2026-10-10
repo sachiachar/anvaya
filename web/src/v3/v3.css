@@ -1,0 +1,64 @@
+/* v3: the avatar trial's own styles, in Anvaya's navy, gold and mist. Nothing here is shared with v2. */
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url("/fonts/inter/inter-latin-wght-normal.woff2") format("woff2"); }
+@font-face { font-family: "Lora"; font-style: normal; font-weight: 400 700; font-display: swap;
+  src: url("/fonts/lora/lora-latin-wght-normal.woff2") format("woff2"); }
+
+:root {
+  --bg: #f6f3ea; --surface: #fffdf8; --ink: #0b132b; --ink-2: #3a4560; --line: #dcd6c6;
+  --gold: #d4af37; --gold-ink: #8a6a12; --mist: #88a0c4;
+  --face: #fff6e6; --feature: #0b132b; --blush: #e8947a; --end: #9a3b1c;
+  --display: "Lora", Georgia, serif; --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0b132b; --surface: #151d33; --ink: #f2efe6; --ink-2: #b9c2d6; --line: #26304a;
+  --gold: #e2bd55; --gold-ink: #e2bd55; --mist: #9fb3d1;
+  --face: #1f2a47; --feature: #f2efe6; --blush: #d97a63; --end: #f2a083; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0b132b; --surface: #151d33; --ink: #f2efe6; --ink-2: #b9c2d6; --line: #26304a;
+  --gold: #e2bd55; --gold-ink: #e2bd55; --mist: #9fb3d1;
+  --face: #1f2a47; --feature: #f2efe6; --blush: #d97a63; --end: #f2a083; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 var(--body); }
+.v3 { max-width: 560px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 40px; display: grid; gap: 20px; }
+.v3-center { min-height: 80vh; align-content: center; justify-items: center; text-align: center; }
+h1 { font-family: var(--display); font-weight: 600; font-size: clamp(26px, 6vw, 34px); margin: 0; text-wrap: balance; }
+.v3-eyebrow { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--gold-ink); }
+.v3-head { display: grid; gap: 4px; text-align: center; }
+.v3-muted { color: var(--ink-2); margin: 0; font-size: 14px; }
+.v3-error { color: var(--end); font-weight: 600; margin: 0; text-align: center; }
+
+.v3-stage { display: grid; justify-items: center; gap: 12px; }
+.v3-avatar-btn { background: none; border: none; padding: 0; cursor: pointer; border-radius: 50%; width: min(78vw, 320px); }
+.v3-avatar-btn:focus-visible { outline: 3px solid var(--gold); outline-offset: 6px; }
+.v3-avatar { display: block; width: 100%; height: auto; }
+.v3-ring { fill: none; stroke: var(--gold); stroke-width: 2.5; transform-origin: 160px 160px; }
+.v3-face { fill: var(--face); stroke: var(--gold); stroke-width: 3.5; }
+.v3-cheek { fill: var(--blush); }
+.v3-brow { fill: none; stroke: var(--feature); stroke-width: 4; stroke-linecap: round; }
+.v3-eye { fill: var(--feature); }
+.v3-mouth { fill: var(--feature); stroke: var(--feature); stroke-width: 2; stroke-linejoin: round; }
+.v3-status { margin: 0; font-weight: 600; color: var(--ink-2); min-height: 1.5em; }
+.v3-controls { display: flex; gap: 10px; }
+.v3-btn { font: 600 16px var(--body); min-height: 48px; padding: 10px 22px; border-radius: 999px; border: 1px solid var(--ink);
+  background: var(--ink); color: var(--bg); cursor: pointer; }
+.v3-btn.quiet { background: transparent; color: var(--ink); }
+.v3-btn.end { background: var(--end); border-color: var(--end); color: #fff; }
+.v3-btn:focus-visible, .v3-chips button:focus-visible, .v3-try summary:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+.v3-captions { display: grid; gap: 8px; min-height: 64px; }
+.v3-captions p { margin: 0; padding: 10px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.v3-captions span { display: block; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--gold-ink); }
+.v3-heard { color: var(--ink-2); }
+
+.v3-try { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.v3-try summary { cursor: pointer; font-weight: 600; }
+.v3-try[open] { display: grid; gap: 10px; }
+.v3-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border: 0; margin: 0; padding: 0; }
+.v3-chips legend { float: left; width: 56px; font-size: 13px; color: var(--ink-2); padding: 0; }
+.v3-chips button { font: 600 14px var(--body); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line);
+  background: transparent; color: var(--ink); cursor: pointer; text-transform: capitalize; }
+.v3-chips button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.v3-chips button:disabled { opacity: .45; cursor: default; }
+.v3-foot { margin: 0; font-size: 13px; color: var(--ink-2); text-align: center; }

@@ -24,6 +24,15 @@ export class LiveCall {
   private playing = new Set<AudioBufferSourceNode>();
   private nextStart = 0;
   private levelTimers = new Set<ReturnType<typeof setTimeout>>();
+  // Saathi's voice passes through one gain node at full volume, which an analyser listens to, so an
+  // animation can follow the voice frame by frame as it plays (the v3 avatar trial). Same sound.
+  private speakerOut: GainNode | null = null;
+  private analyser: AnalyserNode | null = null;
+
+  /** Saathi's voice as it plays, for an animation that follows it closely; null before the call starts. */
+  get saathiAnalyser(): AnalyserNode | null {
+    return this.analyser;
+  }
 
   /** onLevel (optional): how loud each side is, 0 to 1, about ten times a second, for an animation. */
   constructor(private onEvent: (e: CallEvent) => void, private onLevel?: (who: "you" | "saathi", level: number) => void) {}
@@ -34,6 +43,12 @@ export class LiveCall {
     });
     this.micCtx = new AudioContext({ sampleRate: 16000 });
     this.speakerCtx = new AudioContext({ sampleRate: 24000 });
+    this.speakerOut = this.speakerCtx.createGain();
+    this.speakerOut.connect(this.speakerCtx.destination);
+    this.analyser = this.speakerCtx.createAnalyser();
+    this.analyser.fftSize = 1024;
+    this.analyser.smoothingTimeConstant = 0.35;
+    this.speakerOut.connect(this.analyser);
     await this.micCtx.audioWorklet.addModule("/pcm-recorder.js");
 
     // Browsers can't send headers on a WebSocket, so the sign-in token goes in the URL.
@@ -79,7 +94,7 @@ export class LiveCall {
     for (let i = 0; i < pcm.length; i++) samples[i] = pcm[i] / 0x8000;
     const node = ctx.createBufferSource();
     node.buffer = buffer;
-    node.connect(ctx.destination);
+    node.connect(this.speakerOut ?? ctx.destination);
     this.nextStart = Math.max(this.nextStart, ctx.currentTime);
     if (this.onLevel) {  // reported when this piece plays, not when it arrives
       const level = loudness(pcm);
@@ -120,6 +135,8 @@ export class LiveCall {
     this.stream = null;
     this.micCtx = null;
     this.speakerCtx = null;
+    this.speakerOut = null;
+    this.analyser = null;
   }
 }
 
