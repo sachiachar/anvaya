@@ -18,10 +18,12 @@ module itself never imports this one, so it stays independent (PR-2.7.5).
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass, field
 
-from . import step_guard
-from .governance import guardian
+from . import knowledge, step_guard
+from .governance import core, guardian
+from .store import store
 
 # How a piece of information reads as a step, so the fixed rules and the tactics can judge it.
 KIND_TYPES = {"inventory": "record_with_institution", "wish": "legal_document", "person": "tell_family"}
@@ -116,3 +118,72 @@ def screen(*, owner_words: str, moments, inventory, people, turn_id: str, agent:
         out.outcomes.append((decision.action_id, decision.response, safe_route(facts)))
         out.held_back += 0 if decision.goes_ahead else 1
     return out
+
+
+# ---- The family's questions (PR-2.12.4) ------------------------------------------------------
+#
+# The family asking about the owner after the handover: getting what the owner kept must stay easy,
+# so the guardian stops only a vault secret and words aimed at the assistant. Everything else is
+# answered; a risky pattern adds one helpful sentence (fixed words), or a quiet flag for our team
+# that the family never sees. Full numbers in an answer are masked, never refused.
+
+_APPROVAL = re.compile(r"\b(confirm|approve|is it (ok|okay|fine|alright|right)|should i|can i|am i allowed|allowed to|"
+                       r"authori[sz]e)\b", re.IGNORECASE)
+_CHANGE = re.compile(r"\b(transfer|move|change|withdraw|close|sell|pay|cash|break)\b", re.IGNORECASE)
+_DISPUTE = re.compile(r"\b(who should get|who gets|who deserves|fair share|bigger share|don'?t tell|do not tell|"
+                      r"hide (it|this|that) from|without telling|keep (it|this) from|dispute|fighting over)\b", re.IGNORECASE)
+_BANK_CHANGE = re.compile(r"\b(change|new|different|update|another)\b.{0,40}\b(bank account|account number|ifsc|"
+                          r"bank details|upi( id)?)\b", re.IGNORECASE)
+BURST_PER_HOUR = 30  # more family questions than this in an hour gets a quiet look from our team
+
+NOTES = {
+    "someone_else": "One thing to know: banks and insurers don't ask for fees or codes on a call. It's safest to "
+                    "phone them on the number in {first}'s own papers.",
+    "approval": "I can only tell you what {first} kept; I can't approve changes. The bank or insurer decides, with "
+                "the right papers.",
+    "dispute": "For decisions between family members, the will and a registered lawyer are the right guide. I share "
+               "only what {first} kept.",
+}
+
+
+def family_question_facts(text: str) -> dict:
+    """What the guardian's family detector reads for one question. Never stored."""
+    flags, rule, _ = step_guard.statement_signals(text, "record_with_institution")
+    facts: dict = {"asks_secret": step_guard.asks_for_secret(text)}
+    if _TO_SAATHI.search(text):
+        facts["to_assistant"] = True
+    notes = []
+    try:
+        tactics = step_guard.approved_tactics()
+    except step_guard.TacticsUnavailable:
+        tactics = []
+    channel = "institution_official" if "started_by_other" in flags else "owner_self"
+    if rule or any(ex.flags and flags & set(ex.flags) and ex.matches("record_with_institution", channel, flags)
+                   for _, ex in tactics):
+        notes.append("someone_else")
+    if _APPROVAL.search(text) and _CHANGE.search(text):
+        notes.append("approval")
+    if _DISPUTE.search(text):
+        notes.append("dispute")
+    facts["notes"] = notes
+    if _BANK_CHANGE.search(text):
+        facts["bank_change"] = True
+    hour_ago = time.time() - 3600
+    asked = [a for a in store.list("guardian_actions", action="family_question", user_key=core.current_user())
+             if a["at"] > hour_ago]
+    if len(asked) >= BURST_PER_HOUR:
+        facts["burst"] = True
+    return facts
+
+
+def family_notes(facts: dict, owner_name: str) -> list[str]:
+    first = (owner_name or "the owner").split()[0]
+    return [NOTES[n].format(first=first) for n in facts.get("notes", [])]
+
+
+def family_answer(answer: str) -> tuple[str, dict]:
+    """The assistant's answer before it is shown: full numbers masked to their last 4 characters (as
+    the stored turn already is), and a check that it never helps pass on a secret or pay someone who
+    asked. Returns the answer to show and the facts for the guardian (never stored)."""
+    masked = knowledge.mask(answer)
+    return masked, {"masked": masked != answer, "problem": step_guard.reply_problem(masked)}

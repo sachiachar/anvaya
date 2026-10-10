@@ -1062,13 +1062,16 @@ class Question(BaseModel):
 async def ask_question(owner_id: str, body: Question) -> dict:
     require_handover(owner_id)
     owner = owner_or_404(owner_id)
-    # The question asks the guardian first (PR-2.7.4): a question for a secret gets a plain answer
-    # without any model call. The vault reaches the named recipient separately.
-    decision = guardian.decide("family_question", ASSISTANT, {"asks_secret": step_guard.asks_for_secret(body.question)})
+    # The question asks the guardian first (PR-2.7.4, PR-2.12.4). Getting what the owner kept stays
+    # easy: only a vault secret or words aimed at the assistant are stopped, without any model call.
+    # A risky pattern adds a helpful note to the answer, or a quiet look for our team.
+    facts = guardian_inputs.family_question_facts(body.question)
+    decision = guardian.decide("family_question", ASSISTANT, facts)
+    first = (owner.get("name") or "the owner").split()[0]
     if not decision.goes_ahead:
-        first = (owner.get("name") or "the owner").split()[0]
         answer = (f"I can't help with passwords, PINs or codes. Anything {first} kept in the vault is "
-                  f"released separately to the person {first} named, and I can't see it.")
+                  f"released separately to the person {first} named, and I can't see it." if facts["asks_secret"]
+                  else f"I can only answer questions about what {first} kept.")
         # Recorded like any other turn (PR-15.8), so a review sees the attempt.
         session_id = await asyncio.to_thread(executor_agent.record_blocked, owner_id, f"family:{demo.current()}",
                                              body.question, answer, body.session_id)
@@ -1076,9 +1079,17 @@ async def ask_question(owner_id: str, body: Question) -> dict:
                 "answer": answer}
     try:
         # The asker is the family within the caller's own copy, so sessions never cross copies.
-        return {"autonomy": ACT, **await ask(owner, f"family:{demo.current()}", body.question, body.session_id)}
+        result = await ask(owner, f"family:{demo.current()}", body.question, body.session_id)
     except UnknownSession:
         raise HTTPException(404, "conversation not found") from None
+    # The answer asks the guardian too, before it's shown: full numbers masked, and replaced only if
+    # it would help pass on a secret or pay someone who asked. Notes follow the answer.
+    answer, answer_facts = guardian_inputs.family_answer(result["answer"])
+    checked = guardian.decide("family_answer", ASSISTANT, answer_facts, refs={"question": decision.action_id})
+    if not checked.goes_ahead:
+        answer, result["sources"] = f"I can't help with that safely. Please ask about what {first} kept.", []
+    notes = guardian_inputs.family_notes(facts, owner.get("name") or "") if checked.goes_ahead else []
+    return {"autonomy": ACT, **result, "answer": answer, "notes": notes}
 
 
 @api.post("/owners/{owner_id}/settlement", dependencies=[Depends(demo.only("family"))])

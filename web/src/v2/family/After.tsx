@@ -63,7 +63,7 @@ function OpenVault({ parent }: { parent: string }) {
 function Ask({ parent }: { parent: string }) {
   const [q, setQ] = useState("");
   const [session, setSession] = useState<string | undefined>();
-  const [thread, setThread] = useState<{ q: string; a: string; sources: { id: string; title: string }[] }[]>([]);
+  const [thread, setThread] = useState<{ q: string; a: string; sources: { id: string; title: string }[]; notes: string[] }[]>([]);
   const { busy, error, run } = useAction();
   const suggestions = parent === "your family member"
     ? ["What insurance policies were there?", "Where are the important papers?", "Was there any crypto?"]
@@ -72,7 +72,7 @@ function Ask({ parent }: { parent: string }) {
   const send = (question: string) => busy ? undefined : run(async () => {
     const r = await api.ask(question, session);
     setSession(r.session_id);
-    setThread((t) => [...t, { q: question, a: r.answer, sources: r.sources }]);
+    setThread((t) => [...t, { q: question, a: r.answer, sources: r.sources, notes: r.notes ?? [] }]);
     setQ("");
   });
   return (
@@ -90,6 +90,7 @@ function Ask({ parent }: { parent: string }) {
               <div className="v2-turn owner"><p>{t.q}</p></div>
               <div className="v2-turn assistant"><p>{t.a}</p></div>
               {t.sources.length > 0 && <p className="v2-picked">From what {parent} kept · {t.sources.map((s) => s.title).join(" · ")}</p>}
+              {t.notes.map((n) => <p key={n} className="v2-note">{n}</p>)}
             </li>
           ))}
         </ol>

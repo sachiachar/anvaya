@@ -335,7 +335,9 @@ export const api = {
     request<{ case: Case }>(`/admin/cases/${id}/confirm-authority`, json({ reviewer, override_reason })),
 
   ask: (question: string, session_id?: string) =>
-    request<{ answer: string; sources: { id: string; title: string }[]; tools_used: string[]; session_id: string }>(
+    // notes: a helpful line the guardian adds for a risky pattern, such as a fee someone asked for (PR-2.12.4)
+    request<{ answer: string; sources: { id: string; title: string }[]; tools_used: string[]; session_id: string;
+      notes?: string[] }>(
       o("/ask"), json({ question, session_id })),
   settlement: () =>
     request<{

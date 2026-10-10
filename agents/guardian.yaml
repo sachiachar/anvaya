@@ -15,7 +15,7 @@
 # something the code forbids.
 #
 # Actions: next_step, model_call, review_confirmation, certificate_check, keep_card,
-# recipient_change, release, family_question, owner_statement. Each lists only the levels where it differs from
+# recipient_change, release, family_question, owner_statement, family_answer. Each lists only the levels where it differs from
 # the default.
 
 version: 1
@@ -34,3 +34,6 @@ actions:
   family_question: {high: block}  # Priya asks the family's assistant
   # Guardian-led conversations: each new piece of information the owner gives, before any card.
   owner_statement: {high: deflect}
+  # The family's assistant's answer, before it's shown (PR-2.12.4): replaced only if it would help
+  # pass on a secret or pay someone who asked.
+  family_answer: {high: block}

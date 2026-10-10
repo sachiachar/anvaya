@@ -46,8 +46,9 @@ RESPONSES = ("continue", "add_check", "reduce_autonomy", "deflect", "pause", "bl
 ACTIONS = ("next_step", "model_call", "review_confirmation", "certificate_check",
            # Part 2: the actions people care about ask first and obey (PR-2.7.4).
            "keep_card", "recipient_change", "release", "family_question",
-           # Guardian-led conversations: each new piece of information the owner gives (PR-2.12.1).
-           "owner_statement")
+           # Guardian-led conversations: each new piece of information the owner gives (PR-2.12.1), and
+           # each answer the family's assistant gives, before it is shown (PR-2.12.4).
+           "owner_statement", "family_answer")
 CHANNELS = ("app", "live_call", "background")
 KEPT_DAYS = 30  # each action record's expire_at; a Firestore TTL policy removes it (deploy.yml)
 
@@ -199,6 +200,30 @@ def family_secret(facts: dict) -> Finding | None:
     return None
 
 
+def family_rules(facts: dict) -> Finding | None:
+    """The family's question, beyond a secret (guardian_inputs.family_question_facts). Getting what
+    the owner kept must stay easy: only words aimed at the assistant are blocked. A fee or change
+    someone else asked for, a change of bank details, or many questions in an hour are answered
+    and get a quiet look from our team; a note the family sees is added by the caller."""
+    if facts.get("to_assistant"):
+        return Finding("family_rules", "high", "A family question tried to steer the assistant", floor="block")
+    if "someone_else" in facts.get("notes", []):
+        return Finding("family_rules", "medium", "A family question mentions a fee or change someone else asked for")
+    if facts.get("bank_change"):
+        return Finding("family_rules", "medium", "A family question is about changing bank details")
+    if facts.get("burst"):
+        return Finding("family_rules", "medium", "Many family questions within an hour")
+    return None
+
+
+def answer_rules(facts: dict) -> Finding | None:
+    """The assistant's answer before it is shown: one that would help pass on a secret or pay
+    someone who asked is replaced; masking a full number is recorded, not a risk."""
+    if problem := facts.get("problem"):
+        return Finding("answer_rules", "high", f"An answer was replaced: rule {problem}", floor="block")
+    return None
+
+
 def statement_rules(facts: dict) -> Finding | None:
     """Something new the owner said (guardian_inputs.statement_facts): the fixed rules and the fraud
     module. Words aimed at Saathi itself are blocked; a secret passed on, a fixed rule or an approved
@@ -227,8 +252,9 @@ DETECTORS: dict[str, list[Detector]] = {
     "keep_card": [risky_card],
     "recipient_change": [recipient_change],
     "release": [release_risk],
-    "family_question": [family_secret],
+    "family_question": [family_secret, family_rules],
     "owner_statement": [statement_rules],
+    "family_answer": [answer_rules],
 }
 
 
