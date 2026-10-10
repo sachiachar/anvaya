@@ -40,15 +40,19 @@ from . import core
 
 POLICY_PATH = pathlib.Path(__file__).resolve().parents[2] / "guardian.yaml"
 RISKS = ("none", "low", "medium", "high")
-RESPONSES = ("continue", "add_check", "reduce_autonomy", "pause", "block")
+# From mildest. "deflect" is for the conversation: nothing is made of what was said (no card), and
+# the conversation turns to the safe route (guardian-led conversations, PR-2.12.1).
+RESPONSES = ("continue", "add_check", "reduce_autonomy", "deflect", "pause", "block")
 ACTIONS = ("next_step", "model_call", "review_confirmation", "certificate_check",
            # Part 2: the actions people care about ask first and obey (PR-2.7.4).
-           "keep_card", "recipient_change", "release", "family_question")
+           "keep_card", "recipient_change", "release", "family_question",
+           # Guardian-led conversations: each new piece of information the owner gives (PR-2.12.1).
+           "owner_statement")
 CHANNELS = ("app", "live_call", "background")
 KEPT_DAYS = 30  # each action record's expire_at; a Firestore TTL policy removes it (deploy.yml)
 
 Risk = Literal["none", "low", "medium", "high"]
-Response = Literal["continue", "add_check", "reduce_autonomy", "pause", "block"]
+Response = Literal["continue", "add_check", "reduce_autonomy", "deflect", "pause", "block"]
 
 
 # ---- The policy file ------------------------------------------------------------------
@@ -195,6 +199,25 @@ def family_secret(facts: dict) -> Finding | None:
     return None
 
 
+def statement_rules(facts: dict) -> Finding | None:
+    """Something new the owner said (guardian_inputs.statement_facts): the fixed rules and the fraud
+    module. Words aimed at Saathi itself are blocked; a secret passed on, a fixed rule or an approved
+    fraud tactic is deflected: no card, and the conversation turns to the safe route. If the fraud
+    guides can't be read, a reviewer looks afterwards. The first match gives the reason."""
+    if facts.get("to_saathi"):
+        return Finding("statement_rules", "high", "The owner's words tried to steer Saathi", floor="block")
+    if facts.get("secret_shared"):
+        return Finding("statement_rules", "high", "The owner passed on a secret: it belongs in the vault", floor="deflect")
+    if rule := facts.get("rule"):
+        return Finding("statement_rules", "high", f"What the owner said meets {rule}", floor="deflect")
+    if tactics := facts.get("tactics"):
+        return Finding("fraud_module", "high", f"What the owner said matches the approved tactic {tactics[0]}",
+                       floor="deflect")
+    if facts.get("tactics_unavailable"):
+        return Finding("fraud_module", "medium", "The fraud guides couldn't be read", floor="add_check")
+    return None
+
+
 # Which detectors watch which action. A new detector, fixed or a Gemini signal, is added here.
 DETECTORS: dict[str, list[Detector]] = {
     "next_step": [next_step_rule],
@@ -205,6 +228,7 @@ DETECTORS: dict[str, list[Detector]] = {
     "recipient_change": [recipient_change],
     "release": [release_risk],
     "family_question": [family_secret],
+    "owner_statement": [statement_rules],
 }
 
 

@@ -26,7 +26,7 @@ from typing import Callable
 from fastapi import WebSocket, WebSocketDisconnect
 from google.genai import types
 
-from . import gaps, grounding, loops, proposals
+from . import gaps, grounding, guardian_inputs, loops, proposals
 from .config import settings
 from .gemini import client_for
 from .governance import core as governance
@@ -283,11 +283,14 @@ def _finish_exchange(owner_id: str, owner_turn: dict, ai_turn: dict, moments, in
         if not store.get("turns", ai_turn["id"]) or not store.get("turns", owner_turn["id"]):
             return None  # discarded while Saathi was still reading it
         source = {"source": "live call"}
-        moment_docs = [d for m in moments if (d := proposals.save_moment(owner_id, m.model_dump(), source))]
-        item_docs = [proposals.save_inventory(owner_id, i.model_dump(), source) for i in inventory]
-        people_docs = [d for p in people if (d := proposals.save_person(owner_id, p.model_dump()))]
+        # The guardian sees each new piece of information first; only what it allows becomes a card.
+        screened = guardian_inputs.screen(owner_words=owner_turn.get("heard") or "", moments=moments,
+                                          inventory=inventory, people=people, turn_id=owner_turn["id"],
+                                          agent="capture.extractor")
+        moment_docs, item_docs, people_docs = proposals.save_screened(owner_id, screened, source)
         try:
-            owner_turn = store.update("turns", owner_turn["id"], {"saving": False})
+            owner_turn = store.update("turns", owner_turn["id"], {"saving": False, "guardian": screened.decisions,
+                                                                  "held_back": screened.held_back})
             ai_turn = store.update("turns", ai_turn["id"], {"saving": False,
                                                             "proposals": {"moments": [m["id"] for m in moment_docs],
                                                                           "inventory": [i["id"] for i in item_docs],
