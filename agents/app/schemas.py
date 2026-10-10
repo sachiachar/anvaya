@@ -124,6 +124,9 @@ class InventoryItem(BaseModel):
 
 
 Mood = Literal["calm", "happy", "sad", "anxious", "tired", "upset"]
+Voices = Literal["one", "more", "unclear"]
+VOICES_FIELD = ("If audio of the owner's side is given: 'more' if a second person speaks in it, 'one' if only one person "
+                "does, 'unclear' if you can't tell. Never say or guess who anyone is. 'one' when there's no audio.")
 StepOutcome = Literal["answered", "unsure", "not_now", "declined", "none"]
 MOOD_FIELD = ("How the owner seems from their LATEST words, one word: calm, happy, sad, anxious, tired or upset. "
               "'calm' if nothing stands out. A report only: the app decides what to do with it.")
@@ -155,6 +158,7 @@ class ConversationTurn(BaseModel):
     )
     owner_mood: Mood = Field(default="calm", description=MOOD_FIELD)
     step_outcome: StepOutcome = Field(default="none", description=OUTCOME_FIELD)
+    voices: Voices = Field(default="one", description=VOICES_FIELD)
 
 
 class PlanReply(BaseModel):
@@ -176,6 +180,7 @@ class Extraction(BaseModel):
     people: list[Person] = []
     owner_mood: Mood = Field(default="calm", description=MOOD_FIELD)
     step_outcome: StepOutcome = Field(default="none", description=OUTCOME_FIELD)
+    voices: Voices = Field(default="one", description=VOICES_FIELD)
 
 
 class ConversationSummary(BaseModel):

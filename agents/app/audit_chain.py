@@ -25,6 +25,8 @@ def safe_step(step_id: str | None) -> str | None:
         return f"gap:{rest.split(':')[0]}"
     if source in ("safe", "mood"):
         return f"{source}:{rest.split(':')[0]}"
+    if source == "voice":
+        return "voice"
     return "suggestion" if source == "task" else source
 
 

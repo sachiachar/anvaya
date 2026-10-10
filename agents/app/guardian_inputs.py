@@ -187,3 +187,19 @@ def family_answer(answer: str) -> tuple[str, dict]:
     asked. Returns the answer to show and the facts for the guardian (never stored)."""
     masked = knowledge.mask(answer)
     return masked, {"masked": masked != answer, "problem": step_guard.reply_problem(masked)}
+
+
+# ---- Another voice (PR-2.13.2) -----------------------------------------------------------------
+
+
+def another_voice(owner_id: str, turn_id: str, agent: str, card_docs: list[tuple[str, dict]]) -> str:
+    """Another voice was heard in the owner's side of an exchange: the guardian records it for the
+    team, and each card from that exchange is marked, so the owner sees it before Keep. Nothing
+    about the voice is kept: no audio, no voiceprint. Returns the guardian action id."""
+    decision = guardian.decide("owner_statement", agent, {"another_voice": True},
+                               refs={"turn": turn_id, "voice": "another"}, once=f"gev_voice_{turn_id}")
+    for collection, doc in card_docs:
+        if store.get(collection, doc["id"]):
+            store.update(collection, doc["id"], {"another_voice": True})
+            doc["another_voice"] = True
+    return decision.action_id

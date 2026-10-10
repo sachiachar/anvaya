@@ -114,6 +114,8 @@ export type Proposal = (Moment | InventoryItem | Person) & {
   updates?: string;
   /** A kept story or wish this card may be a reworded update of: the card asks Replace or Keep both. */
   looks_like?: { id: string; title: string };
+  /** Another voice was heard when this was said (PR-2.13.2): how many voices, never whose. */
+  another_voice?: boolean;
 };
 
 export type Turn = {

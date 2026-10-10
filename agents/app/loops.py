@@ -185,8 +185,9 @@ async def understand(owner: dict, last_said: dict | None, text: str | None,
             "detail of the moment it was about: return that moment again with its exact saved title and a summary "
             "that includes the new detail. Every summary must make sense on its own. Keep quotes verbatim. Give each "
             "moment its statements (subject, predicate, object), with predicates only from the list; anything they "
-            "want, plan or promised is a wish statement. Say how they seem (owner_mood) and how they answered "
-            "Saathi's last question (step_outcome). " + NO_INVENTED + PRIVACY_RULES
+            "want, plan or promised is a wish statement. Say how they seem (owner_mood), how they answered "
+            "Saathi's last question (step_outcome), and for a voice note whether more than one person speaks "
+            "(voices), never who. " + NO_INVENTED + PRIVACY_RULES
         ),
         prompt=prompt,
     )
@@ -252,11 +253,14 @@ def live_instructions(owner: dict, known: dict, opening: str | None = None) -> s
     )
 
 
-async def extract_from_exchange(owner: dict, heard: str, said: str, known: dict) -> Extraction:
-    """After each exchange in a live call: what is worth keeping (the owner approves later)."""
+async def extract_from_exchange(owner: dict, heard: str, said: str, known: dict, audio: bytes | None = None) -> Extraction:
+    """After each exchange in a live call: what is worth keeping (the owner approves later). With the
+    owner's side of the exchange as audio (a WAV, never stored), it also says whether more than one
+    voice spoke (PR-2.13.2): how many, never whose."""
     return await generate_json(
         agent="capture.extractor",
         schema=Extraction,
+        media=[(audio, "audio/wav")] if audio else None,
         system=(
             "From one exchange of a voice call, pull out what the owner said that is worth "
             "keeping for their family: stories, advice, wishes, practical facts, and financial "
@@ -266,8 +270,9 @@ async def extract_from_exchange(owner: dict, heard: str, said: str, known: dict)
             "it was about: return that moment with its exact saved title and a summary that makes "
             "sense on its own. Give each moment its statements (subject, predicate, object), with "
             "predicates only from the list; anything they want, plan or promised is a wish statement. "
-            "Return empty lists if nothing new. Also say how the owner seems (owner_mood) and how they "
-            "answered the assistant's question (step_outcome). " + NO_INVENTED + PRIVACY_RULES
+            "Return empty lists if nothing new. Also say how the owner seems (owner_mood), how they "
+            "answered the assistant's question (step_outcome), and, if audio is attached, whether more than one "
+            "person speaks in it (voices), never who. " + NO_INVENTED + PRIVACY_RULES
         ),
         prompt=json.dumps({"owner": owner["name"], "owner_said": heard, "assistant_said": said,
                            "already_saved": known}, ensure_ascii=False),

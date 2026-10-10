@@ -18,9 +18,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import io
 import json
 import logging
 import time
+import wave
 from typing import Callable
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -55,6 +57,19 @@ PLAN_TOOLS = [types.Tool(function_declarations=[
             "outcome": types.Schema(type=types.Type.STRING, enum=OUTCOMES)})),
 ])]
 CORRECTED = "A spoken reply broke a conversation rule; Saathi was told to correct it"
+# The owner's side of each exchange, as audio, so the extractor can tell whether another voice spoke
+# (PR-2.13.2). Held in memory only for that exchange, capped, and never stored.
+MAX_EXCHANGE_AUDIO = 16000 * 2 * 90  # 90 seconds of 16 kHz 16-bit mono
+
+
+def _wav(pcm: bytes, rate: int = 16000) -> bytes:
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm)
+    return buffer.getvalue()
 
 # How long a call's request waits, after the call ends, for its last exchanges to finish saving.
 SAVE_GRACE_SECONDS = 30
@@ -79,6 +94,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
     reply_tokens: dict[int, tuple[int, int]] = {}  # tokens in and out for each model reply
     saves: set[asyncio.Task] = set()  # exchanges still being saved (their cards worked out)
     plan_state: dict = {"step": None, "correct": None}  # the step Saathi is carrying out, and any correction
+    heard_audio = bytearray()  # the owner's side of the current exchange, in memory only (PR-2.13.2)
     config = types.LiveConnectConfig(
         response_modalities=["AUDIO"],
         speech_config=types.SpeechConfig(
@@ -112,8 +128,9 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
             started = time.time()
             open_call = governance.call_started(AGENT)  # the agents map shows the call while it lasts
             await ws.send_json({"type": "ready"})
-            upstream = asyncio.create_task(_from_browser(ws, session))
-            downstream = asyncio.create_task(_to_browser(ws, session, owner, expand, reply_tokens, saves, plan_state))
+            upstream = asyncio.create_task(_from_browser(ws, session, heard_audio))
+            downstream = asyncio.create_task(_to_browser(ws, session, owner, expand, reply_tokens, saves, plan_state,
+                                                         heard_audio))
             cap = governance.limit(AGENT, "max_call_minutes", 20)
             # The person's voice minutes left today (PR-10.4); not counted on their own key.
             left = governance.remaining(AGENT) if source == keys.PLATFORM else None
@@ -183,12 +200,14 @@ def _instructions(owner: dict) -> str:
     return loops.live_instructions(owner, proposals.known(owner["id"]), last_said["text"] if last_said else None)
 
 
-async def _from_browser(ws: WebSocket, session) -> None:
+async def _from_browser(ws: WebSocket, session, heard_audio: bytearray | None = None) -> None:
     while True:
         message = await ws.receive()
         if message["type"] == "websocket.disconnect":
             return
         if message.get("bytes"):
+            if heard_audio is not None and len(heard_audio) < MAX_EXCHANGE_AUDIO:
+                heard_audio.extend(message["bytes"][:MAX_EXCHANGE_AUDIO - len(heard_audio)])
             await session.send_realtime_input(
                 audio=types.Blob(data=message["bytes"], mime_type="audio/pcm;rate=16000")
             )
@@ -220,7 +239,7 @@ def _plan_tool(owner_id: str, name: str, args: dict, plan_state: dict) -> dict:
 
 async def _to_browser(ws: WebSocket, session, owner: dict, expand,
                       reply_tokens: dict[int, tuple[int, int]], saves: set[asyncio.Task] | None = None,
-                      plan_state: dict | None = None) -> None:
+                      plan_state: dict | None = None, heard_audio: bytearray | None = None) -> None:
     heard, said = "", ""
     reply = 0  # numbers each model reply; an interrupted reply and the next one are counted apart
     while True:
@@ -256,7 +275,10 @@ async def _to_browser(ws: WebSocket, session, owner: dict, expand,
                         await ws.send_bytes(part.inline_data.data)
             if content.turn_complete and (heard.strip() or said.strip()):
                 # Save in the background so the conversation keeps flowing.
-                task = asyncio.create_task(_save_exchange(ws, owner, heard.strip(), said.strip(), expand, plan_state))
+                audio = bytes(heard_audio) if heard_audio else None
+                if heard_audio is not None:
+                    heard_audio.clear()  # the next exchange starts empty
+                task = asyncio.create_task(_save_exchange(ws, owner, heard.strip(), said.strip(), expand, plan_state, audio))
                 if saves is not None:
                     saves.add(task)
                     task.add_done_callback(saves.discard)
@@ -267,7 +289,7 @@ async def _to_browser(ws: WebSocket, session, owner: dict, expand,
 
 
 async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expand,
-                         plan_state: dict | None = None) -> None:
+                         plan_state: dict | None = None, audio: bytes | None = None) -> None:
     """Save one exchange of a call. Its two turns are stored straight away, marked "saving", so the
     end-of-call review knows more is coming; the cards are added once the extractor has read the
     exchange, and then the mark is cleared. If the owner discarded the exchange meanwhile, no cards
@@ -283,7 +305,8 @@ async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expa
     found, last_said = None, None
     try:
         known, last_said = await asyncio.to_thread(_known_and_last_said, owner_id)
-        found = await loops.extract_from_exchange(owner, heard, said, known)
+        # With the owner's audio, the extractor also says whether another voice spoke; the audio goes no further.
+        found = await loops.extract_from_exchange(owner, heard, said, known, **({"audio": _wav(audio)} if audio else {}))
         # Cards say only what was said: checked against the owner's words and the question they answered.
         # That question is Saathi's turn stored just before this one; owners.last_said can still be the
         # one before it, while the previous exchange is saving.
@@ -341,8 +364,14 @@ def _finish_exchange(owner_id: str, owner_turn: dict, ai_turn: dict, moments, in
                                           agent="capture.extractor")
         moment_docs, item_docs, people_docs = proposals.save_screened(owner_id, screened, source)
         # The plan takes in the guardian's decisions, the owner's mood and how they answered the last step.
+        voices = getattr(found, "voices", "one") == "more"
+        if voices:  # another voice in this exchange (PR-2.13.2)
+            guardian_inputs.another_voice(owner_id, owner_turn["id"], "capture.extractor", [
+                *[("moments", d) for d in moment_docs], *[("inventory", d) for d in item_docs],
+                *[("people", d) for d in people_docs]])
         planner.after_turn(owner_id, owner_turn["id"], screened.outcomes, mood=getattr(found, "owner_mood", "calm"),
-                           answered_step=(last_said or {}).get("step"), outcome=getattr(found, "step_outcome", "none"))
+                           answered_step=(last_said or {}).get("step"), outcome=getattr(found, "step_outcome", "none"),
+                           another_voice=voices)
         try:
             owner_turn = store.update("turns", owner_turn["id"], {"saving": False, "guardian": screened.decisions,
                                                                   "held_back": screened.held_back})

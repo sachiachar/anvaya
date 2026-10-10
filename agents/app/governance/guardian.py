@@ -240,6 +240,8 @@ def statement_rules(facts: dict) -> Finding | None:
                        floor="deflect")
     if facts.get("tactics_unavailable"):
         return Finding("fraud_module", "medium", "The fraud guides couldn't be read", floor="add_check")
+    if facts.get("another_voice"):  # PR-2.13.2: how many voices, never whose
+        return Finding("voice_rule", "medium", "Another voice was heard in the owner's conversation", floor="add_check")
     return None
 
 
