@@ -1,14 +1,21 @@
 // The handover, step by step, in plain words: what has happened, what happens next, and how long
 // the waiting period has left. The family uploads proof of legal authority at its step.
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { api, type Case } from "../../api";
 import { useAction } from "../../ui";
 import { friendlyError } from "../copy";
 import FilePick from "../FilePick";
 import { Check } from "../icons";
+import { Nav } from "../nav";
+import SwitchTo from "../SwitchTo";
 
 export default function Tracker({ status, parent }: { status: Case; parent: string }) {
   const { busy, error, run } = useAction();
+  const nav = useContext(Nav);
+  // Whose turn it is on our team (PR-14.2): any reviewer for the loss, then a different one.
+  const reviewers = nav.people.filter((p) => p.role === "reviewer");
+  const firstReviewer = reviewers[0];
+  const secondReviewer = reviewers.find((p) => p.name.toLowerCase() !== (status.death_confirmed_by ?? "").trim().toLowerCase());
   const [now, setNow] = useState(Date.now() / 1000);
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now() / 1000), 1000);
@@ -19,7 +26,8 @@ export default function Tracker({ status, parent }: { status: Case; parent: stri
   const left = status.wait_until ? Math.max(0, Math.ceil(status.wait_until - now)) : null;
   const steps: { title: string; detail: string; done: boolean; now: boolean; action?: React.ReactNode }[] = [
     { title: "Certificate received", detail: "Careful checks looked for mistakes or forgery.", done: true, now: false },
-    { title: "Confirmed by our team", detail: "A person on our team confirms the loss.", done: s !== "reported", now: s === "reported" },
+    { title: "Confirmed by our team", detail: "A person on our team confirms the loss.", done: s !== "reported", now: s === "reported",
+      action: s === "reported" && firstReviewer ? <SwitchTo to={firstReviewer.id}>Switch to {firstReviewer.name} (our team) to review</SwitchTo> : undefined },
     {
       title: "Proof of your legal authority",
       detail: status.authority_check ? "Received. A second person on our team confirms it." : "For example a will, succession certificate or legal heir certificate.",
@@ -28,12 +36,15 @@ export default function Tracker({ status, parent }: { status: Case; parent: stri
       action: s === "death_confirmed" && !status.authority_check ? (
         <FilePick label={busy ? "Checking…" : "Upload proof"} accept="image/*,application/pdf" disabled={busy}
           onFile={(f) => run(async () => { await api.submitAuthority(f); })} />
+      ) : s === "death_confirmed" && secondReviewer ? (
+        <SwitchTo to={secondReviewer.id}>Switch to {secondReviewer.name} (our team) to confirm</SwitchTo>
       ) : undefined,
     },
     {
       title: s === "waiting" && left !== null ? `Waiting period: ${formatLeft(left)} left` : "Waiting period",
       detail: `${parent}'s phone is told first. One tap from them would cancel everything.`,
       done: s === "released", now: s === "waiting",
+      action: s === "waiting" ? <SwitchTo to="vikram">Switch to {parent} to see the alert</SwitchTo> : undefined,
     },
     { title: `${parent}'s vault opens on your phone`, detail: "Only on your phone, with your key.", done: s === "released", now: false },
   ];

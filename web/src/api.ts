@@ -102,6 +102,8 @@ export type Case = {
   state: "reported" | "death_confirmed" | "waiting" | "released" | "cancelled";
   certificate_check: DocumentCheck;
   authority_check: DocumentCheck | null;
+  /** The reviewer who confirmed the loss; a different one confirms the legal authority. */
+  death_confirmed_by?: string | null;
   wait_until: number | null;
   history: { at: number; event: string }[];
 };
