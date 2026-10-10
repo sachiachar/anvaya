@@ -397,3 +397,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .lm-bar-title { fill: var(--lm-ink); font: 700 21px Lora, Georgia, serif; }
 .lm-bar-sub { fill: var(--pa-muted); font-size: 14px; }
 .lm-bar-status { fill: var(--lm-assists); font-size: 15px; font-weight: 700; text-anchor: end; }
+
+/* One conversation's audit chain (PR-2.12.5). */
+.pa-chain { margin: 0; padding-left: 22px; display: grid; gap: 10px; }
+.pa-chain > li { padding-left: 6px; }
+.pa-chain ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 6px; }

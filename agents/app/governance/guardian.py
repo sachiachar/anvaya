@@ -305,6 +305,8 @@ def decide(action: str, agent: str, facts: dict | None = None, *, refs: dict[str
     if response != "continue":
         reason = "; ".join(f.reason for f in findings) or f"The policy's response for risk {risk}"
         event = core.record_intervention(agent, response, reason, case_key, user_key=event_key or user, once=once)
+        if event:  # so a reviewer can follow the event back to its action (the audit chain, PR-2.12.5)
+            store.update("guardian_actions", record["id"], {"event_id": event["id"]})
     return Decision(response, risk, findings, record["id"], (event or {}).get("id"))
 
 

@@ -96,6 +96,20 @@ export type BudgetRequest = { id: string; at: number; tenant: string; user_key: 
   hours: number; reason: string; status: "pending" | "approved" | "rejected"; decided_at?: number;
   decided_by?: string; decision_reason?: string; expires_at?: number };
 
+/** One conversation's audit chain (PR-2.12.5): ids, decisions and kinds only, never words. */
+export type ChainDecision = { id: string; at: number; response: string; risk: string | null; detectors: string[];
+  event_id: string | null };
+export type Chain = {
+  turn: { id: string; at: number; channel: string; held_back: number; user_key: string | null };
+  statements: (ChainDecision & { card: string | null })[];
+  cards: { id: string; collection: string; status: string; statement: string | null;
+    keep: (ChainDecision & { kept: string | null }) | null }[];
+  plans: { version: number; at: number; cause: Record<string, string>; current: string | null;
+    steps: { step: string | null; opens: string; tone: string }[] }[];
+  reply: { id: string; at: number; step: string | null } | null;
+};
+export type ChainRow = { turn: string; at: number; user_key: string | null; decisions: number; held: number };
+
 export type GuardianEvent = { id: string; at: number; response: "add_check" | "reduce_autonomy" | "deflect" | "pause" | "block";
   agent: string; reason: string; status: "open" | "confirmed" | "reversed"; case_key: string | null;
   decided_by?: string; decision_reason?: string };
@@ -178,6 +192,9 @@ export const platform = {
   approvals: () => request<{ pending: BudgetRequest[]; active: BudgetRequest[]; history: BudgetRequest[] }>(p("/approvals")),
   decideApproval: (id: string, decision: "approve" | "reject", reason: string, hours?: number) =>
     request<BudgetRequest>(p(`/approvals/${id}/decision`), json({ decision, reason, hours })),
+  conversations: () => request<{ conversations: ChainRow[] }>(p("/guardian/conversations")),
+  chain: (turnId: string) => request<Chain>(p(`/guardian/chain/${turnId}`)),
+  eventChain: (eventId: string) => request<Chain>(p(`/guardian/events/${eventId}/chain`)),
   guardian: () => request<{ events: GuardianEvent[]; by_response: Record<string, number>; false_alarm_rate: number | null }>(p("/guardian")),
   decideGuardian: (id: string, decision: "confirm" | "reverse", reason: string) =>
     request<GuardianEvent>(p(`/guardian/${id}/decision`), json({ decision, reason })),

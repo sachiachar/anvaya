@@ -43,7 +43,7 @@ A model-based detector (`guardian.detectors`) comes later.
 ## Audit trail
 
 Every decision links to its cause by id: turn, guardian decision, card, Keep, plan version, next
-step. The records hold ids, kinds, rule names and fixed reasons, never what anyone said (rule 4).
+step. *(Built in PR-2.12.5: the Guardian page follows one turn through this chain.)* The records hold ids, kinds, rule names and fixed reasons, never what anyone said (rule 4).
 The words stay in the owner's own store.
 
 ## Steps
