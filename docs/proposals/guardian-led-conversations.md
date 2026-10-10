@@ -58,8 +58,10 @@ The words stay in the owner's own store.
    owner's mood, reported by the reader of each turn, changes the plan in code.)* Typed chat:
    extract, guardian, cards and plan, then the reply. Voice:
    `current_step()` and `report_step(outcome)` tools; the same reply checks as typed chat.
-4. **The family side.** Every family question, and every answer before it is shown, through the
-   guardian with the same rules.
+4. **The family side.** *(Built in PR-2.12.4, light-touch at the owner's request: getting what the
+   owner kept must stay easy.)* Every family question, and every answer before it is shown, through the
+   guardian with the same rules. Only a vault secret or words aimed at the assistant are stopped; a
+   risky pattern adds a helpful note or a quiet flag for the team; full numbers are masked, not refused.
 
 ## Trade-offs the owner accepted
 

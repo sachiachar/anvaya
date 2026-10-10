@@ -79,7 +79,7 @@ const NODES: MapNode[] = [
     does: "Code opens the vault after 2 reviewers approve and the waiting period ends.", gets: "Two confirmations",
     gives: "The vault opens for the named recipient", decides: "The guardian can hold it for a risk reviewer." },
   { id: "ask", title: ["Family", "assistant"], shape: "loop", x: 1230, y: 430,
-    does: "Answers the family's questions from kept knowledge, with sources. The guardian checks each question, and each answer from PR-2.12.4.",
+    does: "Answers the family's questions from kept knowledge, with sources. The guardian checks each question and each answer, but keeps it easy: only a vault secret or words aimed at the assistant are stopped; a risky pattern adds a helpful note or a quiet flag for our team, and full numbers are masked.",
     gets: "A family question, after release", gives: "An answer with sources", decides: "The guardian decides whether a question is answered." },
   { id: "claims", title: ["Claims"], shape: "loop", r: 40, x: 1230, y: 610,
     does: "Drafts a claims checklist and letters for each bank and insurer.", gets: "Kept accounts and policies",

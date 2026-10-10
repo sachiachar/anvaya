@@ -361,6 +361,8 @@ a { color: inherit; text-decoration-color: var(--gold); text-underline-offset: 3
 /* A note sits on the thread: its dot centred on the gold line (8.75px into the 26px gutter), and its
    text on the same left edge as Saathi's words, wrapping under the text, not under the dot. */
 .v2-picked { position: relative; font-size: var(--step--1); line-height: 1.5; color: var(--gold-ink); font-weight: 500; }
+/* A helpful line the guardian adds under a family answer, such as a fee someone asked for (PR-2.12.4). */
+.v2-note { font-size: var(--step--1); line-height: 1.5; margin: 6px 0 0; padding: 8px 12px; border-left: 3px solid var(--gold-ink); background: color-mix(in srgb, var(--gold-ink) 8%, transparent); border-radius: 6px; }
 .v2-dot { position: absolute; left: -22px; top: calc(0.75em - 4.5px); width: 9px; height: 9px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 3px var(--ground); }
 .v2-transcript-end { height: 1px; scroll-margin-bottom: 160px; }
 .v2-earlier { border-radius: 14px; border: 1px solid var(--line); background: var(--surface); padding: 0 16px; }
