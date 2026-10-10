@@ -42,7 +42,8 @@ AGENT = "saathi.voice"
 
 
 # The plan on a call (PR-2.12.3): Saathi reads the current step, and reports how the owner answered
-# it, through these two tools, so the plan and its tone can change during the call. Both are in the
+# it, through these tools, so the plan and its tone can change during the call. It also says at once
+# when it hears another voice (PR-2.13.2), so it doesn't wait for the extractor. All are in the
 # registry and Saathi's voice policy; the gateway checks each call (check_tool).
 OUTCOMES = ["answered", "unsure", "not_now", "declined"]
 PLAN_TOOLS = [types.Tool(function_declarations=[
@@ -55,8 +56,16 @@ PLAN_TOOLS = [types.Tool(function_declarations=[
         description="Report how the owner answered the current step.",
         parameters=types.Schema(type=types.Type.OBJECT, required=["outcome"], properties={
             "outcome": types.Schema(type=types.Type.STRING, enum=OUTCOMES)})),
+    types.FunctionDeclaration(
+        name="voice_joined",
+        description="Call at once when you hear a second person speak, or two voices at the same time. It gives "
+                    "you the step to carry out next. Never guess or say who they are."),
 ])]
 CORRECTED = "A spoken reply broke a conversation rule; Saathi was told to correct it"
+# When the extractor hears another voice that Saathi didn't report, Saathi is told to read the plan
+# now, not at its next answer (PR-2.13.2). A note from the app, never shown or stored.
+VOICE_NOTE = ("Note from the app, not from the person: the plan has changed. Call current_step now, and carry "
+              "out its step when they finish speaking. Don't reply to this note.")
 # The owner's side of each exchange, as audio, so the extractor can tell whether another voice spoke
 # (PR-2.13.2). Held in memory only for that exchange, capped, and never stored.
 MAX_EXCHANGE_AUDIO = 16000 * 2 * 90  # 90 seconds of 16 kHz 16-bit mono
@@ -93,7 +102,9 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
     reserved, reserved_on = 0.0, None
     reply_tokens: dict[int, tuple[int, int]] = {}  # tokens in and out for each model reply
     saves: set[asyncio.Task] = set()  # exchanges still being saved (their cards worked out)
-    plan_state: dict = {"step": None, "correct": None}  # the step Saathi is carrying out, and any correction
+    # The step Saathi is carrying out, any correction, whether Saathi heard another voice in this
+    # exchange, and whether it already knows about another voice on this call.
+    plan_state: dict = {"step": None, "correct": None, "voice_heard": False, "voice_told": False}
     heard_audio = bytearray()  # the owner's side of the current exchange, in memory only (PR-2.13.2)
     config = types.LiveConnectConfig(
         response_modalities=["AUDIO"],
@@ -234,6 +245,16 @@ def _plan_tool(owner_id: str, name: str, args: dict, plan_state: dict) -> dict:
     if name == "report_step" and plan_state.get("step") and args.get("outcome") in OUTCOMES:
         planner.step_outcome(owner_id, plan_state["step"], args["outcome"])
         return {"ok": True}
+    if name == "voice_joined":
+        # Code adds the warm step, once a call; the guardian's look and the card marks come when the
+        # exchange is saved. Saathi gets the step straight back, so it can ask in its next words.
+        plan_state["voice_heard"] = True
+        if not plan_state.get("voice_told"):
+            plan_state["voice_told"] = True
+            planner.voice_heard(owner_id, new_id("live"))
+        step = planner.view(planner.current(owner_id))["current"]
+        plan_state["step"] = step["id"] if step else None
+        return {"step": step}
     return {"ok": False}
 
 
@@ -278,7 +299,11 @@ async def _to_browser(ws: WebSocket, session, owner: dict, expand,
                 audio = bytes(heard_audio) if heard_audio else None
                 if heard_audio is not None:
                     heard_audio.clear()  # the next exchange starts empty
-                task = asyncio.create_task(_save_exchange(ws, owner, heard.strip(), said.strip(), expand, plan_state, audio))
+                heard_live = bool(plan_state and plan_state.get("voice_heard"))
+                if plan_state is not None:
+                    plan_state["voice_heard"] = False
+                task = asyncio.create_task(_save_exchange(ws, owner, heard.strip(), said.strip(), expand, plan_state, audio,
+                                                          heard_live=heard_live, session=session))
                 if saves is not None:
                     saves.add(task)
                     task.add_done_callback(saves.discard)
@@ -289,7 +314,8 @@ async def _to_browser(ws: WebSocket, session, owner: dict, expand,
 
 
 async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expand,
-                         plan_state: dict | None = None, audio: bytes | None = None) -> None:
+                         plan_state: dict | None = None, audio: bytes | None = None, *,
+                         heard_live: bool = False, session=None) -> None:
     """Save one exchange of a call. Its two turns are stored straight away, marked "saving", so the
     end-of-call review knows more is coming; the cards are added once the extractor has read the
     exchange, and then the mark is cleared. If the owner discarded the exchange meanwhile, no cards
@@ -318,9 +344,16 @@ async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expa
         moments, inventory, people = [], [], []
 
     turns = await asyncio.to_thread(_finish_exchange, owner_id, owner_turn, ai_turn, moments, inventory, people, expand,
-                                    found, last_said, step)
+                                    found, last_said, step, heard_live)
     if turns is None:
         return
+    if (session is not None and plan_state is not None and getattr(found, "voices", "one") == "more"
+            and not plan_state.get("voice_told")):
+        plan_state["voice_told"] = True
+        try:
+            await session.send_realtime_input(text=VOICE_NOTE)
+        except Exception:
+            pass  # the call may have ended; the step waits in the plan
     owner_turn, ai_turn = turns
     try:
         await ws.send_json({"type": "turn", "owner_turn": owner_turn, "assistant_turn": ai_turn})
@@ -352,7 +385,8 @@ def _known_and_last_said(owner_id: str) -> tuple[dict, dict | None]:
 
 
 def _finish_exchange(owner_id: str, owner_turn: dict, ai_turn: dict, moments, inventory, people,
-                     expand, found=None, last_said: dict | None = None, step: str | None = None) -> tuple[dict, dict] | None:
+                     expand, found=None, last_said: dict | None = None, step: str | None = None,
+                     heard_live: bool = False) -> tuple[dict, dict] | None:
     """Add the cards and clear the "saving" mark. None if the owner discarded the exchange."""
     with proposals.saving(owner_id):
         if not store.get("turns", ai_turn["id"]) or not store.get("turns", owner_turn["id"]):
@@ -364,9 +398,10 @@ def _finish_exchange(owner_id: str, owner_turn: dict, ai_turn: dict, moments, in
                                           agent="capture.extractor")
         moment_docs, item_docs, people_docs = proposals.save_screened(owner_id, screened, source)
         # The plan takes in the guardian's decisions, the owner's mood and how they answered the last step.
-        voices = getattr(found, "voices", "one") == "more"
-        if voices:  # another voice in this exchange (PR-2.13.2)
-            guardian_inputs.another_voice(owner_id, owner_turn["id"], "capture.extractor", [
+        # Another voice in this exchange (PR-2.13.2): Saathi heard it live, or the extractor did in the audio.
+        voices = heard_live or getattr(found, "voices", "one") == "more"
+        if voices:
+            guardian_inputs.another_voice(owner_id, owner_turn["id"], AGENT if heard_live else "capture.extractor", [
                 *[("moments", d) for d in moment_docs], *[("inventory", d) for d in item_docs],
                 *[("people", d) for d in people_docs]])
         planner.after_turn(owner_id, owner_turn["id"], screened.outcomes, mood=getattr(found, "owner_mood", "calm"),

@@ -64,6 +64,7 @@ policies:
     tools:                # PR-2.12.3: it follows the conversation plan on a call
       - {tool: current_step, scope: read}
       - {tool: report_step, scope: write}
+      - {tool: voice_joined, scope: write}  # PR-2.13.2: says at once when it hears another voice
     consumption:
       call: {max_call_minutes: 20}
       per_user: {pool: owner}

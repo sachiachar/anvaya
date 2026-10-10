@@ -276,10 +276,8 @@ def after_turn(owner_id: str, turn_id: str, decisions: list[tuple[str, str, str 
     if held:
         cause["guardian"] = held[0][0]
     # Another voice: Saathi warmly asks who's there, once a conversation (PR-2.13.2).
-    recent_voice = any(s["source"] == "voice" and now - s.get("at", 0) < SAFE_STEP_SECONDS for s in plan.get("steps", []))
-    if another_voice and not recent_voice:
-        topic, ask, tone = VOICE_STEP
-        add.append(_step(f"voice:{turn_id}", "voice", topic, ask, "saathi", "voice", tone))
+    if another_voice and not _recent_voice(plan, now):
+        add.append(_voice_step(turn_id))
         cause["voice"] = "another"
     mood = mood if mood in MOODS else "calm"
     if mood != mood_now(plan, now):
@@ -299,6 +297,25 @@ def after_turn(owner_id: str, turn_id: str, decisions: list[tuple[str, str, str 
     if len(cause) == 2:
         return plan
     return refresh(owner_id, cause, add=add, now=now)
+
+
+def _recent_voice(plan: dict, now: float) -> bool:
+    return any(s["source"] == "voice" and now - s.get("at", 0) < SAFE_STEP_SECONDS for s in plan.get("steps", []))
+
+
+def _voice_step(ref: str) -> dict:
+    topic, ask, tone = VOICE_STEP
+    return _step(f"voice:{ref}", "voice", topic, ask, "saathi", "voice", tone)
+
+
+def voice_heard(owner_id: str, ref: str, now: float | None = None) -> dict:
+    """Saathi heard another voice on a call (its voice_joined tool): the warm "who's with you" step
+    goes first at once, before the exchange is saved, and once a conversation. Nothing else changes."""
+    now = time.time() if now is None else now
+    plan = current(owner_id, now=now)
+    if _recent_voice(plan, now):
+        return plan
+    return refresh(owner_id, {"kind": "turn", "turn": ref, "voice": "another"}, add=[_voice_step(ref)], now=now)
 
 
 def after_statements(owner_id: str, turn_id: str, decisions: list[tuple[str, str, str | None]]) -> dict | None:
