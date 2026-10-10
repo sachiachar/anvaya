@@ -34,6 +34,8 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
   const [notice, setNotice] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [topic, setTopic] = useState<string | null>(chosen);
+  const [opens, setOpens] = useState<"saathi" | "owner">("saathi");
+  const [ask, setAsk] = useState<string | null>(null); // how Saathi opens the plan's step
   const [allowance, setAllowance] = useState<Allowance | null>(null);
   const [text, setText] = useState("");
   const input = useRef<HTMLInputElement | null>(null);
@@ -92,13 +94,17 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
   useEffect(() => {
     loadConversation();
     api.owner().then((o) => setName(String(o.name ?? "").split(" ")[0])).catch(() => {});
-    // Today's topic: the first open step Saathi can talk about, else the most harmful gap. Both are
-    // already worked out; this never starts a new readiness check.
+    // Today's topic: the conversation plan's current step (PR-2.12.2), the only source of what
+    // Saathi talks about. It says who starts it: Saathi, or the owner when they're ready.
     if (!chosen) {
-      api.tasks()
-        .then((r) => r.tasks.find((t) => (t.action === "talk" || t.action === "family") && t.question_for_owner)?.question_for_owner ?? null)
-        .then(async (q) => q ?? (await api.gaps()).gaps[0]?.text ?? null)
-        .then(setTopic)
+      // A safe-route step is an instruction for Saathi's next reply, never a line to show or say.
+      api.plan()
+        .then((p) => {
+          const step = p.current?.source === "safe_route" ? p.next[0] : p.current;
+          setTopic(step?.topic ?? null);
+          setAsk(step?.ask ?? null);
+          setOpens(step?.opens ?? "saathi");
+        })
         .catch(() => setTopic(null));
     }
     refreshAllowance();
@@ -426,6 +432,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
     : callState === "speaking" ? "Just talk to interrupt, like a phone call."
     : callState === "listening" ? (muted ? "Tap Unmute to talk again." : "Talk whenever you're ready.")
     : phase === "gathering" ? "Saathi is finishing the last thing you said. This takes a few seconds."
+    : topic && opens === "owner" ? "Something to talk about whenever you feel like it."
     : topic ? "Shall we talk about this today?" : "Whenever you're ready, just talk. Saathi is listening.";
 
   if (phase === "review") {
@@ -468,9 +475,9 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
 
       {!live && phase === "talk" && topic && (
         <div className="v2-topic">
-          <p className="v2-eyebrow">Today, perhaps</p>
+          <p className="v2-eyebrow">{opens === "owner" ? "When you're ready" : "Saathi would like to ask"}</p>
           <p className="v2-topic-q">{topic}</p>
-          <button className="v2-link" disabled={!baseline || asking} onClick={() => talkAbout(topic)}>
+          <button className="v2-link" disabled={!baseline || asking} onClick={() => talkAbout(ask ?? topic)}>
             {asking ? "Saathi is getting ready…" : "Talk about this"}
           </button>
         </div>

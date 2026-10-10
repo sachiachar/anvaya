@@ -26,7 +26,7 @@ from typing import Callable
 from fastapi import WebSocket, WebSocketDisconnect
 from google.genai import types
 
-from . import gaps, grounding, guardian_inputs, loops, proposals
+from . import gaps, grounding, guardian_inputs, loops, planner, proposals
 from .config import settings
 from .gemini import client_for
 from .governance import core as governance
@@ -288,6 +288,7 @@ def _finish_exchange(owner_id: str, owner_turn: dict, ai_turn: dict, moments, in
                                           inventory=inventory, people=people, turn_id=owner_turn["id"],
                                           agent="capture.extractor")
         moment_docs, item_docs, people_docs = proposals.save_screened(owner_id, screened, source)
+        planner.after_statements(owner_id, owner_turn["id"], screened.outcomes)  # a deflection adds a safe-route step
         try:
             owner_turn = store.update("turns", owner_turn["id"], {"saving": False, "guardian": screened.decisions,
                                                                   "held_back": screened.held_back})

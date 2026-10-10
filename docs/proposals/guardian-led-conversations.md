@@ -49,8 +49,10 @@ The words stay in the owner's own store.
 ## Steps
 
 1. **The guardian as controller.** `owner_statement` before any card; the new response `deflect`;
-   fixed rules and the fraud module as inputs. *(This PR.)*
-2. **The conversation planner.** The initial plan file; one stored plan per owner, updated after
+   fixed rules and the fraud module as inputs. *(Built in PR-2.12.1.)*
+2. **The conversation planner.** *(Built in PR-2.12.2.)* Each step says who starts it: Saathi opens
+   with it, or Saathi waits for the owner to start (wishes, advice, low-harm gaps, suggestions).
+   The initial plan file; one stored plan per owner, updated after
    each guardian decision, step outcome and Keep; gaps and readiness feed only the planner.
 3. **Saathi as executor.** Typed chat: extract, guardian, cards and plan, then the reply. Voice:
    `current_step()` and `report_step(outcome)` tools; the same reply checks as typed chat.

@@ -21,7 +21,7 @@ from google.genai import errors as genai_errors
 from pydantic import BaseModel, Field, ValidationError
 
 from . import (auth, demo, escrow, fraud_guides, fraud_pipeline, gaps, grounding, guardian_inputs, knowledge,
-               knowledge_map, live, loops, media, model_access, proposals, release, scheduler, speech, step_guard,
+               knowledge_map, live, loops, media, model_access, planner, proposals, release, scheduler, speech, step_guard,
                tasks, tone)
 from .config import settings
 from . import executor_agent
@@ -39,6 +39,7 @@ model_keys.install_log_redaction()
 log = logging.getLogger(__name__)
 governance_core.check_files()
 guardian.check_policy()  # a broken guardian.yaml stops start-up too
+planner.check_plan()  # and so does a broken conversation_plan.yaml (PR-2.12.2)
 app = FastAPI(title="Anvaya agents", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
@@ -283,6 +284,7 @@ def _save_turn(owner_id: str, text: str | None, result, attachment: dict | None,
                                           inventory=result.inventory, people=result.people, turn_id=owner_turn_id,
                                           agent="saathi.chat")
         moments, inventory, people = proposals.save_screened(owner_id, screened, source)
+        planner.after_statements(owner_id, owner_turn_id, screened.outcomes)  # a deflection adds a safe-route step
         owner_turn = store.put("turns", {"id": owner_turn_id, "owner_id": owner_id, "at": now, "role": "owner",
                                          "text": (text or "").strip() or result.heard, "heard": result.heard,
                                          "attachment": attachment, **({"media": path} if path else {}),
@@ -431,9 +433,11 @@ def decide(doc_id: str, body: Decision) -> dict:
     if replaces:
         doc = store.update(body.collection, doc_id, {"updates": replaces})
     try:
-        return proposals.approve(body.collection, doc)
+        kept = proposals.approve(body.collection, doc)
     except knowledge.Removed as e:
         raise HTTPException(409, "You removed the item this card updates, so it can't be kept.") from e
+    planner.refresh(doc["owner_id"], {"kind": "keep", "ref": doc_id})  # a kept item can finish a step
+    return kept
 
 
 @api.get("/owners/{owner_id}/archive")
@@ -545,6 +549,7 @@ async def readiness(owner_id: str) -> dict:
     result = await loops.assess_readiness(owner, *args[1:])
     # Off the event loop: each step is checked and written down by the guardian (PR-2.7).
     await asyncio.to_thread(tasks.refresh, owner_id, [g.model_dump() for g in result.gaps])
+    await asyncio.to_thread(planner.refresh, owner_id, {"kind": "readiness"})  # suggestions feed only the plan
     store.update("owners", owner_id, {"readiness_score": result.score})
     # Running readiness updates the next steps, which are one of its own inputs, so remember
     # the inputs as they are now; an unchanged owner then gets the saved result next time.
@@ -556,6 +561,14 @@ def _labelled_steps(owner_id: str) -> list[dict]:
     """The owner's open next steps, each with its agent's autonomy label (PR-15.7)."""
     label = governance_core.autonomy(STEPS)
     return [{**t, "autonomy": label} for t in tasks.open_tasks(owner_id)]
+
+
+@api.get("/owners/{owner_id}/plan", dependencies=[Depends(demo.only("owner"))])
+def get_plan(owner_id: str) -> dict:
+    """The conversation plan (PR-2.12.2): the current step, who starts it, and the next ones. The
+    only source of what Saathi talks about; worked out on a cold start or when it's over an hour old."""
+    owner_or_404(owner_id)
+    return planner.view(planner.current(owner_id))
 
 
 @api.get("/owners/{owner_id}/tasks")
