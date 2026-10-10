@@ -199,3 +199,75 @@ def test_no_note_when_saathi_already_reported_the_voice_or_heard_one_voice(clien
 def test_saathi_is_told_to_report_another_voice_never_who():
     text = loops.live_instructions({"name": "Vikram Rao"}, {})
     assert "voice_joined" in text and "Never guess or say who" in text
+
+
+def test_the_warm_step_comes_once_a_conversation_even_after_it_is_answered():
+    owner = "owner_test_voice_answered"
+    store.put("owners", {"id": owner, "name": "Test Owner"})
+    planner.current(owner)
+    first = planner.voice_heard(owner, "live_1")
+    step = next(s for s in first["steps"] if s["source"] == "voice")
+    planner.after_turn(owner, "t1", [], answered_step=step["id"], outcome="answered")
+    assert not [s for s in planner.current(owner)["steps"] if s["source"] == "voice"]
+    planner.voice_heard(owner, "live_2")  # a second call in the same conversation
+    planner.after_turn(owner, "t2", [], another_voice=True)
+    assert not [s for s in planner.current(owner)["steps"] if s["source"] == "voice"]
+
+
+def test_the_audit_chain_links_the_turn_when_saathi_added_the_step_live(client, monkeypatch):  # noqa: F811
+    fresh_plan()
+    planner.current(OWNER)
+    planner.voice_heard(OWNER, "live_1")
+    exchange(monkeypatch, "one", heard_live=True)
+    turn = owner_turns()[-1]["id"]
+    linked = [v for v in store.list("plan_versions", owner_id=OWNER) if v["cause"].get("turn") == turn]
+    assert linked and linked[-1]["cause"]["voice"] == "another"
+    assert any(v["cause"].get("voice") == "another" for v in audit_chain.for_turn(turn)["plans"])
+
+
+def test_voice_joined_also_gives_a_waiting_correction(client):  # noqa: F811
+    fresh_plan()
+    state = {"step": None, "correct": "Don't say 'noted'.", "voice_heard": False, "voice_told": False}
+    out = live._plan_tool(OWNER, "voice_joined", {}, state)
+    assert out["correct"] == "Don't say 'noted'." and state["correct"] is None
+
+
+def test_the_record_says_who_heard_the_voice(client, monkeypatch):  # noqa: F811
+    exchange(monkeypatch, "more", heard_live=True)
+    [action] = voice_actions()
+    assert action["agent"] == "saathi.voice" and action["refs"]["heard_by"] == "saathi.voice,capture.extractor"
+
+
+def test_the_note_waits_while_someone_is_speaking_and_goes_when_the_turn_ends(client, monkeypatch):  # noqa: F811
+    session = Session()
+    state = {"step": None, "correct": None, "voice_told": False, "talking": True}
+    exchange(monkeypatch, "more", state=state, session=session)
+    assert session.notes == [] and state["note_waiting"]
+
+    class Message:
+        usage_metadata = tool_call = None
+
+        class server_content:  # noqa: N801  (the Live API's name)
+            input_transcription = output_transcription = model_turn = interrupted = None
+            turn_complete = True
+
+    class Live(Session):
+        def __init__(self):
+            super().__init__()
+            self.turns = [[Message()], []]
+
+        async def receive(self):
+            for message in self.turns.pop(0):
+                yield message
+
+    live_session = Live()
+    asyncio.run(live._to_browser(WS(), live_session, {"id": OWNER, "name": "Vikram Rao"}, main._expand, {}, None, state))
+    assert live_session.notes == [live.VOICE_NOTE] and not state["note_waiting"]
+
+
+def test_no_note_when_the_warm_step_was_not_put_first(client, monkeypatch):  # noqa: F811
+    session = Session()
+    state = {"step": None, "correct": None, "voice_told": False}
+    monkeypatch.setattr(live.planner, "after_turn", lambda *a, **kw: {})  # e.g. already asked this conversation
+    exchange(monkeypatch, "more", state=state, session=session)
+    assert session.notes == []

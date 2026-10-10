@@ -36,7 +36,7 @@ def _decision(a: dict) -> dict:
 
 
 def _cause(cause: dict, card_ids: set[str]) -> dict:
-    out = {k: v for k, v in cause.items() if k in ("kind", "turn", "guardian", "mood", "outcome")}
+    out = {k: v for k, v in cause.items() if k in ("kind", "turn", "guardian", "mood", "outcome", "voice")}
     if "step" in cause:
         out["step"] = safe_step(cause["step"])
     if cause.get("ref") in card_ids:

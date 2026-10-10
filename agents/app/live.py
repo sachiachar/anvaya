@@ -235,13 +235,7 @@ def _plan_tool(owner_id: str, name: str, args: dict, plan_state: dict) -> dict:
     except governance.Refused:
         return {"error": "This tool isn't allowed."}
     if name == "current_step":
-        step = planner.view(planner.current(owner_id))["current"]
-        plan_state["step"] = step["id"] if step else None
-        out = {"step": step} if step else {"step": None, "note": "No step right now: let them talk about anything."}
-        if plan_state.get("correct"):
-            out["correct"] = plan_state["correct"]
-            plan_state["correct"] = None
-        return out
+        return _step_for_saathi(owner_id, plan_state)
     if name == "report_step" and plan_state.get("step") and args.get("outcome") in OUTCOMES:
         planner.step_outcome(owner_id, plan_state["step"], args["outcome"])
         return {"ok": True}
@@ -249,13 +243,35 @@ def _plan_tool(owner_id: str, name: str, args: dict, plan_state: dict) -> dict:
         # Code adds the warm step, once a call; the guardian's look and the card marks come when the
         # exchange is saved. Saathi gets the step straight back, so it can ask in its next words.
         plan_state["voice_heard"] = True
+        plan = None
         if not plan_state.get("voice_told"):
             plan_state["voice_told"] = True
-            planner.voice_heard(owner_id, new_id("live"))
-        step = planner.view(planner.current(owner_id))["current"]
-        plan_state["step"] = step["id"] if step else None
-        return {"step": step}
+            plan = planner.voice_heard(owner_id, new_id("live"))
+        return _step_for_saathi(owner_id, plan_state, plan)
     return {"ok": False}
+
+
+def _step_for_saathi(owner_id: str, plan_state: dict, plan: dict | None = None) -> dict:
+    """The plan's current step for Saathi, with a correction waiting from its last spoken reply (once)."""
+    step = planner.view(plan or planner.current(owner_id))["current"]
+    plan_state["step"] = step["id"] if step else None
+    out = {"step": step} if step else {"step": None, "note": "No step right now: let them talk about anything."}
+    if plan_state.get("correct"):
+        out["correct"] = plan_state["correct"]
+        plan_state["correct"] = None
+    return out
+
+
+async def _tell_saathi(session, plan_state: dict) -> None:
+    """Send the voice note now if nobody is speaking; otherwise when the current turn ends."""
+    if plan_state.get("talking"):
+        plan_state["note_waiting"] = True
+        return
+    plan_state["note_waiting"] = False
+    try:
+        await session.send_realtime_input(text=VOICE_NOTE)
+    except Exception:
+        pass  # the call may have ended; the step waits in the plan
 
 
 async def _to_browser(ws: WebSocket, session, owner: dict, expand,
@@ -281,6 +297,8 @@ async def _to_browser(ws: WebSocket, session, owner: dict, expand,
             content = message.server_content
             if not content:
                 continue
+            if plan_state is not None and (content.input_transcription or content.model_turn):
+                plan_state["talking"] = True  # the owner or Saathi is speaking: a voice note waits
             if content.input_transcription and content.input_transcription.text:
                 heard += content.input_transcription.text
                 await ws.send_json({"type": "heard", "text": content.input_transcription.text})
@@ -308,6 +326,10 @@ async def _to_browser(ws: WebSocket, session, owner: dict, expand,
                     saves.add(task)
                     task.add_done_callback(saves.discard)
                 heard, said = "", ""
+            if content.turn_complete and plan_state is not None:
+                plan_state["talking"] = False
+                if plan_state.get("note_waiting"):
+                    await _tell_saathi(session, plan_state)
         if received == 0:  # the session has ended
             return
         reply += 1
@@ -347,13 +369,13 @@ async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expa
                                     found, last_said, step, heard_live)
     if turns is None:
         return
+    # The extractor heard a voice Saathi didn't report: if that put the warm step first, Saathi is told now.
     if (session is not None and plan_state is not None and getattr(found, "voices", "one") == "more"
             and not plan_state.get("voice_told")):
         plan_state["voice_told"] = True
-        try:
-            await session.send_realtime_input(text=VOICE_NOTE)
-        except Exception:
-            pass  # the call may have ended; the step waits in the plan
+        current = (await asyncio.to_thread(lambda: planner.view(planner.current(owner_id))))["current"]
+        if current and current["source"] == "voice":
+            await _tell_saathi(session, plan_state)
     owner_turn, ai_turn = turns
     try:
         await ws.send_json({"type": "turn", "owner_turn": owner_turn, "assistant_turn": ai_turn})
@@ -399,9 +421,11 @@ def _finish_exchange(owner_id: str, owner_turn: dict, ai_turn: dict, moments, in
         moment_docs, item_docs, people_docs = proposals.save_screened(owner_id, screened, source)
         # The plan takes in the guardian's decisions, the owner's mood and how they answered the last step.
         # Another voice in this exchange (PR-2.13.2): Saathi heard it live, or the extractor did in the audio.
-        voices = heard_live or getattr(found, "voices", "one") == "more"
+        in_audio = getattr(found, "voices", "one") == "more"
+        voices = heard_live or in_audio
         if voices:
-            guardian_inputs.another_voice(owner_id, owner_turn["id"], AGENT if heard_live else "capture.extractor", [
+            heard_by = [a for a, heard_it in ((AGENT, heard_live), ("capture.extractor", in_audio)) if heard_it]
+            guardian_inputs.another_voice(owner_id, owner_turn["id"], heard_by[0], heard_by=heard_by, card_docs=[
                 *[("moments", d) for d in moment_docs], *[("inventory", d) for d in item_docs],
                 *[("people", d) for d in people_docs]])
         planner.after_turn(owner_id, owner_turn["id"], screened.outcomes, mood=getattr(found, "owner_mood", "calm"),
