@@ -94,11 +94,15 @@ function Ask({ parent }: { parent: string }) {
                 <div className="v2-sources">
                   <p className="v2-sources-label">From what {parent} kept</p>
                   <ul className="v2-chips" aria-label={`Sources from what ${parent} kept`}>
-                    {t.sources.map((s) => (
-                      <li key={s.id} className="v2-source">
-                        <BookIcon />{s.title}{CHAPTER[s.id.split("_")[0]] && <span> · {CHAPTER[s.id.split("_")[0]]}</span>}
-                      </li>
-                    ))}
+                    {t.sources.map((s) => {
+                      const kind = KIND[s.id.split("_")[0]];
+                      const title = s.title.trim() || kind || "Something kept";
+                      return (
+                        <li key={s.id} className="v2-source">
+                          <BookIcon />{title}{kind && title !== kind && <span> · {kind}</span>}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               )}
@@ -118,19 +122,21 @@ function Ask({ parent }: { parent: string }) {
   );
 }
 
-/** Which chapter of the book a source is in, from its id: a story and the policy it's about can share
- *  a title, and this tells them apart. Names as on Kept. */
-const CHAPTER: Record<string, string> = { m: "Stories and advice", inv: "Money matters", p: "People" };
+/** What kind of kept item a source is, from its id: a story and the policy it's about can share a
+ *  title, and this tells them apart. The id can't tell a story from a wish, so those share one name;
+ *  the others are as on the review cards (items.ts). */
+const KIND: Record<string, string> = { m: "Story or wish", inv: "Account or policy", p: "Family" };
 
-/** The answer as plain paragraphs. The model quotes the owner as Markdown ("> …"), on its own or
- *  straight after a line of text; those lines show as a quote, without the ">" (PR-14.3: no raw
- *  codes or symbols in the answer). */
+/** The answer as plain paragraphs. The model quotes the owner as Markdown ("> …", or nested ">> …"),
+ *  on its own or straight after a line of text; those lines show as a quote, without the ">"
+ *  (PR-14.3: no raw codes or symbols in the answer). A ">" with no space after it (">50%") is text. */
+const QUOTE = /^\s*>+(?:\s+>+)*(?:\s+|$)/;
 function Answer({ text }: { text: string }) {
   const parts: { quote: boolean; text: string }[] = [];
   for (const block of text.split(/\n\s*\n/)) {
     for (const line of block.split("\n")) {
-      const quote = /^\s*>/.test(line);
-      const body = quote ? line.replace(/^\s*>\s?/, "") : line;
+      const quote = QUOTE.test(line);
+      const body = quote ? line.replace(QUOTE, "") : line;
       const last = parts[parts.length - 1];
       if (last && last.quote === quote && !last.text.endsWith("\n\n")) last.text += `\n${body}`;
       else parts.push({ quote, text: body });
