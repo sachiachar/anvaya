@@ -131,7 +131,7 @@ function Recipient({ me, parent }: { me: string; parent: string }) {
     body = !invite ? (
       <div className="v2-stack">
         <p className="v2-muted">{parent} hasn't chosen who receives the vault yet. That's done in their own app.</p>
-        <SwitchTo to="vikram" tab="family">Switch to {parent} to choose</SwitchTo>
+        <SwitchTo as="owner" tab="family">Switch to {parent} to choose</SwitchTo>
         {authEnabled && (
           // Each Google account has its own demo copy: an invite made in another account isn't here.
           <p className="v2-muted v2-small">Demo: if {parent} invited you from another window, check both are signed in with the same Google account. Each account has its own demo copy.</p>
@@ -153,7 +153,7 @@ function Recipient({ me, parent }: { me: string; parent: string }) {
         {!recipient.vault_sealed && (
           <>
             <p className="v2-muted v2-small">Waiting for {parent} to seal the vault for you.</p>
-            <SwitchTo to="vikram" tab="family">Switch to {parent} to seal it</SwitchTo>
+            <SwitchTo as="owner" tab="family">Switch to {parent} to seal it</SwitchTo>
           </>
         )}
       </div>
@@ -161,7 +161,7 @@ function Recipient({ me, parent }: { me: string; parent: string }) {
       <div className="v2-stack">
         <p>Waiting for {parent} to approve. Their phone should show this same code:</p>
         <p className="v2-code">{myCode}</p>
-        <SwitchTo to="vikram" tab="family">Switch to {parent} to approve</SwitchTo>
+        <SwitchTo as="owner" tab="family">Switch to {parent} to approve</SwitchTo>
       </div>
     );
   } else if (registered && !onDevice) {

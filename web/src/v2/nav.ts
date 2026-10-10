@@ -1,5 +1,6 @@
 import { createContext } from "react";
 import type { DemoPerson, PersonId } from "../api";
+import { ROLE_TEXT } from "./copy";
 
 export type OwnerTab = "talk" | "kept" | "family" | "vault";
 
@@ -12,3 +13,11 @@ export const Nav = createContext<{
   /** Show the app as this person; for the owner, optionally on this tab. */
   switchTo: (person: PersonId, tab?: OwnerTab) => void;
 }>({ people: [], acting: "vikram", switchTo: () => {} });
+
+/** The same person by name, as the server compares reviewers for the two-person rule (strip, casefold). */
+export const samePerson = (a: string | null | undefined, b: string | null | undefined) =>
+  (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
+
+/** How a person is named in the demo's lists, and what they do there. */
+export const personLabel = (p: DemoPerson) => (p.role === "platform_admin" ? "Platform admin" : p.name);
+export const personRole = (p: DemoPerson) => (p.role === "platform_admin" ? "Opens the admin portal" : ROLE_TEXT[p.role]);

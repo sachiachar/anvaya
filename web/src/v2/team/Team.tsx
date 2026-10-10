@@ -6,7 +6,7 @@ import { useContext, useEffect, useState } from "react";
 import { type AccessRequest, api, type Case, type DocumentCheck } from "../../api";
 import { useAction } from "../../ui";
 import { friendlyError } from "../copy";
-import { Nav } from "../nav";
+import { Nav, samePerson } from "../nav";
 import SwitchTo from "../SwitchTo";
 
 const STATE_TEXT: Record<Case["state"], { title: string; tone: "act" | "wait" | "done" }> = {
@@ -56,7 +56,8 @@ function Cases({ reviewer }: { reviewer: string }) {
   return (
     <section className="v2-stack" aria-label="Cases">
       {cases.length === 0 && <p className="v2-muted">No open cases.</p>}
-      {cases.length === 0 && <StartHandover />}
+      {/* Nothing open (none yet, or only cancelled ones): the family starts a handover. */}
+      {!cases.some((c) => c.state !== "cancelled") && <StartHandover />}
       {cases.map((c) => (
         <article key={c.id} className={`v2-panel v2-case is-${STATE_TEXT[c.state].tone}`}>
           <p className="v2-eyebrow">Case</p>
@@ -68,7 +69,7 @@ function Cases({ reviewer }: { reviewer: string }) {
           )}
           {c.authority_check && <CheckView title="Proof of legal authority: the check" check={c.authority_check} />}
           {/* The reviewer who confirmed the loss can't confirm this too (two-person rule); NextPerson offers the other. */}
-          {c.state === "death_confirmed" && c.authority_check && (c.death_confirmed_by ?? "").trim().toLowerCase() !== reviewer.trim().toLowerCase() && (
+          {c.state === "death_confirmed" && c.authority_check && !samePerson(c.death_confirmed_by, reviewer) && (
             <Confirm label="Confirm the legal authority" check={c.authority_check} busy={busy}
               onConfirm={(reason) => run(async () => { await api.confirmAuthority(c.id, reviewer.trim(), reason); await refresh(); })} />
           )}
@@ -96,8 +97,8 @@ function StartHandover() {
 function NextPerson({ c, reviewer }: { c: Case; reviewer: string }) {
   const nav = useContext(Nav);
   const family = nav.people.find((p) => p.role === "family");
-  const other = nav.people.find((p) => p.role === "reviewer" && p.name !== reviewer);
-  const confirmedLoss = (c.death_confirmed_by ?? "").trim().toLowerCase() === reviewer.trim().toLowerCase();
+  const other = nav.people.find((p) => p.role === "reviewer" && !samePerson(p.name, reviewer));
+  const confirmedLoss = samePerson(c.death_confirmed_by, reviewer);
   if (c.state === "death_confirmed" && !c.authority_check && family) {
     return <SwitchTo to={family.id}>Switch to {family.name} to send proof of legal authority</SwitchTo>;
   }

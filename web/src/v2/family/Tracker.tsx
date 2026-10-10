@@ -6,7 +6,7 @@ import { useAction } from "../../ui";
 import { friendlyError } from "../copy";
 import FilePick from "../FilePick";
 import { Check } from "../icons";
-import { Nav } from "../nav";
+import { Nav, samePerson } from "../nav";
 import SwitchTo from "../SwitchTo";
 
 export default function Tracker({ status, parent }: { status: Case; parent: string }) {
@@ -15,7 +15,7 @@ export default function Tracker({ status, parent }: { status: Case; parent: stri
   // Whose turn it is on our team (PR-14.2): any reviewer for the loss, then a different one.
   const reviewers = nav.people.filter((p) => p.role === "reviewer");
   const firstReviewer = reviewers[0];
-  const secondReviewer = reviewers.find((p) => p.name.toLowerCase() !== (status.death_confirmed_by ?? "").trim().toLowerCase());
+  const secondReviewer = reviewers.find((p) => !samePerson(p.name, status.death_confirmed_by));
   const [now, setNow] = useState(Date.now() / 1000);
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now() / 1000), 1000);
@@ -44,7 +44,7 @@ export default function Tracker({ status, parent }: { status: Case; parent: stri
       title: s === "waiting" && left !== null ? `Waiting period: ${formatLeft(left)} left` : "Waiting period",
       detail: `${parent}'s phone is told first. One tap from them would cancel everything.`,
       done: s === "released", now: s === "waiting",
-      action: s === "waiting" ? <SwitchTo to="vikram">Switch to {parent} to see the alert</SwitchTo> : undefined,
+      action: s === "waiting" ? <SwitchTo as="owner">Switch to {parent} to see the alert</SwitchTo> : undefined,
     },
     { title: `${parent}'s vault opens on your phone`, detail: "Only on your phone, with your key.", done: s === "released", now: false },
   ];
