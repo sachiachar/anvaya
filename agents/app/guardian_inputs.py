@@ -72,6 +72,19 @@ class Screened:
     allowed_by: dict[int, str] = field(default_factory=dict)  # id(card) -> guardian action id
     decisions: list[str] = field(default_factory=list)
     held_back: int = 0
+    # For the planner (PR-2.12.2): (action id, response, safe route) for each decision.
+    outcomes: list[tuple[str, str, str | None]] = field(default_factory=list)
+
+
+def safe_route(facts: dict) -> str | None:
+    """Which safe-route step a deflected statement calls for: a secret belongs in the vault; a
+    payment, change or tactic someone else started means calling the institution directly. Words
+    aimed at Saathi get none: they're blocked, and the conversation simply goes on."""
+    if facts.get("to_saathi"):
+        return None
+    if facts.get("secret_shared"):
+        return "secret"
+    return "someone_else" if facts.get("rule") or facts.get("tactics") else None
 
 
 def _kind(collection: str, card) -> str:
@@ -86,17 +99,20 @@ def screen(*, owner_words: str, moments, inventory, people, turn_id: str, agent:
     cards = [("moments", c) for c in moments] + [("inventory", c) for c in inventory] + [("people", c) for c in people]
     for n, (collection, card) in enumerate(cards):
         words = " ".join(str(getattr(card, f, None) or "") for f in CARD_FIELDS[collection])
-        decision = guardian.decide("owner_statement", agent, statement_facts(_kind(collection, card), f"{words} {owner_words}"),
+        facts = statement_facts(_kind(collection, card), f"{words} {owner_words}")
+        decision = guardian.decide("owner_statement", agent, facts,
                                    refs={"turn": turn_id, "card": f"{collection}:{n}"}, once=f"gev_st_{turn_id}_{n}")
         out.decisions.append(decision.action_id)
+        out.outcomes.append((decision.action_id, decision.response, safe_route(facts)))
         if decision.goes_ahead:
             getattr(out, collection).append(card)
             out.allowed_by[id(card)] = decision.action_id
         else:
             out.held_back += 1
     if not cards and owner_words.strip():
-        decision = guardian.decide("owner_statement", agent, statement_facts("utterance", owner_words),
-                                   refs={"turn": turn_id}, once=f"gev_st_{turn_id}")
+        facts = statement_facts("utterance", owner_words)
+        decision = guardian.decide("owner_statement", agent, facts, refs={"turn": turn_id}, once=f"gev_st_{turn_id}")
         out.decisions.append(decision.action_id)
+        out.outcomes.append((decision.action_id, decision.response, safe_route(facts)))
         out.held_back += 0 if decision.goes_ahead else 1
     return out

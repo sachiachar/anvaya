@@ -9,7 +9,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY app ./app
 COPY demo_data ./demo_data
-COPY registry.yaml policies.yaml guardian.yaml ./
+COPY registry.yaml policies.yaml guardian.yaml conversation_plan.yaml ./
 RUN /srv/.venv/bin/python -m compileall -q app
 
 # Start uvicorn straight from the environment: `uv run` checks the environment first, on every start.

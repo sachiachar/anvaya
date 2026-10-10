@@ -1,0 +1,41 @@
+# The initial conversation plan (PR-2.12.2): where every new owner starts. Reviewed like code.
+# Design: docs/proposals/guardian-led-conversations.md. The planner (agents/app/planner.py) starts
+# from these steps, in this order, and adds gaps, readiness suggestions and safe-route steps.
+#
+# Each step:
+#   id         stable, short, lower case
+#   topic      what the step is about, as the owner sees it on the Talk screen
+#   ask        how Saathi may open it, in plain words; Saathi says it in its own words
+#   done_when  the kind of kept item that completes it: person, story, advice, practical, wish
+#              or inventory (an account, policy or property)
+#   opens      who starts it: saathi (Saathi opens with it) or owner (Saathi waits for the owner,
+#              and raises it only when they start talking about it)
+
+version: 1
+
+steps:
+  - id: people
+    topic: The people who matter most to you
+    ask: Shall we start with the people closest to you? Who are they?
+    done_when: person
+    opens: saathi
+  - id: story
+    topic: A story you'd like your family to keep
+    ask: Is there a story from your life you'd like your family to remember?
+    done_when: story
+    opens: saathi
+  - id: money
+    topic: Where your money matters are kept
+    ask: Could you tell me about one account or policy your family should know about?
+    done_when: inventory
+    opens: saathi
+  - id: wishes
+    topic: Your wishes for your family
+    ask: When you feel ready, is there anything you wish for your family?
+    done_when: wish
+    opens: owner
+  - id: advice
+    topic: Advice for the next generation
+    ask: Is there any advice you'd like to pass on?
+    done_when: advice
+    opens: owner

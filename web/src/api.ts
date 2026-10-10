@@ -126,6 +126,10 @@ export type Turn = {
   saving?: boolean;
 };
 
+/** A step of the conversation plan (PR-2.12.2), and who starts it: Saathi, or the owner when ready. */
+export type PlanStep = { id: string; source: "initial" | "gap" | "suggestion" | "safe_route"; topic: string; ask: string;
+  opens: "saathi" | "owner" };
+
 export type Task = {
   id: string;
   title: string;
@@ -281,6 +285,8 @@ export const api = {
 
   readiness: () => request<{ score: number; tasks: Task[] }>(o("/readiness"), { method: "POST" }),
   tasks: () => request<{ score: number | null; tasks: Task[] }>(o("/tasks")),
+  /** The conversation plan: the only source of what Saathi talks about (PR-2.12.2). */
+  plan: () => request<{ version: number; current: PlanStep | null; next: PlanStep[] }>(o("/plan")),
   updateTask: (id: string, status: "done" | "dismissed") => request<Task>(`/tasks/${id}`, json({ status })),
   companionAsks: (text: string) => request<Turn>(o("/conversation/prompt"), json({ text })),
   /** A few sentences that sum up these turns of the conversation (shown, never stored). */
