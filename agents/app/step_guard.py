@@ -50,7 +50,10 @@ _PAYMENT = re.compile(r"\b(pay|pays|paid|paying|payment|fees?|charges?|deposit|c
                       r"(send|transfer|move) (the )?(money|amount|funds|cash))\b|शुल्क|फीस|पैसे भेज", re.IGNORECASE)
 _STARTED_BY_OTHER = re.compile(r"\b(who called|who will call|will call you|caller|called you|someone (called|asked|"
                                r"messaged)|asked you to|on the call|sms from|whatsapp(ed)? you|link in the message|"
-                               r"middleman|tout|broker)\b", re.IGNORECASE)
+                               r"middleman|tout|broker|"
+                               # As the owner tells it (guardian-led conversations): "a man called and asked me to".
+                               # Only calls and messages: "my son told me to" is family, not someone else.
+                               r"(called|phoned|rang|messaged|texted) (me|us|and|about|saying))\b", re.IGNORECASE)
 _DEADLINE = re.compile(r"\b(today|immediately|urgent(ly)?|right now|within \d+ (hours?|days?)|last date|"
                        r"before it expires|or (it|the account) (will be )?(blocked|frozen))\b|तुरंत|आज ही", re.IGNORECASE)
 # The only way a secret may appear in a step: saving it in the owner's own vault, with nobody else in it.
@@ -154,6 +157,17 @@ def reply_problem(reply: str) -> str | None:
     if _PAYMENT.search(words) and _STARTED_BY_OTHER.search(words):
         return "rule:pay_on_request"
     return None
+
+
+def statement_signals(text: str, step_type: str) -> tuple[set[str], str | None, bool]:
+    """What the fixed rules see in something the owner said (the guardian's input for each new piece
+    of information, guardian_inputs.py): its flags, the fixed rule it meets if any, read as a step of
+    this type, and whether it passes on a secret (a warning, or saving it in the vault, doesn't)."""
+    words = _plain(text)
+    flags = flags_of({"text": words})
+    rule = next((r for r, applies in _FIXED_RULES if applies(step_type, flags)), None)
+    shares = "secret" in flags and not _NEGATION.search(words) and not _INTO_VAULT.search(words)
+    return flags, rule, shares
 
 
 def asks_for_secret(text: str) -> bool:

@@ -96,7 +96,7 @@ export type BudgetRequest = { id: string; at: number; tenant: string; user_key: 
   hours: number; reason: string; status: "pending" | "approved" | "rejected"; decided_at?: number;
   decided_by?: string; decision_reason?: string; expires_at?: number };
 
-export type GuardianEvent = { id: string; at: number; response: "add_check" | "reduce_autonomy" | "pause" | "block";
+export type GuardianEvent = { id: string; at: number; response: "add_check" | "reduce_autonomy" | "deflect" | "pause" | "block";
   agent: string; reason: string; status: "open" | "confirmed" | "reversed"; case_key: string | null;
   decided_by?: string; decision_reason?: string };
 

@@ -6,6 +6,7 @@
 #   continue         the action goes ahead
 #   add_check        it goes ahead, and a risk reviewer looks at it afterwards
 #   reduce_autonomy  it goes ahead with less freedom (for example, an answer without tools)
+#   deflect          nothing is made of it (no card), and the conversation turns to the safe route
 #   pause            it waits for a risk reviewer (part 2: held, and the owner is alerted)
 #   block            it doesn't happen
 #
@@ -14,7 +15,7 @@
 # something the code forbids.
 #
 # Actions: next_step, model_call, review_confirmation, certificate_check, keep_card,
-# recipient_change, release, family_question. Each lists only the levels where it differs from
+# recipient_change, release, family_question, owner_statement. Each lists only the levels where it differs from
 # the default.
 
 version: 1
@@ -31,3 +32,5 @@ actions:
   recipient_change: {}            # Vikram changes who receives the vault (high: pause, medium: add a check)
   release: {}                     # the vault opens after the waiting period (high: pause)
   family_question: {high: block}  # Priya asks the family's assistant
+  # Guardian-led conversations: each new piece of information the owner gives, before any card.
+  owner_statement: {high: deflect}

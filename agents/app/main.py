@@ -20,8 +20,9 @@ from google.auth.exceptions import DefaultCredentialsError
 from google.genai import errors as genai_errors
 from pydantic import BaseModel, Field, ValidationError
 
-from . import (auth, demo, escrow, fraud_guides, fraud_pipeline, gaps, grounding, knowledge, knowledge_map, live, loops,
-               media, model_access, proposals, release, scheduler, speech, step_guard, tasks, tone)
+from . import (auth, demo, escrow, fraud_guides, fraud_pipeline, gaps, grounding, guardian_inputs, knowledge,
+               knowledge_map, live, loops, media, model_access, proposals, release, scheduler, speech, step_guard,
+               tasks, tone)
 from .config import settings
 from . import executor_agent
 from .executor_agent import UnknownSession, ask
@@ -276,12 +277,16 @@ def _save_turn(owner_id: str, text: str | None, result, attachment: dict | None,
         store.update("owners", owner_id, {"language": result.owner_language})
 
         now = time.time()
-        moments = [d for m in result.moments if (d := proposals.save_moment(owner_id, m.model_dump(), source))]
-        inventory = [proposals.save_inventory(owner_id, i.model_dump(), source) for i in result.inventory]
-        people = [d for p in result.people if (d := proposals.save_person(owner_id, p.model_dump()))]
-        owner_turn = store.put("turns", {"id": new_id("turn"), "owner_id": owner_id, "at": now, "role": "owner",
+        owner_turn_id = new_id("turn")
+        # The guardian sees each new piece of information first; only what it allows becomes a card.
+        screened = guardian_inputs.screen(owner_words=(text or "").strip() or result.heard, moments=result.moments,
+                                          inventory=result.inventory, people=result.people, turn_id=owner_turn_id,
+                                          agent="saathi.chat")
+        moments, inventory, people = proposals.save_screened(owner_id, screened, source)
+        owner_turn = store.put("turns", {"id": owner_turn_id, "owner_id": owner_id, "at": now, "role": "owner",
                                          "text": (text or "").strip() or result.heard, "heard": result.heard,
-                                         "attachment": attachment, **({"media": path} if path else {})})
+                                         "attachment": attachment, **({"media": path} if path else {}),
+                                         "guardian": screened.decisions, "held_back": screened.held_back})
         ai_turn = store.put("turns", {"id": new_id("turn"), "owner_id": owner_id, "at": now + 0.001,
                                       "role": "assistant", "text": result.reply, "language": result.reply_language,
                                       "proposals": {"moments": [m["id"] for m in moments],

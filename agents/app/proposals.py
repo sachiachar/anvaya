@@ -234,6 +234,20 @@ def save_person(owner_id: str, person: dict) -> dict | None:
     return _pending("people", owner_id, person)
 
 
+def save_screened(owner_id: str, screened, source: dict[str, Any]) -> tuple[list[dict], list[dict], list[dict]]:
+    """Save the cards the guardian allowed (guardian_inputs.screen), each linked to the decision
+    that allowed it, so a card can be traced back to its turn and its guardian decision."""
+    def linked(collection: str, card, doc: dict | None) -> dict | None:
+        if doc and (action := screened.allowed_by.get(id(card))) and store.get(collection, doc["id"]):
+            doc = store.update(collection, doc["id"], {"guardian_action": action})
+        return doc
+
+    moments = [d for m in screened.moments if (d := linked("moments", m, save_moment(owner_id, m.model_dump(), source)))]
+    inventory = [linked("inventory", i, save_inventory(owner_id, i.model_dump(), source)) for i in screened.inventory]
+    people = [d for p in screened.people if (d := linked("people", p, save_person(owner_id, p.model_dump())))]
+    return moments, inventory, people
+
+
 def approve(collection: str, doc: dict) -> dict:
     """The owner tapped Keep: commit the card to the kept-knowledge bundle, then remove the draft.
     An update card becomes the new version, and the version it updates is marked deprecated."""
