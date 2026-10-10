@@ -4,6 +4,7 @@ with you" step in the plan (once a conversation) and a mark on that exchange's c
 voiceprint is stored. All data here is synthetic."""
 
 import asyncio
+import time
 
 from app import audit_chain, live, loops, main, planner
 from app.schemas import Extraction, Moment
@@ -19,7 +20,16 @@ class WS:
         pass
 
 
-def exchange(monkeypatch, voices: str, audio: bytes | None = b"\x00\x01" * 800) -> dict:
+class Session:
+    def __init__(self):
+        self.notes = []
+
+    async def send_realtime_input(self, **kw):
+        self.notes.append(kw.get("text"))
+
+
+def exchange(monkeypatch, voices: str, audio: bytes | None = b"\x00\x01" * 800, *, state: dict | None = None,
+             heard_live: bool = False, session: Session | None = None) -> dict:
     seen = {}
 
     async def extract(owner, heard, said, known, audio=None):
@@ -32,8 +42,14 @@ def exchange(monkeypatch, voices: str, audio: bytes | None = b"\x00\x01" * 800) 
             if collection != "moments" or doc.get("quote") == SAID:  # a card from an earlier test would merge
                 store.delete(collection, doc["id"])
     asyncio.run(live._save_exchange(WS(), {"id": OWNER, "name": "Vikram Rao"}, SAID, "I see, Vikram ji.",
-                                    main._expand, {"step": None, "correct": None}, audio))
+                                    main._expand, state or {"step": None, "correct": None}, audio,
+                                    heard_live=heard_live, session=session))
     return seen
+
+
+def fresh_plan():
+    for doc in store.list("conversation_plans"):
+        store.delete("conversation_plans", doc["id"])
 
 
 def owner_turns() -> list[dict]:
@@ -136,3 +152,122 @@ def test_a_voice_note_with_another_voice_is_marked_too(client, monkeypatch):  # 
     assert r.status_code == 200
     [card] = [c for c in r.json()["assistant_turn"]["proposals"] if c["collection"] == "moments"]
     assert card["another_voice"] is True and voice_actions()
+
+
+# ---- Faster: Saathi says at once, and the extractor's finding reaches Saathi at once --------------
+
+
+def test_saathi_reports_another_voice_and_gets_the_warm_step_at_once(client):  # noqa: F811
+    fresh_plan()
+    state = {"step": None, "correct": None, "voice_heard": False, "voice_told": False}
+    out = live._plan_tool(OWNER, "voice_joined", {}, state)
+    assert out["step"]["source"] == "voice" and state["step"] == out["step"]["id"]
+    assert state["voice_heard"] and state["voice_told"]
+    again = live._plan_tool(OWNER, "voice_joined", {}, state)  # a second report adds no second step
+    assert [s["id"] for s in planner.current(OWNER)["steps"] if s["source"] == "voice"] == [again["step"]["id"]]
+
+
+def test_reporting_another_voice_keeps_the_owners_mood(client):  # noqa: F811
+    fresh_plan()
+    planner.after_turn(OWNER, "t_sad", [], mood="sad")
+    planner.voice_heard(OWNER, "live_1")
+    assert planner.mood_now(planner.current(OWNER), time.time()) == "sad"
+
+
+def test_what_saathi_heard_marks_the_exchange_even_when_the_extractor_hears_one_voice(client, monkeypatch):  # noqa: F811
+    exchange(monkeypatch, "one", heard_live=True)
+    [card] = [c for c in store.list("moments", owner_id=OWNER, status="pending") if c["quote"] == SAID]
+    assert card["another_voice"] is True
+    [action] = voice_actions()
+    assert action["agent"] == "saathi.voice" and action["refs"]["turn"] == owner_turns()[-1]["id"]
+
+
+def test_the_extractor_finding_tells_saathi_to_read_the_plan_now_once_a_call(client, monkeypatch):  # noqa: F811
+    session, state = Session(), {"step": None, "correct": None, "voice_heard": False, "voice_told": False}
+    exchange(monkeypatch, "more", state=state, session=session)
+    exchange(monkeypatch, "more", state=state, session=session)
+    assert session.notes == [live.VOICE_NOTE] and "current_step" in live.VOICE_NOTE
+
+
+def test_no_note_when_saathi_already_reported_the_voice_or_heard_one_voice(client, monkeypatch):  # noqa: F811
+    session = Session()
+    exchange(monkeypatch, "more", session=session, state={"step": None, "correct": None, "voice_told": True})
+    exchange(monkeypatch, "one", session=session, state={"step": None, "correct": None, "voice_told": False})
+    assert session.notes == []
+
+
+def test_saathi_is_told_to_report_another_voice_never_who():
+    text = loops.live_instructions({"name": "Vikram Rao"}, {})
+    assert "voice_joined" in text and "Never guess or say who" in text
+
+
+def test_the_warm_step_comes_once_a_conversation_even_after_it_is_answered():
+    owner = "owner_test_voice_answered"
+    store.put("owners", {"id": owner, "name": "Test Owner"})
+    planner.current(owner)
+    first = planner.voice_heard(owner, "live_1")
+    step = next(s for s in first["steps"] if s["source"] == "voice")
+    planner.after_turn(owner, "t1", [], answered_step=step["id"], outcome="answered")
+    assert not [s for s in planner.current(owner)["steps"] if s["source"] == "voice"]
+    planner.voice_heard(owner, "live_2")  # a second call in the same conversation
+    planner.after_turn(owner, "t2", [], another_voice=True)
+    assert not [s for s in planner.current(owner)["steps"] if s["source"] == "voice"]
+
+
+def test_the_audit_chain_links_the_turn_when_saathi_added_the_step_live(client, monkeypatch):  # noqa: F811
+    fresh_plan()
+    planner.current(OWNER)
+    planner.voice_heard(OWNER, "live_1")
+    exchange(monkeypatch, "one", heard_live=True)
+    turn = owner_turns()[-1]["id"]
+    linked = [v for v in store.list("plan_versions", owner_id=OWNER) if v["cause"].get("turn") == turn]
+    assert linked and linked[-1]["cause"]["voice"] == "another"
+    assert any(v["cause"].get("voice") == "another" for v in audit_chain.for_turn(turn)["plans"])
+
+
+def test_voice_joined_also_gives_a_waiting_correction(client):  # noqa: F811
+    fresh_plan()
+    state = {"step": None, "correct": "Don't say 'noted'.", "voice_heard": False, "voice_told": False}
+    out = live._plan_tool(OWNER, "voice_joined", {}, state)
+    assert out["correct"] == "Don't say 'noted'." and state["correct"] is None
+
+
+def test_the_record_says_who_heard_the_voice(client, monkeypatch):  # noqa: F811
+    exchange(monkeypatch, "more", heard_live=True)
+    [action] = voice_actions()
+    assert action["agent"] == "saathi.voice" and action["refs"]["heard_by"] == "saathi.voice,capture.extractor"
+
+
+def test_the_note_waits_while_someone_is_speaking_and_goes_when_the_turn_ends(client, monkeypatch):  # noqa: F811
+    session = Session()
+    state = {"step": None, "correct": None, "voice_told": False, "talking": True}
+    exchange(monkeypatch, "more", state=state, session=session)
+    assert session.notes == [] and state["note_waiting"]
+
+    class Message:
+        usage_metadata = tool_call = None
+
+        class server_content:  # noqa: N801  (the Live API's name)
+            input_transcription = output_transcription = model_turn = interrupted = None
+            turn_complete = True
+
+    class Live(Session):
+        def __init__(self):
+            super().__init__()
+            self.turns = [[Message()], []]
+
+        async def receive(self):
+            for message in self.turns.pop(0):
+                yield message
+
+    live_session = Live()
+    asyncio.run(live._to_browser(WS(), live_session, {"id": OWNER, "name": "Vikram Rao"}, main._expand, {}, None, state))
+    assert live_session.notes == [live.VOICE_NOTE] and not state["note_waiting"]
+
+
+def test_no_note_when_the_warm_step_was_not_put_first(client, monkeypatch):  # noqa: F811
+    session = Session()
+    state = {"step": None, "correct": None, "voice_told": False}
+    monkeypatch.setattr(live.planner, "after_turn", lambda *a, **kw: {})  # e.g. already asked this conversation
+    exchange(monkeypatch, "more", state=state, session=session)
+    assert session.notes == []

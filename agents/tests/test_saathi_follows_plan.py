@@ -120,13 +120,14 @@ def test_talk_about_this_remembers_the_plan_step_it_opens(client):  # noqa: F811
     assert store.get("owners", OWNER)["last_said"]["step"] is None
 
 
-# ---- A call: two tools, checked by the gateway ------------------------------------------------
+# ---- A call: the plan tools, checked by the gateway -------------------------------------------
 
 
-def test_the_voice_policy_grants_the_two_plan_tools():
+def test_the_voice_policy_grants_the_plan_tools():
     granted = {g["tool"]: g["scope"] for g in core.policy("saathi.voice")["tools"]}
-    assert granted == {"current_step": "read", "report_step": "write"}
-    assert [f.name for f in live.PLAN_TOOLS[0].function_declarations] == ["current_step", "report_step"]
+    assert granted == {"current_step": "read", "report_step": "write", "voice_joined": "write"}
+    assert [f.name for f in live.PLAN_TOOLS[0].function_declarations] == ["current_step", "report_step",
+                                                                           "voice_joined"]
 
 
 def test_current_step_gives_the_step_and_report_step_moves_the_plan():

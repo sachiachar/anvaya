@@ -192,12 +192,15 @@ def family_answer(answer: str) -> tuple[str, dict]:
 # ---- Another voice (PR-2.13.2) -----------------------------------------------------------------
 
 
-def another_voice(owner_id: str, turn_id: str, agent: str, card_docs: list[tuple[str, dict]]) -> str:
+def another_voice(owner_id: str, turn_id: str, agent: str, card_docs: list[tuple[str, dict]], *,
+                  heard_by: list[str] | None = None) -> str:
     """Another voice was heard in the owner's side of an exchange: the guardian records it for the
     team, and each card from that exchange is marked, so the owner sees it before Keep. Nothing
-    about the voice is kept: no audio, no voiceprint. Returns the guardian action id."""
-    decision = guardian.decide("owner_statement", agent, {"another_voice": True},
-                               refs={"turn": turn_id, "voice": "another"}, once=f"gev_voice_{turn_id}")
+    about the voice is kept: no audio, no voiceprint. `heard_by` lists every agent that heard it
+    (Saathi live, the extractor in the audio). Returns the guardian action id."""
+    refs = {"turn": turn_id, "voice": "another", "heard_by": ",".join(heard_by or [agent])}
+    decision = guardian.decide("owner_statement", agent, {"another_voice": True}, refs=refs,
+                               once=f"gev_voice_{turn_id}")
     for collection, doc in card_docs:
         if store.get(collection, doc["id"]):
             store.update(collection, doc["id"], {"another_voice": True})
