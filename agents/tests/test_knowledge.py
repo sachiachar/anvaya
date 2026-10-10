@@ -301,3 +301,13 @@ def test_kept_items_have_the_list_fields_cards_have():
     kept_story = knowledge.items(OWNER, "moments")[0]
     assert kept_story["people"] == [] and kept_story["places"] == [] and kept_story["intended_for"] == []
     assert story["status"] == "approved"
+
+
+def test_each_kept_item_says_when_it_was_kept():
+    """PR-2.13.1: the time an item was kept, in the list the owner's book reads and on the item itself."""
+    from datetime import datetime, timezone
+    before = datetime.now(timezone.utc).replace(microsecond=0)
+    kept = _keep("moments", STORY)
+    [row] = [i for i in TestClient(main.app).get(f"/api/owners/{OWNER}/kept").json()["items"] if i["id"] == kept["id"]]
+    at = datetime.strptime(row["kept_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    assert before <= at <= datetime.now(timezone.utc) and kept["kept_at"] == row["kept_at"]

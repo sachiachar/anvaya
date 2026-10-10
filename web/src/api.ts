@@ -17,7 +17,9 @@ export const setActingAs = (person: PersonId) => {
 export type Autonomy = "assist" | "propose" | "act_within_limits";
 
 export type KeptItem = { id: string; collection: "moments" | "inventory" | "people"; type: string; title: string;
-  description: string };
+  description: string;
+  /** When the owner kept it: UTC, ISO 8601 (PR-2.13.1). */
+  kept_at?: string | null };
 
 // The same kinds as gaps.KINDS on the server.
 export type Gap = { key: string; kind: "nominee" | "conflict" | "heir" | "relationship" | "papers" | "will" | "loans"
