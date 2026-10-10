@@ -346,6 +346,10 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .uc-pair figure { margin: 0; min-width: 0; }
 .uc-pair figcaption { font-size: 0.9rem; margin-bottom: 4px; }
 .uc-chart { width: 100%; }
+.uc-caption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; margin-bottom: 6px; }
+.uc-caption figcaption { margin: 0; }
+.uc-caption .uc-switch label { min-height: 30px; padding: 2px 12px; font-size: 0.85rem; }
+.uc-empty { margin: 0; padding: 28px 16px; text-align: center; color: var(--pa-muted); border: 1px dashed var(--pa-line); border-radius: 12px; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .uc-switch label.on { background: var(--pa-gold); color: #0b132b; }
 }

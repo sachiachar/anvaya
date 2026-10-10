@@ -1,5 +1,5 @@
 import { BarChart } from "echarts/charts";
-import { DataZoomComponent, GridComponent, LegendComponent, MarkLineComponent, TooltipComponent } from "echarts/components";
+import { GridComponent, LegendComponent, MarkLineComponent, TooltipComponent } from "echarts/components";
 import * as echarts from "echarts/core";
 import type { EChartsCoreOption } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
@@ -8,7 +8,7 @@ import { fmt, type ServiceCeiling, type Use } from "./api";
 
 // Only what these two charts use, so the portal loads as little as it can. This file is loaded
 // only when the dashboard opens (pages.tsx imports it lazily).
-echarts.use([BarChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, MarkLineComponent, CanvasRenderer]);
+echarts.use([BarChart, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent, CanvasRenderer]);
 
 type Metric = "tokens" | "minutes" | "calls";
 type Row = { agents: Record<string, Use> };
@@ -22,8 +22,9 @@ const METRICS: Record<Metric, { label: string; unit: string }> = {
   minutes: { label: "Voice minutes", unit: "minutes" },
   calls: { label: "Calls", unit: "calls" },
 };
-const HOURS_SHOWN = 48;
-const HOURS_KEPT = 14 * 24;
+// How far back the hourly chart goes: plain choices instead of a zoom slider.
+const RANGES = { 24: "24 hours", 48: "48 hours", 168: "7 days", 336: "14 days" } as const;
+type Range = keyof typeof RANGES;
 const DAYS_SHOWN = 30;
 const CEILING_SHOWN_FROM = 0.25; // the ceiling line shows once a day reaches this share of it
 const TOP_AGENTS = 7; // the rest are summed as "other agents", so the legend stays readable
@@ -97,19 +98,37 @@ function baseOption(m: Metric) {
 
 const compact = (v: number) => (v >= 1e6 ? `${Math.round(v / 1e5) / 10}M` : v >= 1e3 ? `${Math.round(v / 100) / 10}k` : String(Math.round(v * 10) / 10));
 
+/** A row of choices that looks like a switch; real radio buttons underneath. */
+function Choice<T extends string | number>({ name, legend, options, value: current, onChange }: {
+  name: string; legend: string; options: [T, string][]; value: T; onChange: (v: T) => void;
+}) {
+  return (
+    <fieldset className="uc-switch">
+      <legend className="uc-hidden">{legend}</legend>
+      {options.map(([v, label]) => (
+        <label key={String(v)} className={current === v ? "on" : ""}>
+          <input type="radio" name={name} value={String(v)} checked={current === v} onChange={() => onChange(v)} />
+          {label}
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
 export default function UsageCharts({ usage, ceiling }: { usage: UsageSeries; ceiling: ServiceCeiling }) {
   const [metric, setMetric] = useState<Metric>("tokens");
+  const [range, setRange] = useState<Range>(48);
 
-  // Every hour of the last 14 days, empty hours included, in the reader's own time zone.
+  // Every hour of the chosen range, empty hours included, in the reader's own time zone.
   const hours = useMemo(() => {
     const byHour = new Map(usage.hourly.map((h) => [h.hour, h]));
     const now = new Date();
     now.setUTCMinutes(0, 0, 0);
-    return Array.from({ length: HOURS_KEPT }, (_, i) => {
-      const d = new Date(now.getTime() - (HOURS_KEPT - 1 - i) * 3600_000);
+    return Array.from({ length: range }, (_, i) => {
+      const d = new Date(now.getTime() - (range - 1 - i) * 3600_000);
       return { at: d, agents: byHour.get(utcHour(d))?.agents ?? {} };
     });
-  }, [usage.hourly]);
+  }, [usage.hourly, range]);
 
   // Every day of the last 30 days, empty days included (days are in UTC, like the daily ceiling).
   const days = useMemo(() => {
@@ -130,17 +149,16 @@ export default function UsageCharts({ usage, ceiling }: { usage: UsageSeries; ce
         type: "category", data: hours.map((h) => h.at.toISOString()),
         axisLabel: { color: base.textStyle.color, hideOverlap: true, formatter: (iso: string) => {
           const d = new Date(iso);
-          return d.getHours() === 0 ? d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) : `${pad(d.getHours())}:00`;
+          if (d.getHours() === 0) return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+          return range > 48 ? "" : `${pad(d.getHours())}:00`; // over 2 days, only the dates
         } },
         axisPointer: { label: { formatter: ({ value: iso }: { value: string }) =>
           new Date(iso).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) } },
       },
-      // The last 48 hours first; drag the slider back up to 14 days.
-      dataZoom: [{ type: "inside", startValue: HOURS_KEPT - HOURS_SHOWN, endValue: HOURS_KEPT - 1 },
-        { type: "slider", startValue: HOURS_KEPT - HOURS_SHOWN, endValue: HOURS_KEPT - 1, height: 22, bottom: 8 }],
+      grid: { ...base.grid, bottom: 24 },
       series,
     };
-  }, [hours, metric]);
+  }, [hours, metric, range]);
 
   const ceilingLimit = metric === "tokens" ? ceiling.tokens?.limit : metric === "minutes" ? ceiling.voice_minutes?.limit : undefined;
   const peakDay = Math.max(0, ...days.map((d) => Object.values(d.agents).reduce((t, u) => t + value(u, metric), 0)));
@@ -171,7 +189,8 @@ export default function UsageCharts({ usage, ceiling }: { usage: UsageSeries; ce
   }, [days, metric, ceilingLimit, peakDay]);
 
   const sum = (rows: Row[]) => rows.reduce((s, r) => s + Object.values(r.agents).reduce((t, u) => t + value(u, metric), 0), 0);
-  const last48 = sum(hours.slice(-HOURS_SHOWN));
+  const inRange = sum(hours);
+  const hourlyFrom = usage.hourly[0]?.hour;
   const last30 = sum(days);
   const unit = METRICS[metric].unit;
   const show = (v: number) => (metric === "minutes" ? `${Math.round(v * 10) / 10}` : fmt.num(v));
@@ -179,22 +198,27 @@ export default function UsageCharts({ usage, ceiling }: { usage: UsageSeries; ce
   return (
     <div className="uc">
       <div className="uc-head">
-        <fieldset className="uc-switch">
-          <legend className="uc-hidden">What the charts show</legend>
-          {(Object.keys(METRICS) as Metric[]).map((m) => (
-            <label key={m} className={metric === m ? "on" : ""}>
-              <input type="radio" name="uc-metric" value={m} checked={metric === m} onChange={() => setMetric(m)} />
-              {METRICS[m].label}
-            </label>
-          ))}
-        </fieldset>
+        <Choice name="uc-metric" legend="What the charts show" value={metric} onChange={setMetric}
+          options={(Object.keys(METRICS) as Metric[]).map((m) => [m, METRICS[m].label])} />
         <p className="pa-muted">Hover for each agent's share. Select an agent in the legend to hide or show it.</p>
       </div>
       <div className="uc-pair">
         <figure>
-          <figcaption><strong>Per hour</strong> <span className="pa-muted">{show(last48)} {unit} in the last 48 hours · drag the slider back up to 14 days · your time zone</span></figcaption>
-          <EChart option={hourlyOption} height={320}
-            label={`${METRICS[metric].label} per hour by agent: ${show(last48)} ${unit} in the last 48 hours.`} />
+          <div className="uc-caption">
+            <figcaption><strong>Per hour</strong> <span className="pa-muted">{show(inRange)} {unit} in the last {RANGES[range]} · your time zone</span></figcaption>
+            <Choice name="uc-range" legend="How far back the hourly chart goes" value={range} onChange={setRange}
+              options={(Object.keys(RANGES).map(Number) as Range[]).map((r) => [r, RANGES[r]])} />
+          </div>
+          {inRange > 0 ? (
+            <EChart option={hourlyOption} height={300}
+              label={`${METRICS[metric].label} per hour by agent: ${show(inRange)} ${unit} in the last ${RANGES[range]}.`} />
+          ) : (
+            <p className="uc-empty">
+              {hourlyFrom
+                ? `No ${unit} in the last ${RANGES[range]}. Choose a longer range above.`
+                : "Hourly counts started with the latest release. The chart fills in as calls come in."}
+            </p>
+          )}
         </figure>
         <figure>
           <figcaption><strong>Per day</strong> <span className="pa-muted">{show(last30)} {unit} in the last 30 days{ceilingLimit
@@ -203,7 +227,6 @@ export default function UsageCharts({ usage, ceiling }: { usage: UsageSeries; ce
             label={`${METRICS[metric].label} per day by agent: ${show(last30)} ${unit} in the last 30 days.`} />
         </figure>
       </div>
-      {usage.hourly.length === 0 && <p className="pa-muted">Hourly counts start with this release, so the hourly chart fills up from now on.</p>}
     </div>
   );
 }
