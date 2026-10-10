@@ -288,7 +288,8 @@ export const api = {
   /** The conversation plan: the only source of what Saathi talks about (PR-2.12.2). */
   plan: () => request<{ version: number; current: PlanStep | null; next: PlanStep[] }>(o("/plan")),
   updateTask: (id: string, status: "done" | "dismissed") => request<Task>(`/tasks/${id}`, json({ status })),
-  companionAsks: (text: string) => request<Turn>(o("/conversation/prompt"), json({ text })),
+  /** Saathi opens a topic; with the plan step it opens, the next answer is judged against that step (PR-2.12.3). */
+  companionAsks: (text: string, stepId?: string | null) => request<Turn>(o("/conversation/prompt"), json({ text, step_id: stepId ?? null })),
   /** A few sentences that sum up these turns of the conversation (shown, never stored). */
   summarizeConversation: (turn_ids: string[]) =>
     request<{ summary: string }>(o("/conversation/summary"), json({ turn_ids })),

@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import knowledge, live, loops, main, proposals
-from app.schemas import ConversationTurn, Extraction, Moment, Statement
+from app.schemas import ConversationTurn, Extraction, Moment, PlanReply, Statement
 from app.store import new_id
 from tests.test_knowledge import OWNER
 
@@ -68,11 +68,14 @@ def test_a_follow_up_adds_statements_once(client):
 
 
 def test_typed_chat_and_live_calls_both_return_statements(client, monkeypatch):
-    async def converse(*args):
-        return ConversationTurn(heard="", owner_language="English", reply="That's a lovely thought, Vikram ji.",
-                                reply_language="en-IN", moments=[Moment(**FLAT)])
+    async def understand(*args):
+        return ConversationTurn(heard="", owner_language="English", moments=[Moment(**FLAT)])
 
-    monkeypatch.setattr(loops, "converse", converse)
+    async def respond(*args):
+        return PlanReply(reply="That's a lovely thought, Vikram ji.", reply_language="en-IN")
+
+    monkeypatch.setattr(loops, "understand", understand)
+    monkeypatch.setattr(loops, "respond", respond)
     r = client.post(f"/api/owners/{OWNER}/conversation", data={"text": FLAT["quote"]})
     typed = r.json()["assistant_turn"]["proposals"][0]
     assert typed["kind"] == "wish" and typed["statements"][0]["recipient"] == "Sunita"

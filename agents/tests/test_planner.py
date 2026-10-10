@@ -45,8 +45,10 @@ def test_a_new_owner_starts_from_the_initial_plan_and_saathi_opens_the_first_ste
     assert view["current"]["id"] == "initial:people" and view["current"]["opens"] == "saathi"
     wishes = next(s for s in view["next"] if s["id"] == "initial:wishes")
     assert wishes["opens"] == "owner"  # a sensitive step waits for the owner to start it
-    order = [s["source"] for s in [view["current"], *view["next"]]]
-    assert order.index("initial") < len(order) and "gap" not in order[:order.count("initial")]
+    steps = [view["current"], *view["next"]]
+    opens = [s["opens"] for s in steps]
+    assert opens == sorted(opens, key=lambda o: o != "saathi")  # Saathi's steps first, the owner's after
+    assert [s["id"] for s in steps][:3] == ["initial:people", "initial:story", "initial:money"]
     [version] = store.list("plan_versions", owner_id=NEW)
     assert version["cause"] == {"kind": "cold_start"} and version["current"] == "initial:people"
     assert "closest" not in str(version) and "topic" not in str(version)  # ids and sources only, no words
@@ -72,7 +74,7 @@ def test_a_deflected_statement_puts_a_safe_route_step_first_for_this_conversatio
     planner.current(NEW)
     plan = planner.after_statements(NEW, "turn_x", [("gac_1", "deflect", "secret")])
     assert plan["current"] == "safe:secret:turn_x" and plan["steps"][0]["opens"] == "saathi"
-    assert plan["cause"] == {"kind": "guardian", "ref": "gac_1", "turn": "turn_x"}
+    assert plan["cause"] == {"kind": "turn", "turn": "turn_x", "guardian": "gac_1"}
     later = planner.refresh(NEW, {"kind": "time"}, now=time.time() + planner.SAFE_STEP_SECONDS + 1)
     assert not [s for s in later["steps"] if s["source"] == "safe_route"]  # it belonged to that conversation
 
@@ -81,7 +83,7 @@ def test_a_blocked_statement_is_recorded_without_a_safe_step_and_an_allowed_one_
     planner.current(NEW)
     assert planner.after_statements(NEW, "turn_y", [("gac_2", "continue", None)]) is None
     plan = planner.after_statements(NEW, "turn_y", [("gac_3", "block", None)])
-    assert plan["cause"]["ref"] == "gac_3" and not [s for s in plan["steps"] if s["source"] == "safe_route"]
+    assert plan["cause"]["guardian"] == "gac_3" and not [s for s in plan["steps"] if s["source"] == "safe_route"]
 
 
 def test_a_step_the_step_guard_drops_never_joins_the_plan(monkeypatch):

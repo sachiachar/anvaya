@@ -36,6 +36,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
   const [topic, setTopic] = useState<string | null>(chosen);
   const [opens, setOpens] = useState<"saathi" | "owner">("saathi");
   const [ask, setAsk] = useState<string | null>(null); // how Saathi opens the plan's step
+  const [stepId, setStepId] = useState<string | null>(null);
   const [allowance, setAllowance] = useState<Allowance | null>(null);
   const [text, setText] = useState("");
   const input = useRef<HTMLInputElement | null>(null);
@@ -103,6 +104,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
           const step = p.current?.source === "safe_route" ? p.next[0] : p.current;
           setTopic(step?.topic ?? null);
           setAsk(step?.ask ?? null);
+          setStepId(step?.id ?? null);
           setOpens(step?.opens ?? "saathi");
         })
         .catch(() => setTopic(null));
@@ -406,7 +408,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
     setError(null);
     setAsking(true);
     try {
-      appendTurns(await api.companionAsks(question));
+      appendTurns(await api.companionAsks(question, question === ask ? stepId : null));
     } catch (e) {
       setError(friendlyError(e));
       return;

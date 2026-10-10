@@ -100,14 +100,14 @@ def stubbed(monkeypatch, tmp_path):
     async def ask(owner, user, question, session_id=None):
         return {"answer": f"{owner['name']} never recorded anything about that.", "sources": [], "session_id": "hs"}
 
-    async def converse(owner, last, text, media, known):
-        return ConversationTurn(reply="Thank you.", reply_language="en", owner_language="en", heard="",
+    async def understand(owner, last, text, media, known):
+        return ConversationTurn(owner_language="en", heard="",
                                 moments=[Moment(kind="practical", title="Papers", summary=f"{text} In the steel cupboard.",
                                                 quote=text)], inventory=[], people=[])
 
     monkeypatch.setattr(loops, "check_document", check_document)
     monkeypatch.setattr(executor_agent, "ask", ask)
-    monkeypatch.setattr(loops, "converse", converse)
+    monkeypatch.setattr(loops, "understand", understand)
     monkeypatch.setattr(run, "RESULTS", tmp_path)
     monkeypatch.setenv("GOOGLE_API_KEY", "not-a-real-key")
     return tmp_path

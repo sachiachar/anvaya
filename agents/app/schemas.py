@@ -123,7 +123,20 @@ class InventoryItem(BaseModel):
 # ---- Conversation (one interface for voice, text, photos, documents) -----
 
 
+Mood = Literal["calm", "happy", "sad", "anxious", "tired", "upset"]
+StepOutcome = Literal["answered", "unsure", "not_now", "declined", "none"]
+MOOD_FIELD = ("How the owner seems from their LATEST words, one word: calm, happy, sad, anxious, tired or upset. "
+              "'calm' if nothing stands out. A report only: the app decides what to do with it.")
+OUTCOME_FIELD = ("How the owner's LATEST words answer Saathi's last question: 'answered'; 'unsure' (e.g. 'I think "
+                 "it's Meena'); 'not_now' (later, not now); 'declined' (doesn't want to say); or 'none' if they "
+                 "don't address it or there was none.")
+
+
 class ConversationTurn(BaseModel):
+    """Reading one turn of the owner's chat (guardian-led conversations, PR-2.12.3): what they said,
+    what is worth keeping, how they seem and how they answered. Saathi's reply is a separate step,
+    made after the guardian and the plan have seen this."""
+
     heard: str = Field(
         description="Verbatim transcript of what the owner said, in the original language; or a "
         "one-line description of the shared photo or document; or empty if they only typed."
@@ -132,11 +145,6 @@ class ConversationTurn(BaseModel):
         description="Language and script of the owner's LATEST message only, e.g. 'English', "
         "'Hinglish (Latin script)', 'Hindi (Devanagari)'. The reply must use exactly this."
     )
-    reply: str = Field(
-        description="Your reply, spoken aloud to the owner: at most 2 short sentences, entirely in "
-        "owner_language, usually ending with one gentle follow-up question."
-    )
-    reply_language: str = Field(description="BCP-47 code of the reply language, e.g. hi-IN, en-IN, ta-IN")
     moments: list[Moment] = Field(default=[], description="Moments worth keeping from this turn only")
     inventory: list[InventoryItem] = Field(
         default=[], description="Financial items found in a shared document or mentioned in this turn"
@@ -145,31 +153,29 @@ class ConversationTurn(BaseModel):
         default=[], description="People whose relationship to the owner was stated in this turn "
         "(e.g. 'My wife is Meena', 'Ajay is my nephew'). Not people already in the family list."
     )
-    asked_gap: str | None = Field(
-        default=None, description="If your reply asks about one of open_gaps, that gap's key, exactly; otherwise null."
+    owner_mood: Mood = Field(default="calm", description=MOOD_FIELD)
+    step_outcome: StepOutcome = Field(default="none", description=OUTCOME_FIELD)
+
+
+class PlanReply(BaseModel):
+    """Saathi's reply, carrying out the plan's current step in its tone (PR-2.12.3)."""
+
+    reply: str = Field(
+        description="Your reply, spoken aloud to the owner: at most 2 short sentences, entirely in the owner's "
+        "language and script."
     )
-    gap_outcome: Literal["answered", "unsure", "not_now", "declined", "none"] = Field(
-        default="none", description="How the owner's LATEST message answers last_gap_asked: 'answered'; 'unsure' "
-        "(e.g. 'I think it's Meena'); 'not_now' (later, not now); 'declined' (doesn't want to say); or 'none' "
-        "if it doesn't address it or there is none."
-    )
+    reply_language: str = Field(description="BCP-47 code of the reply language, e.g. hi-IN, en-IN, ta-IN")
 
 
 class Extraction(BaseModel):
-    """What is worth keeping from one spoken exchange in a live call."""
+    """What is worth keeping from one spoken exchange in a live call, how the owner seems, and how
+    they answered Saathi's last question."""
 
     moments: list[Moment] = []
     inventory: list[InventoryItem] = []
     people: list[Person] = []
-    asked_gap: str | None = Field(
-        default=None,
-        description="If what the assistant said asks about one of open_gaps, that gap's key, exactly; otherwise null.",
-    )
-    gap_outcome: Literal["answered", "unsure", "not_now", "declined", "none"] = Field(
-        default="none", description="How what the owner said answers last_gap_asked: 'answered'; 'unsure' "
-        "(e.g. 'I think it's Meena'); 'not_now' (later, not now); 'declined' (doesn't want to say); or 'none' "
-        "if it doesn't address it or there is none."
-    )
+    owner_mood: Mood = Field(default="calm", description=MOOD_FIELD)
+    step_outcome: StepOutcome = Field(default="none", description=OUTCOME_FIELD)
 
 
 class ConversationSummary(BaseModel):

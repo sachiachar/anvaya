@@ -23,7 +23,8 @@ import tempfile
 from . import score
 
 RESULTS = pathlib.Path(__file__).resolve().parent / "results"
-AGENTS = {"certificates": "activation.checker", "questions": "handover.assistant", "cards": "saathi.chat"}
+# Cards are made by the reader of each turn (capture.extractor) since guardian-led conversations (PR-2.12.3).
+AGENTS = {"certificates": "activation.checker", "questions": "handover.assistant", "cards": "capture.extractor"}
 # Before the app loads (its settings are read once): memory only, no bucket, the Gemini API key path.
 LOCAL_ONLY = {"STORE": "memory", "MEDIA_BUCKET": "", "GOOGLE_GENAI_USE_VERTEXAI": "false", "KMS_KEY_NAME": ""}
 
@@ -71,11 +72,11 @@ async def cards() -> list[dict]:
     data = score.load("cards")
     owner = {"id": "owner_evals_cards", "name": data["owner"]["name"], "country": "India", "city": "Bengaluru",
              "family": data["owner"]["family"]}
-    known = {**proposals.known(owner["id"]), "family": data["owner"]["family"], "last_gap_asked": None}
+    known = {**proposals.known(owner["id"]), "family": data["owner"]["family"]}
     rows = []
     for case in data["cases"]:
         last = {"text": case["saathi"]} if case["saathi"] else None
-        result = await loops.converse(owner, last, case["owner"], None, known)
+        result = await loops.understand(owner, last, case["owner"], None, known)
         grounded = grounding.ground(result, owner_words=case["owner"], saathi_words=case["saathi"] or "", known=known)
         rows.append(score.score_cards(case, score.cards_text(result), score.cards_text(grounded)))
         print(f"  cards {case['id']}: unsaid before {rows[-1]['unsaid_before_check']}, after {rows[-1]['unsaid_after_check']}")

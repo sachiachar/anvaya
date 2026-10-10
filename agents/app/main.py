@@ -256,47 +256,57 @@ async def converse(owner_id: str, text: str | None = Form(None), file: UploadFil
         attachment = {"kind": kind, "name": file.filename, "mime": mime}
         source = {"recording": path} if kind == "voice" else {"document": path}
 
+    # Guardian-led (PR-2.12.3): read the turn, let the guardian see each new piece of information and
+    # the plan move on, and only then let Saathi reply, from the plan's current step and its tone.
     # Saathi carries on from what's kept and its own last message, never from older conversation.
     last_said = gaps.recent(owner.get("last_said"))
-    known = await asyncio.to_thread(_known_and_last_gap, owner_id, last_said)
-    result = await loops.converse(owner, last_said, text, upload, known)
+    known = await asyncio.to_thread(proposals.known, owner_id)
+    result = await loops.understand(owner, last_said, text, upload, known)
     # Cards say only what was said: the owner's words (typed, or heard in a voice note), checked in code.
     voice = bool(attachment and attachment["kind"] == "voice")
     result = grounding.ground(result, owner_words=" ".join(filter(None, [text, result.heard if voice else ""])),
                               saathi_words=(last_said or {}).get("text") or "", known=known,
                               from_document=bool(attachment) and not voice)
-    return await asyncio.to_thread(_save_turn, owner_id, text, result, attachment, path, source, last_said)
+    taken = await asyncio.to_thread(_take_in, owner_id, text, result, attachment, path, source, last_said)
+    reply = await loops.respond(owner, taken["step"], last_said, (text or "").strip() or result.heard, known)
+    return await asyncio.to_thread(_answer, owner_id, taken, result, reply, last_said)
 
 
-def _known_and_last_gap(owner_id: str, last_said: dict | None) -> dict:
-    return {**proposals.known(owner_id), "last_gap_asked": gaps.last_gap(owner_id, last_said)}
-
-
-def _save_turn(owner_id: str, text: str | None, result, attachment: dict | None, path: str | None, source: dict,
-               last_said: dict | None = None) -> dict:
+def _take_in(owner_id: str, text: str | None, result, attachment: dict | None, path: str | None, source: dict,
+             last_said: dict | None) -> dict:
+    """The owner's side of a turn: the guardian sees each new piece of information first, only what it
+    allows becomes a card, and the plan takes in the guardian's decisions, the owner's mood and how
+    they answered the step Saathi carried out last. Returns the turn, its cards and the step to carry out."""
     with proposals.saving(owner_id):  # cards from a call exchange may be saving at the same moment
         store.update("owners", owner_id, {"language": result.owner_language})
-
         now = time.time()
         owner_turn_id = new_id("turn")
-        # The guardian sees each new piece of information first; only what it allows becomes a card.
         screened = guardian_inputs.screen(owner_words=(text or "").strip() or result.heard, moments=result.moments,
                                           inventory=result.inventory, people=result.people, turn_id=owner_turn_id,
                                           agent="saathi.chat")
         moments, inventory, people = proposals.save_screened(owner_id, screened, source)
-        planner.after_statements(owner_id, owner_turn_id, screened.outcomes)  # a deflection adds a safe-route step
+        plan = planner.after_turn(owner_id, owner_turn_id, screened.outcomes, mood=result.owner_mood,
+                                  answered_step=(last_said or {}).get("step"), outcome=result.step_outcome)
         owner_turn = store.put("turns", {"id": owner_turn_id, "owner_id": owner_id, "at": now, "role": "owner",
                                          "text": (text or "").strip() or result.heard, "heard": result.heard,
                                          "attachment": attachment, **({"media": path} if path else {}),
                                          "guardian": screened.decisions, "held_back": screened.held_back})
-        ai_turn = store.put("turns", {"id": new_id("turn"), "owner_id": owner_id, "at": now + 0.001,
-                                      "role": "assistant", "text": result.reply, "language": result.reply_language,
-                                      "proposals": {"moments": [m["id"] for m in moments],
-                                                    "inventory": [i["id"] for i in inventory],
-                                                    "people": [p["id"] for p in people]}})
-        gaps.after_reply(owner_id, last_said, text=result.reply, turn_id=ai_turn["id"],
-                         asked_gap=result.asked_gap, outcome=result.gap_outcome)
-    return {"autonomy": ACT, "owner_turn": _expand(owner_turn), "assistant_turn": _expand(ai_turn)}
+    return {"owner_turn": owner_turn, "at": now, "step": planner.view(plan)["current"],
+            "proposals": {"moments": [m["id"] for m in moments], "inventory": [i["id"] for i in inventory],
+                          "people": [p["id"] for p in people]}}
+
+
+def _answer(owner_id: str, taken: dict, result, reply, last_said: dict | None) -> dict:
+    """Saathi's side of a turn: its reply, the step it carried out, and the gap that step asked about
+    (so a gap comes back only as a reminder)."""
+    step = taken["step"] or {}
+    ai_turn = store.put("turns", {"id": new_id("turn"), "owner_id": owner_id, "at": max(time.time(), taken["at"] + 0.001),
+                                  "role": "assistant", "text": reply.reply, "language": reply.reply_language,
+                                  "step": step.get("id"), "proposals": taken["proposals"]})
+    gap = step["id"].removeprefix("gap:") if step.get("source") == "gap" and step.get("opens") == "saathi" else None
+    gaps.after_reply(owner_id, last_said, text=reply.reply, turn_id=ai_turn["id"], asked_gap=gap,
+                     outcome=result.step_outcome, step=step.get("id"))
+    return {"autonomy": ACT, "owner_turn": _expand(taken["owner_turn"]), "assistant_turn": _expand(ai_turn)}
 
 
 @app.websocket("/api/owners/{owner_id}/live")
@@ -590,6 +600,7 @@ def update_task(task_id: str, body: TaskUpdate) -> dict:
 
 class Prompt(BaseModel):
     text: str
+    step_id: str | None = None  # the plan step this opens, from the Talk screen (PR-2.12.3)
 
 
 @api.post("/owners/{owner_id}/conversation/prompt", dependencies=[Depends(demo.only("owner"))])
@@ -602,7 +613,12 @@ def companion_asks(owner_id: str, body: Prompt) -> dict:
         raise HTTPException(422, "Saathi can't start with that.")
     turn = store.put("turns", {"id": new_id("turn"), "owner_id": owner_id, "at": time.time(),
                                "role": "assistant", "text": body.text, "language": None})
-    store.update("owners", owner_id, {"last_said": {"text": body.text, "turn_id": turn["id"], "at": turn["at"], "gap": None}})
+    # When it opens the plan's current step (PR-2.12.3), the next answer is judged against that step.
+    step = planner.view(planner.current(owner_id))["current"] if body.step_id else None
+    step_id = step["id"] if step and step["id"] == body.step_id else None
+    gap = step_id.removeprefix("gap:") if step_id and step_id.startswith("gap:") else None
+    store.update("owners", owner_id, {"last_said": {"text": body.text, "turn_id": turn["id"], "at": turn["at"],
+                                                    "gap": gap, "step": step_id}})
     return turn
 
 

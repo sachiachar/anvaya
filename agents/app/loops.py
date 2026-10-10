@@ -22,6 +22,7 @@ from .schemas import (
     ConversationSummary,
     ConversationTurn,
     DocumentCheck,
+    PlanReply,
     Extraction,
     InventoryItem,
     LegalNeeds,
@@ -57,15 +58,12 @@ def persona(owner: dict) -> str:
         "the institution. If they ask for help with that, explain the usual next step in one "
         "sentence (e.g. a nominee change form from the insurer or bank) and suggest keeping it "
         "as a reminder.\n"
-        "Gaps: 'open_gaps' in what is already saved lists the most important missing pieces, "
-        "found by the app. When the moment fits (not in the middle of a story), gently ask about "
-        "at most ONE of them, in your own words. Never press; if they don't know, move on. A gap "
-        "with 'reminder' above 0 was asked before ('last_asked', 'last_answer'): bring it up as a "
-        "gentle reminder (\"Last week we talked about..., did you get a chance to...?\"), never as "
-        "if it were new, and never pushy. The app decides when to remind; you only choose the "
-        "moment and the words.\n"
-        "People: when they mention someone whose relationship to them you don't know (for "
-        "example a nominee), ask who that person is.\n"
+        "The plan: the app gives you the current step of the conversation plan: its topic, what to do "
+        "('ask', guidance, not a script), who starts it and its tone. You carry it out; you never choose a "
+        "topic or a follow-up question of your own. If the step opens with you, carry it out in your own "
+        "words. If it waits for them, don't raise it unless they bring it up: respond to what they said and "
+        "warmly invite them to go on. Speak in the step's tone. If they bring up something else, listen and "
+        "respond kindly, then come back to the step only if it fits; never ask about anything else.\n"
         "Never ask for passwords, PINs or full account or policy numbers (the last 4 digits are "
         "enough); the secure vault in the app is for those. No legal or financial advice.\n"
         "Safe routes only: never help with a route that could be a fraud, such as paying a fee to "
@@ -154,77 +152,100 @@ NO_INVENTED = ("Fill a field only with what was said. Never copy an example from
                "leave a field empty if they didn't say it. ")
 
 
-async def converse(owner: dict, last_said: dict | None, text: str | None,
-                   media: tuple[bytes, str] | None, known: dict) -> ConversationTurn:
-    """Conversation loop: one turn of the owner's single chat, whatever they send.
+async def understand(owner: dict, last_said: dict | None, text: str | None,
+                     media: tuple[bytes, str] | None, known: dict) -> ConversationTurn:
+    """Reading one turn of the owner's single chat, whatever they send (PR-2.12.3): voice is
+    transcribed, photos and documents are read, and anything worth keeping comes back as candidate
+    cards. It also reports how the owner seems and how they answered Saathi's last question. It
+    decides nothing: the guardian sees what was said, then the plan moves on, and only then does
+    Saathi reply (respond).
 
-    Voice is transcribed, photos and documents are read, and anything worth keeping
-    comes back as candidate moments or inventory items for the owner to approve.
-    A reply that breaks the language or honesty rules is rewritten once.
-
-    Saathi remembers only what the owner kept (in `known`, with the gaps that are due), plus
-    its own last message in this conversation, so a short answer still makes sense. No earlier
-    conversation is sent: what the owner discarded or never kept can't steer it.
-    The parts that change least come first, so Gemini can reuse them from the last request.
-    """
-    last_gap = known.get("last_gap_asked")
-    saved = {k: v for k, v in known.items() if k != "last_gap_asked"}
+    It sees only what the owner kept (`known`) and Saathi's own last message in this conversation,
+    so a short answer still makes sense. No earlier conversation is sent."""
     prompt = (
-        f"What is already saved: {json.dumps(saved, ensure_ascii=False)}\n\n"
-        f"Your last message in this conversation: {last_said['text'] if last_said else '(none: a new conversation)'}\n"
-        f"last_gap_asked: {json.dumps(last_gap, ensure_ascii=False) if last_gap else 'none'}\n\n"
-        f"The owner's LATEST message (reply in its language): {text or '(see attachment)'}"
+        f"What is already saved: {json.dumps(known, ensure_ascii=False)}\n\n"
+        f"Saathi's last message in this conversation: {last_said['text'] if last_said else '(none: a new conversation)'}\n\n"
+        f"The owner's LATEST message: {text or '(see attachment)'}"
     )
-    result = await _converse_once(owner, prompt, media)
-    problems = reply_problems(text or result.heard, result.reply)
-    if problems:
-        prompt += "\n\nYour previous reply broke these rules; write it again:\n- " + "\n- ".join(problems)
-        result = await _converse_once(owner, prompt, media)
-    return result
-
-
-async def _converse_once(owner: dict, prompt: str, media: tuple[bytes, str] | None) -> ConversationTurn:
     return await generate_json(
-        agent="saathi.chat",
+        agent="capture.extractor",
         schema=ConversationTurn,
         media=[media] if media else None,
         system=(
+            "You read one turn of an older person's conversation with Saathi, their companion, who helps them "
+            "leave stories, advice, wishes and practical knowledge for their family. You don't reply.\n"
+            "Voice: transcribe verbatim in 'heard'. Photo of people or places: describe it in 'heard'; only make a "
+            "moment once they tell the story. Financial document (policy, statement, passbook): add an inventory "
+            "item. If they give new details about an item already discussed, return that item again with the same "
+            "institution and last 4 digits, including the new details. If they say who the nominee or beneficiary "
+            "of an account or policy IS, that is a fact about that item, not a wish; only a wish to CHANGE a nominee "
+            "is a wish.\n"
+            "Only include moments, inventory and people from THIS turn. If a moment with the same meaning is already "
+            "saved, don't add it again. A short answer to Saathi's question (like 'Yes, that would be Priya') is a "
+            "detail of the moment it was about: return that moment again with its exact saved title and a summary "
+            "that includes the new detail. Every summary must make sense on its own. Keep quotes verbatim. Give each "
+            "moment its statements (subject, predicate, object), with predicates only from the list; anything they "
+            "want, plan or promised is a wish statement. Say how they seem (owner_mood) and how they answered "
+            "Saathi's last question (step_outcome). " + NO_INVENTED + PRIVACY_RULES
+        ),
+        prompt=prompt,
+    )
+
+
+def _step_words(step: dict | None) -> str:
+    if not step:
+        return "No step right now: respond warmly to what they said and invite them to share whatever they like."
+    return json.dumps({"topic": step["topic"], "what to do": step["ask"], "who starts it": step["opens"],
+                       "tone": f"{step['tone']}: {step['tone_words']}"}, ensure_ascii=False)
+
+
+async def respond(owner: dict, step: dict | None, last_said: dict | None, text: str, known: dict) -> PlanReply:
+    """Saathi's reply (PR-2.12.3): it carries out the plan's current step, in its tone, after the
+    guardian and the planner have seen the turn. A reply that breaks the language, honesty or
+    safe-route rules is rewritten once."""
+    prompt = (
+        f"What is already saved: {json.dumps(known, ensure_ascii=False)}\n\n"
+        f"Your last message in this conversation: {last_said['text'] if last_said else '(none: a new conversation)'}\n\n"
+        f"The current step of the plan: {_step_words(step)}\n\n"
+        f"The owner's LATEST message (reply in its language): {text}"
+    )
+    result = await _respond_once(owner, prompt)
+    problems = reply_problems(text, result.reply)
+    if problems:
+        prompt += "\n\nYour previous reply broke these rules; write it again:\n- " + "\n- ".join(problems)
+        result = await _respond_once(owner, prompt)
+    return result
+
+
+async def _respond_once(owner: dict, prompt: str) -> PlanReply:
+    return await generate_json(
+        agent="saathi.chat",
+        schema=PlanReply,
+        system=(
             persona(owner) + "\n\n"
-            "Each turn: understand what they said or shared, reply in one or two short sentences, "
-            "and ask ONE gentle follow-up question that fills a gap in what is saved (people, "
-            "dates, where documents are, who should receive what).\n"
-            "Voice: transcribe verbatim in 'heard'. Photo of people or places: describe it in "
-            "'heard' and ask who is in it and what happened; only create a moment once they tell "
-            "the story. Financial document (policy, statement, passbook): add an inventory item "
-            "and mention anything missing, such as a nominee. If they give new details about an "
-            "item already discussed, return that item again with the same institution and last "
-            "4 digits, including the new details.\n"
-            "Only include moments, inventory and people from THIS turn. If a moment with the same "
-            "meaning is already saved, don't add it again. A short answer to your own question "
-            "(like 'Yes, that would be Priya') is a detail of the moment you asked about: return "
-            "that moment again with its exact saved title and a summary that includes the new "
-            "detail. Every summary must make sense on its own. Keep quotes verbatim. Give each moment its "
-            "statements (subject, predicate, object), with predicates only from the list; anything they "
-            "want, plan or promised is a wish statement. " + NO_INVENTED + PRIVACY_RULES
+            "Each turn: reply to what they said in one or two short sentences, in the step's tone, and carry out "
+            "the current step as the plan says."
         ),
         prompt=prompt,
     )
 
 
 def live_instructions(owner: dict, known: dict, opening: str | None = None) -> str:
-    """System instruction for a live voice call: the same companion as the typed chat. Like the
-    chat, it gets only what's kept and the gaps that are due, plus, within the same conversation,
-    its own last message (e.g. a question asked from a next step), to open the call with."""
+    """System instruction for a live voice call: the same companion as the typed chat, following
+    the same plan (PR-2.12.3). It reads the current step with the current_step tool, at the start
+    and after each answer, so the plan (and its tone) can change during the call; it reports how
+    the owner answered with report_step. Within the same conversation it also gets its own last
+    message (e.g. a question asked from "Talk about this")."""
     return (
         persona(owner) + "\n\n"
-        "This is a voice call. Speak naturally: one or two short sentences, then ONE gentle "
-        "follow-up question that fills a gap (people, dates, where documents are, who should "
-        "receive what). Let them finish before you answer. At most one reminder in this call.\n"
+        "This is a voice call. Speak naturally: one or two short sentences. Let them finish before you answer.\n"
+        "The plan on this call: call current_step at the start, and again after each of their answers, before "
+        "you speak. If the step opens with you, carry it out; if it waits for them, let them lead. Speak in its "
+        "tone. When they answer the step, or say not now, or decline, call report_step with that outcome. If "
+        "current_step gives you a 'correct' note, follow it gently in your next words.\n"
         "Words to avoid on this call: 'noted', 'I've noted', 'saved', 'recorded', 'made a note'. "
         "Say 'I've added that to your list to review' instead, because nothing is saved until "
         "they tap Keep.\n"
-        "If they say 'not yet' to something that needs action (a will, a nominee change), don't "
-        "drop it: say it's now on their next steps in the app.\n"
         f"Already saved: {json.dumps(known, ensure_ascii=False)}. Don't ask about those again.\n"
         + (f"Your last message, a few minutes ago: \"{opening}\". If it was a question, start the call "
            f"by gently asking it again." if opening else "")
@@ -245,13 +266,11 @@ async def extract_from_exchange(owner: dict, heard: str, said: str, known: dict)
             "it was about: return that moment with its exact saved title and a summary that makes "
             "sense on its own. Give each moment its statements (subject, predicate, object), with "
             "predicates only from the list; anything they want, plan or promised is a wish statement. "
-            "Return empty lists if nothing new. Also say which of open_gaps the "
-            "assistant asked about (asked_gap), and how the owner answered last_gap_asked "
-            "(gap_outcome). " + NO_INVENTED + PRIVACY_RULES
+            "Return empty lists if nothing new. Also say how the owner seems (owner_mood) and how they "
+            "answered the assistant's question (step_outcome). " + NO_INVENTED + PRIVACY_RULES
         ),
         prompt=json.dumps({"owner": owner["name"], "owner_said": heard, "assistant_said": said,
-                           "already_saved": {k: v for k, v in known.items() if k != "last_gap_asked"},
-                           "last_gap_asked": known.get("last_gap_asked")}, ensure_ascii=False),
+                           "already_saved": known}, ensure_ascii=False),
     )
 
 

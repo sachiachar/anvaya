@@ -28,6 +28,8 @@ tools:
   - {id: read_concept, kind: function, effect: read, data: owner_bundle_after_release}
   - {id: list_accounts, kind: function, effect: read, data: owner_bundle_after_release}
   - {id: web_search, kind: function, effect: external, data: none}   # Exa, web_search.py; never owner data
+  - {id: current_step, kind: function, effect: read, data: conversation_plan}    # PR-2.12.3: the plan's current step
+  - {id: report_step, kind: function, effect: write, data: conversation_plan}    # how the owner answered it
 
 mcp_servers: []          # none yet; each will list its endpoint and tools
 

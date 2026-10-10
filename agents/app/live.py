@@ -39,6 +39,23 @@ log = logging.getLogger(__name__)
 AGENT = "saathi.voice"
 
 
+# The plan on a call (PR-2.12.3): Saathi reads the current step, and reports how the owner answered
+# it, through these two tools, so the plan and its tone can change during the call. Both are in the
+# registry and Saathi's voice policy; the gateway checks each call (check_tool).
+OUTCOMES = ["answered", "unsure", "not_now", "declined"]
+PLAN_TOOLS = [types.Tool(function_declarations=[
+    types.FunctionDeclaration(
+        name="current_step",
+        description="The current step of the conversation plan: its topic, what to do, who starts it, its tone, "
+                    "and a 'correct' note if your last words broke a rule. Call it at the start and after each answer."),
+    types.FunctionDeclaration(
+        name="report_step",
+        description="Report how the owner answered the current step.",
+        parameters=types.Schema(type=types.Type.OBJECT, required=["outcome"], properties={
+            "outcome": types.Schema(type=types.Type.STRING, enum=OUTCOMES)})),
+])]
+CORRECTED = "A spoken reply broke a conversation rule; Saathi was told to correct it"
+
 # How long a call's request waits, after the call ends, for its last exchanges to finish saving.
 SAVE_GRACE_SECONDS = 30
 # After this long, a turn still marked "saving" is treated as saved (its save was lost), so nothing
@@ -61,6 +78,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
     reserved, reserved_on = 0.0, None
     reply_tokens: dict[int, tuple[int, int]] = {}  # tokens in and out for each model reply
     saves: set[asyncio.Task] = set()  # exchanges still being saved (their cards worked out)
+    plan_state: dict = {"step": None, "correct": None}  # the step Saathi is carrying out, and any correction
     config = types.LiveConnectConfig(
         response_modalities=["AUDIO"],
         speech_config=types.SpeechConfig(
@@ -71,6 +89,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
         system_instruction=await asyncio.to_thread(_instructions, owner),
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
+        tools=PLAN_TOOLS,
     )
     source = keys.PLATFORM
     try:
@@ -94,7 +113,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
             open_call = governance.call_started(AGENT)  # the agents map shows the call while it lasts
             await ws.send_json({"type": "ready"})
             upstream = asyncio.create_task(_from_browser(ws, session))
-            downstream = asyncio.create_task(_to_browser(ws, session, owner, expand, reply_tokens, saves))
+            downstream = asyncio.create_task(_to_browser(ws, session, owner, expand, reply_tokens, saves, plan_state))
             cap = governance.limit(AGENT, "max_call_minutes", 20)
             # The person's voice minutes left today (PR-10.4); not counted on their own key.
             left = governance.remaining(AGENT) if source == keys.PLATFORM else None
@@ -157,8 +176,9 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
 
 
 def _instructions(owner: dict) -> str:
-    """What's kept and the gaps that are due; no earlier conversation, only Saathi's own last
-    message if it's from the same conversation (e.g. a question from "Talk about this")."""
+    """What's kept (no gaps: they feed only the plan, which Saathi reads with current_step); no
+    earlier conversation, only Saathi's own last message if it's from the same conversation (e.g.
+    a question from "Talk about this")."""
     last_said = gaps.recent(owner.get("last_said"))
     return loops.live_instructions(owner, proposals.known(owner["id"]), last_said["text"] if last_said else None)
 
@@ -177,8 +197,30 @@ async def _from_browser(ws: WebSocket, session) -> None:
             return
 
 
+def _plan_tool(owner_id: str, name: str, args: dict, plan_state: dict) -> dict:
+    """Run one of Saathi's plan tools on a call. The gateway checks the tool first; a correction
+    waiting from the last spoken reply goes out once, with the next step."""
+    try:
+        governance.check_tool(AGENT, name)
+    except governance.Refused:
+        return {"error": "This tool isn't allowed."}
+    if name == "current_step":
+        step = planner.view(planner.current(owner_id))["current"]
+        plan_state["step"] = step["id"] if step else None
+        out = {"step": step} if step else {"step": None, "note": "No step right now: let them talk about anything."}
+        if plan_state.get("correct"):
+            out["correct"] = plan_state["correct"]
+            plan_state["correct"] = None
+        return out
+    if name == "report_step" and plan_state.get("step") and args.get("outcome") in OUTCOMES:
+        planner.step_outcome(owner_id, plan_state["step"], args["outcome"])
+        return {"ok": True}
+    return {"ok": False}
+
+
 async def _to_browser(ws: WebSocket, session, owner: dict, expand,
-                      reply_tokens: dict[int, tuple[int, int]], saves: set[asyncio.Task] | None = None) -> None:
+                      reply_tokens: dict[int, tuple[int, int]], saves: set[asyncio.Task] | None = None,
+                      plan_state: dict | None = None) -> None:
     heard, said = "", ""
     reply = 0  # numbers each model reply; an interrupted reply and the next one are counted apart
     while True:
@@ -191,6 +233,11 @@ async def _to_browser(ws: WebSocket, session, owner: dict, expand,
                 # in gemini.py.
                 reply_tokens[reply] = (usage.prompt_token_count or 0,
                                       (usage.response_token_count or 0) + (usage.thoughts_token_count or 0))
+            if (call := getattr(message, "tool_call", None)) and call.function_calls and plan_state is not None:
+                responses = [types.FunctionResponse(id=fc.id, name=fc.name, response=await asyncio.to_thread(
+                    _plan_tool, owner["id"], fc.name, dict(fc.args or {}), plan_state)) for fc in call.function_calls]
+                await session.send_tool_response(function_responses=responses)
+                continue
             content = message.server_content
             if not content:
                 continue
@@ -209,7 +256,7 @@ async def _to_browser(ws: WebSocket, session, owner: dict, expand,
                         await ws.send_bytes(part.inline_data.data)
             if content.turn_complete and (heard.strip() or said.strip()):
                 # Save in the background so the conversation keeps flowing.
-                task = asyncio.create_task(_save_exchange(ws, owner, heard.strip(), said.strip(), expand))
+                task = asyncio.create_task(_save_exchange(ws, owner, heard.strip(), said.strip(), expand, plan_state))
                 if saves is not None:
                     saves.add(task)
                     task.add_done_callback(saves.discard)
@@ -219,16 +266,23 @@ async def _to_browser(ws: WebSocket, session, owner: dict, expand,
         reply += 1
 
 
-async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expand) -> None:
+async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expand,
+                         plan_state: dict | None = None) -> None:
     """Save one exchange of a call. Its two turns are stored straight away, marked "saving", so the
     end-of-call review knows more is coming; the cards are added once the extractor has read the
     exchange, and then the mark is cleared. If the owner discarded the exchange meanwhile, no cards
     are made for it. The store calls run in a worker thread, so the call's audio never waits on them."""
     owner_id = owner["id"]
+    step = (plan_state or {}).get("step")  # the step Saathi was carrying out as it spoke
+    # A spoken reply can't be taken back, so it's checked after the fact (the same rules as typed
+    # chat): a broken rule is recorded for the team, and Saathi corrects it with its next step.
+    if (problems := loops.reply_problems(heard, said)) and plan_state is not None:
+        plan_state["correct"] = problems[0]
+        await asyncio.to_thread(governance.record_intervention, AGENT, "add_check", CORRECTED)
     owner_turn, ai_turn = await asyncio.to_thread(_start_exchange, owner_id, heard, said)
     found, last_said = None, None
     try:
-        known, last_said = await asyncio.to_thread(_known_and_last_gap, owner_id)
+        known, last_said = await asyncio.to_thread(_known_and_last_said, owner_id)
         found = await loops.extract_from_exchange(owner, heard, said, known)
         # Cards say only what was said: checked against the owner's words and the question they answered.
         # That question is Saathi's turn stored just before this one; owners.last_said can still be the
@@ -241,7 +295,7 @@ async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expa
         moments, inventory, people = [], [], []
 
     turns = await asyncio.to_thread(_finish_exchange, owner_id, owner_turn, ai_turn, moments, inventory, people, expand,
-                                    found, last_said)
+                                    found, last_said, step)
     if turns is None:
         return
     owner_turn, ai_turn = turns
@@ -268,16 +322,14 @@ def _question_before(owner_id: str, at: float) -> str:
     return (max(earlier, key=lambda t: t["at"]).get("text") or "") if earlier else ""
 
 
-def _known_and_last_gap(owner_id: str) -> tuple[dict, dict | None]:
-    """What the extractor needs: what's kept and due, and the gap Saathi's last message asked
-    about, to judge the answer. Read fresh, because earlier exchanges of this call changed it; the
-    same last message is used to record the answer, so it's judged against the question it saw."""
-    last_said = (store.get("owners", owner_id) or {}).get("last_said")
-    return {**proposals.known(owner_id), "last_gap_asked": gaps.last_gap(owner_id, last_said)}, last_said
+def _known_and_last_said(owner_id: str) -> tuple[dict, dict | None]:
+    """What the extractor needs: what's kept, read fresh because earlier exchanges of this call
+    changed it, and Saathi's last message, whose step this exchange answers."""
+    return proposals.known(owner_id), (store.get("owners", owner_id) or {}).get("last_said")
 
 
 def _finish_exchange(owner_id: str, owner_turn: dict, ai_turn: dict, moments, inventory, people,
-                     expand, found=None, last_said: dict | None = None) -> tuple[dict, dict] | None:
+                     expand, found=None, last_said: dict | None = None, step: str | None = None) -> tuple[dict, dict] | None:
     """Add the cards and clear the "saving" mark. None if the owner discarded the exchange."""
     with proposals.saving(owner_id):
         if not store.get("turns", ai_turn["id"]) or not store.get("turns", owner_turn["id"]):
@@ -288,7 +340,9 @@ def _finish_exchange(owner_id: str, owner_turn: dict, ai_turn: dict, moments, in
                                           inventory=inventory, people=people, turn_id=owner_turn["id"],
                                           agent="capture.extractor")
         moment_docs, item_docs, people_docs = proposals.save_screened(owner_id, screened, source)
-        planner.after_statements(owner_id, owner_turn["id"], screened.outcomes)  # a deflection adds a safe-route step
+        # The plan takes in the guardian's decisions, the owner's mood and how they answered the last step.
+        planner.after_turn(owner_id, owner_turn["id"], screened.outcomes, mood=getattr(found, "owner_mood", "calm"),
+                           answered_step=(last_said or {}).get("step"), outcome=getattr(found, "step_outcome", "none"))
         try:
             owner_turn = store.update("turns", owner_turn["id"], {"saving": False, "guardian": screened.decisions,
                                                                   "held_back": screened.held_back})
@@ -309,6 +363,7 @@ def _finish_exchange(owner_id: str, owner_turn: dict, ai_turn: dict, moments, in
                     if current and current.get("status") == "pending" and doc["id"] not in mentioned:
                         store.delete(collection, doc["id"])
             return None
+        gap = step.removeprefix("gap:") if step and step.startswith("gap:") else None
         gaps.after_reply(owner_id, last_said, text=ai_turn["text"], turn_id=ai_turn["id"], now=ai_turn["at"],
-                         asked_gap=getattr(found, "asked_gap", None), outcome=getattr(found, "gap_outcome", None))
+                         asked_gap=gap, outcome=getattr(found, "step_outcome", None), step=step)
         return owner_turn, expand(ai_turn)
