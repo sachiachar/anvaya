@@ -54,7 +54,9 @@ The words stay in the owner's own store.
    with it, or Saathi waits for the owner to start (wishes, advice, low-harm gaps, suggestions).
    The initial plan file; one stored plan per owner, updated after
    each guardian decision, step outcome and Keep; gaps and readiness feed only the planner.
-3. **Saathi as executor.** Typed chat: extract, guardian, cards and plan, then the reply. Voice:
+3. **Saathi as executor.** *(Built in PR-2.12.3, with tone and mood: each step has a tone, and the
+   owner's mood, reported by the reader of each turn, changes the plan in code.)* Typed chat:
+   extract, guardian, cards and plan, then the reply. Voice:
    `current_step()` and `report_step(outcome)` tools; the same reply checks as typed chat.
 4. **The family side.** Every family question, and every answer before it is shown, through the
    guardian with the same rules.

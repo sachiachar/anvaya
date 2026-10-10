@@ -261,7 +261,7 @@ def recent(last_said: dict | None, now: float | None = None) -> dict | None:
 
 
 def after_reply(owner_id: str, last_said: dict | None, *, text: str, turn_id: str,
-                asked_gap: str | None, outcome: str | None, now: float | None = None) -> None:
+                asked_gap: str | None, outcome: str | None, now: float | None = None, step: str | None = None) -> None:
     """Record what Saathi just said: how the owner answered the gap it asked last time, which
     gap (if any) it asks about now, and the message itself, so the next turn can carry on.
     A key that isn't an open gap is ignored, so the model can't invent one. Only keys, times and
@@ -282,7 +282,9 @@ def after_reply(owner_id: str, last_said: dict | None, *, text: str, turn_id: st
         store.put("gap_asks", doc)
     current = (store.get("owners", owner_id) or {}).get("last_said") or {}
     if current.get("at", 0) <= now:  # exchanges of a call can finish out of order: keep the newest
-        store.update("owners", owner_id, {"last_said": {"text": text, "turn_id": turn_id, "at": now, "gap": asked}})
+        # The plan step Saathi carried out (PR-2.12.3), so the next answer is judged against it.
+        store.update("owners", owner_id, {"last_said": {"text": text, "turn_id": turn_id, "at": now, "gap": asked,
+                                                        "step": step}})
 
 
 def forget_turns(owner_id: str, turn_ids: set[str]) -> None:

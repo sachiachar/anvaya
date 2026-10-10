@@ -16,7 +16,7 @@ import re
 import threading
 from typing import Any
 
-from . import gaps, knowledge
+from . import knowledge
 from .schemas import is_wish
 from .store import new_id, store
 
@@ -78,7 +78,8 @@ def _all(collection: str, owner_id: str) -> list[dict]:
 
 
 def known(owner_id: str) -> dict:
-    """What is already saved or waiting, given to the model so it doesn't repeat itself."""
+    """What is already saved or waiting, given to the model so it doesn't repeat itself. No gaps:
+    they feed only the conversation planner (PR-2.12.2), never Saathi."""
     return {
         "family": knowledge.family(owner_id) + [
             f"{p['name']} ({p['relationship']}), waiting for confirmation"
@@ -86,8 +87,6 @@ def known(owner_id: str) -> dict:
         "moments": [{"title": m["title"], "summary": m["summary"]} for m in _all("moments", owner_id)],
         "inventory": [f"{i['institution']} {i['product']} {i['account_hint']} (nominee: "
                       f"{i.get('nominee_or_beneficiary') or 'not recorded'})" for i in _all("inventory", owner_id)],
-        # PR-7.10: what's missing, found by fixed rules and ranked by harm, and due now; Saathi may raise one.
-        "open_gaps": gaps.due(owner_id),
     }
 
 

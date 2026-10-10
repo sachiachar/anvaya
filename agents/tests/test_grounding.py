@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import grounding, live, loops, main, proposals
-from app.schemas import ConversationTurn, Extraction, InventoryItem, Moment, Person
+from app.schemas import ConversationTurn, Extraction, InventoryItem, Moment, Person, PlanReply
 from tests.test_knowledge import OWNER
 
 SAID = "The LIC papers are in the master bedroom."
@@ -34,10 +34,14 @@ def _turn(**cards) -> ConversationTurn:
 
 
 def _chat(client, monkeypatch, text: str, turn: ConversationTurn) -> list[dict]:
-    async def converse(*args):
+    async def understand(*args):
         return turn
 
-    monkeypatch.setattr(loops, "converse", converse)
+    async def respond(*args):
+        return PlanReply(reply="Thank you, Vikram ji.", reply_language="en-IN")
+
+    monkeypatch.setattr(loops, "understand", understand)
+    monkeypatch.setattr(loops, "respond", respond)
     r = client.post(f"/api/owners/{OWNER}/conversation", data={"text": text})
     assert r.status_code == 200
     return r.json()["assistant_turn"]["proposals"]

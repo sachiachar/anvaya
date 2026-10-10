@@ -6,8 +6,9 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
-from app import gaps, knowledge, loops, main, proposals
-from app.schemas import ConversationTurn
+from app import gaps, knowledge, loops, main, planner, proposals
+from app.schemas import ConversationTurn, PlanReply
+from app.store import store
 from tests.people import PRIYA
 from tests.test_knowledge import OWNER, POLICY, STORY, _keep
 
@@ -64,33 +65,37 @@ def test_property_without_an_heir_and_a_person_without_a_relationship(client):
     assert "heir" not in keys()
 
 
-def test_saathi_gets_the_top_two_gaps(client):
+def test_gaps_feed_the_plan_and_saathi_never_sees_them(client):
     _keep("inventory", SBI)
     _keep("inventory", {**POLICY, "nominee_or_beneficiary": None})
-    _keep("inventory", {**SBI, "institution": "HDFC", "account_hint": "••1111"})
     known = proposals.known(OWNER)
-    assert len(known["open_gaps"]) == 2 and "LIC" in known["open_gaps"][0]["text"]
-    assert known["open_gaps"][0]["harm"] == "high" and known["open_gaps"][0]["reminder"] == 0
-    assert "SBI Savings account ••4808 (nominee: not recorded)" in known["inventory"]
+    assert "open_gaps" not in known and "SBI Savings account ••4808 (nominee: not recorded)" in known["inventory"]
+    for doc in store.list("conversation_plans"):
+        store.delete("conversation_plans", doc["id"])
+    gap_steps = [s for s in planner.current(OWNER)["steps"] if s["source"] == "gap"]
+    assert gap_steps and all(s["tone"] in ("gentle", "clear") for s in gap_steps)
 
 
-def test_the_conversation_is_told_about_gaps_and_the_nominee_rule(monkeypatch):
-    seen = {}
+def test_saathi_is_given_the_plan_step_and_its_tone_never_the_gaps(monkeypatch):
+    seen = []
 
     async def fake(**kw):
-        seen.update(kw)
-        return ConversationTurn(heard="", owner_language="English", reply="Thank you, Vikram ji.",
-                                reply_language="en-IN")
+        seen.append(kw)
+        if kw["schema"] is PlanReply:
+            return PlanReply(reply="Thank you, Vikram ji.", reply_language="en-IN")
+        return ConversationTurn(heard="", owner_language="English")
 
     monkeypatch.setattr(loops, "generate_json", fake)
     owner = {"name": "Vikram Rao", "city": "Bengaluru", "country": "India", "family": []}
-    known = {"open_gaps": [{"key": "nominee:sbi|4808|savings account", "text": "SBI Savings account ••4808 has no "
-                            "nominee recorded.", "harm": "medium", "reminder": 0}]}
-    asyncio.run(loops.converse(owner, None, "My wife is the nominee for SBI", None, known))
-    assert "SBI Savings account ••4808 has no nominee recorded." in seen["prompt"]
-    assert "at most ONE" in seen["system"] and "IS, that is a fact" in seen["system"]
-    assert "gentle reminder" in seen["system"]
-    assert "open_gaps" in loops.live_instructions(owner, known)
+    asyncio.run(loops.understand(owner, None, "My wife is the nominee for SBI", None, {}))
+    assert "IS, that is a fact" in seen[0]["system"] and seen[0]["agent"] == "capture.extractor"
+    step = {"topic": "A nominee for SBI", "ask": "Gently ask who the nominee is.", "opens": "saathi", "tone": "gentle",
+            "tone_words": planner.TONE_WORDS["gentle"]}
+    asyncio.run(loops.respond(owner, step, None, "Hello", {}))
+    assert "Gently ask who the nominee is." in seen[1]["prompt"] and planner.TONE_WORDS["gentle"] in seen[1]["prompt"]
+    assert "never choose a topic" in seen[1]["system"] and "open_gaps" not in seen[1]["system"]
+    assert seen[1]["agent"] == "saathi.chat"
+    assert "current_step" in loops.live_instructions(owner, {}) and "open_gaps" not in loops.live_instructions(owner, {})
 
 
 def test_naming_the_nominee_with_just_the_bank_updates_that_account(client):
@@ -108,7 +113,7 @@ def test_a_skipped_gap_never_comes_back(client):
     key = of("nominee")[0]["key"]
     r = client.post(f"/api/owners/{OWNER}/gaps/{key}/skip")
     assert r.status_code == 200 and of("nominee", r.json()["gaps"]) == []
-    assert key not in [g["key"] for g in proposals.known(OWNER)["open_gaps"]]
+    assert f"gap:{key}" not in [s["id"] for s in planner.refresh(OWNER, {"kind": "test"})["steps"]]
     assert client.post(f"/api/owners/{OWNER}/gaps/nominee:nope/skip").status_code == 404
     assert client.get(f"/api/owners/{OWNER}/gaps", headers=PRIYA).status_code == 403
 

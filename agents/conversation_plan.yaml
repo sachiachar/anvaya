@@ -10,6 +10,8 @@
 #              or inventory (an account, policy or property)
 #   opens      who starts it: saathi (Saathi opens with it) or owner (Saathi waits for the owner,
 #              and raises it only when they start talking about it)
+#   tone       how Saathi speaks while on it (PR-2.12.3): warm, gentle, light, clear, reassuring or
+#              patient. The planner can change it during the conversation from the owner's mood.
 
 version: 1
 
@@ -19,23 +21,28 @@ steps:
     ask: Shall we start with the people closest to you? Who are they?
     done_when: person
     opens: saathi
+    tone: warm
   - id: story
     topic: A story you'd like your family to keep
     ask: Is there a story from your life you'd like your family to remember?
     done_when: story
     opens: saathi
+    tone: warm
   - id: money
     topic: Where your money matters are kept
     ask: Could you tell me about one account or policy your family should know about?
     done_when: inventory
     opens: saathi
+    tone: clear
   - id: wishes
     topic: Your wishes for your family
     ask: When you feel ready, is there anything you wish for your family?
     done_when: wish
     opens: owner
+    tone: gentle
   - id: advice
     topic: Advice for the next generation
     ask: Is there any advice you'd like to pass on?
     done_when: advice
     opens: owner
+    tone: gentle

@@ -61,7 +61,9 @@ policies:
   - agent: saathi.voice
     role: {autonomy: act_within_limits}
     models: {allow: [gemini-3.8-live]}
-    tools: []
+    tools:                # PR-2.12.3: it follows the conversation plan on a call
+      - {tool: current_step, scope: read}
+      - {tool: report_step, scope: write}
     consumption:
       call: {max_call_minutes: 20}
       per_user: {pool: owner}
@@ -79,7 +81,8 @@ policies:
     models: {allow: [gemini-3.1-flash-lite, gemini-3.5-flash-lite]}
     tools: []
     consumption:
-      call: {max_input_tokens: 12000, max_output_tokens: 4000, max_retries: 2}
+      # 20000: it now reads each typed turn, photos and documents included (PR-2.12.3), as saathi.chat did
+      call: {max_input_tokens: 20000, max_output_tokens: 4000, max_retries: 2}
       per_user: {pool: owner}
 
   - agent: saathi.summary

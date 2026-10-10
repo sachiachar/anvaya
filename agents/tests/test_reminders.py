@@ -1,7 +1,8 @@
 """Saathi remembers only what's kept, and reminds instead of repeating.
 
-No earlier conversation reaches Gemini: only what the owner kept, the gaps that are due, and
-Saathi's own last message while it's the same conversation. Code records which gap was asked and
+No earlier conversation reaches Gemini: only what the owner kept and Saathi's own last message
+while it's the same conversation. Gaps feed only the conversation plan (PR-2.12.2): a gap counts as
+asked when it is the plan step Saathi carried out (PR-2.12.3), and the reader of the next turn says
 how it was answered, so a gap comes back only as a reminder, after a wait set by its harm."""
 
 import asyncio
@@ -9,8 +10,8 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
-from app import gaps, live, loops, main, proposals
-from app.schemas import ConversationTurn, Extraction
+from app import gaps, live, loops, main, planner, proposals
+from app.schemas import ConversationTurn, Extraction, PlanReply
 from app.store import new_id, store
 from tests.test_knowledge import OWNER, POLICY, _keep
 
@@ -30,17 +31,29 @@ def client():
 
 @pytest.fixture()
 def chat(monkeypatch):
-    """Stub Gemini for typed chat: records each prompt, and replies with what the test sets."""
+    """Stub Gemini for typed chat (reading the turn, then Saathi's reply): records each prompt, and
+    reads the owner's answer to the last step as the test sets."""
     seen: list[str] = []
-    reply = {"asked_gap": None, "gap_outcome": "none"}
+    reading = {"step_outcome": "none"}
 
     async def fake(**kw):
         seen.append(kw["prompt"])
-        return ConversationTurn(heard="", owner_language="English", reply="Which bank is it, Vikram ji?",
-                                reply_language="en-IN", **reply)
+        if kw["schema"] is PlanReply:
+            return PlanReply(reply="Which bank is it, Vikram ji?", reply_language="en-IN")
+        return ConversationTurn(heard="", owner_language="English", **reading)
 
     monkeypatch.setattr(loops, "generate_json", fake)
-    return seen, reply
+    for doc in store.list("conversation_plans"):
+        store.delete("conversation_plans", doc["id"])
+    return seen, reading
+
+
+def gap_first(key: str) -> None:
+    """Make this gap the plan's current step: the first-plan steps are taken as done."""
+    plan = planner.current(OWNER)
+    store.update("conversation_plans", OWNER, {"finished": [f"initial:{s.id}" for s in planner.initial_plan().steps]})
+    plan = planner.refresh(OWNER, {"kind": "test"})
+    assert plan["current"] == f"gap:{key}", plan["current"]
 
 
 def key_of(institution: str) -> str:
@@ -153,35 +166,36 @@ def test_a_waiting_card_pauses_its_gap_and_keeping_it_closes_the_gap(client):
 # ---- What Saathi reports -------------------------------------------------------
 
 
-def test_the_chat_records_the_gap_asked_and_how_it_was_answered(client, chat):
-    _, reply = chat
+def test_the_chat_records_the_gap_step_asked_and_how_it_was_answered(client, chat):
+    _, reading = chat
     _keep("inventory", LIC)
     key = key_of("lic")
-    reply["asked_gap"] = key
+    gap_first(key)
     client.post(URL, data={"text": "Hello"})
-    assert store.get("owners", OWNER)["last_said"]["gap"] == key
-    reply.update(asked_gap=None, gap_outcome="not_now")
+    last = store.get("owners", OWNER)["last_said"]
+    assert last["gap"] == key and last["step"] == f"gap:{key}"
+    reading["step_outcome"] = "not_now"
     client.post(URL, data={"text": "Not now, later"})
     events = store.get("gap_asks", f"{OWNER}:{key}")["events"]
-    assert len(events) == 1 and events[0]["outcome"] == "not_now"
+    assert events[0]["outcome"] == "not_now"
 
 
-def test_a_gap_key_the_model_invented_is_ignored(client, chat):
-    _, reply = chat
-    reply["asked_gap"] = "nominee:made up"
+def test_a_step_that_waits_for_the_owner_is_never_counted_as_asked(client, chat):
+    _keep("inventory", SBI)  # a medium-harm nominee gap; the common gaps come first
+    plan = planner.current(OWNER)
+    owner_steps = [s for s in plan["steps"] if s["opens"] == "owner"]
+    assert owner_steps and all(s["id"] != plan["current"] for s in owner_steps)
     client.post(URL, data={"text": "Hello"})
-    assert store.list("gap_asks", owner_id=OWNER) == []
-    assert store.get("owners", OWNER)["last_said"]["gap"] is None
+    asked = {a["key"] for a in store.list("gap_asks", owner_id=OWNER)}
+    assert not asked & {s["id"].removeprefix("gap:") for s in owner_steps}
 
 
-def test_a_call_records_the_gap_it_asked_and_the_answer(client, monkeypatch):
+def test_a_call_records_the_gap_step_it_asked_and_the_answer(client, monkeypatch):
     _keep("inventory", LIC)
     key = key_of("lic")
-    found = iter([Extraction(asked_gap=key), Extraction(gap_outcome="unsure")])
-    seen = []
+    found = iter([Extraction(), Extraction(step_outcome="unsure")])
 
     async def extract(owner, heard, said, known):
-        seen.append(known["last_gap_asked"])
         return next(found)
 
     class WS:
@@ -190,16 +204,17 @@ def test_a_call_records_the_gap_it_asked_and_the_answer(client, monkeypatch):
 
     monkeypatch.setattr(live.loops, "extract_from_exchange", extract)
     owner = {"id": OWNER, "name": "Vikram Rao"}
-    asyncio.run(live._save_exchange(WS(), owner, "I have an LIC policy.", "Who is its nominee?", main._expand))
-    asyncio.run(live._save_exchange(WS(), owner, "I think Meena.", "Thank you.", main._expand))
-    assert seen[0] is None and seen[1]["key"] == key
+    state = {"step": f"gap:{key}", "correct": None}  # what current_step gave Saathi
+    asyncio.run(live._save_exchange(WS(), owner, "I have an LIC policy.", "Who is its nominee?", main._expand, state))
+    assert store.get("owners", OWNER)["last_said"]["step"] == f"gap:{key}"
+    state["step"] = None
+    asyncio.run(live._save_exchange(WS(), owner, "I think Meena.", "Thank you.", main._expand, state))
     assert store.get("gap_asks", f"{OWNER}:{key}")["events"][0]["outcome"] == "unsure"
 
 
 def test_discard_forgets_the_questions_asked_and_the_last_message(client, chat):
-    _, reply = chat
     _keep("inventory", LIC)
-    reply["asked_gap"] = key_of("lic")
+    gap_first(key_of("lic"))
     turns = client.post(URL, data={"text": "Hello"}).json()
     ids = [turns["owner_turn"]["id"], turns["assistant_turn"]["id"]]
     assert client.post(f"{URL}/forget", json={"turn_ids": ids}).status_code == 200
@@ -208,12 +223,12 @@ def test_discard_forgets_the_questions_asked_and_the_last_message(client, chat):
 
 
 def test_discarding_the_answer_takes_it_back_even_if_the_question_is_kept(client, chat):
-    _, reply = chat
+    _, reading = chat
     _keep("inventory", LIC)
     key = key_of("lic")
-    reply["asked_gap"] = key
+    gap_first(key)
     client.post(URL, data={"text": "Hello"})  # asked here; this conversation is kept
-    reply.update(asked_gap=None, gap_outcome="declined")
+    reading["step_outcome"] = "declined"
     answer = client.post(URL, data={"text": "I'd rather not say"}).json()
     client.post(f"{URL}/forget", json={"turn_ids": [answer["owner_turn"]["id"], answer["assistant_turn"]["id"]]})
     events = store.get("gap_asks", f"{OWNER}:{key}")["events"]
@@ -221,9 +236,8 @@ def test_discarding_the_answer_takes_it_back_even_if_the_question_is_kept(client
 
 
 def test_a_call_judges_each_answer_against_the_question_it_saw(client, monkeypatch):
-    """Exchanges of a call save at the same time and can finish out of order: an answer is
-    recorded on the gap its extractor was shown, and an older exchange never replaces a newer
-    last message."""
+    """Exchanges of a call save at the same time and can finish out of order: an older exchange
+    never replaces a newer last message, and each records the step Saathi was carrying out then."""
     _keep("inventory", LIC)
     key = key_of("lic")
     first_done = asyncio.Event()
@@ -231,8 +245,7 @@ def test_a_call_judges_each_answer_against_the_question_it_saw(client, monkeypat
     async def extract(owner, heard, said, known):
         if heard == "First.":
             await first_done.wait()  # the first exchange finishes last
-            return Extraction()
-        return Extraction(asked_gap=key)
+        return Extraction()
 
     class WS:
         async def send_json(self, data):
@@ -242,12 +255,15 @@ def test_a_call_judges_each_answer_against_the_question_it_saw(client, monkeypat
     owner = {"id": OWNER, "name": "Vikram Rao"}
 
     async def run() -> None:
-        first = asyncio.create_task(live._save_exchange(WS(), owner, "First.", "Older reply.", main._expand))
+        first = asyncio.create_task(live._save_exchange(WS(), owner, "First.", "Older reply.", main._expand,
+                                                        {"step": None, "correct": None}))
         await asyncio.sleep(0.05)
-        await live._save_exchange(WS(), owner, "Second.", "Who is the nominee?", main._expand)
+        await live._save_exchange(WS(), owner, "Second.", "Who is the nominee?", main._expand,
+                                  {"step": f"gap:{key}", "correct": None})
         first_done.set()
         await first
 
     asyncio.run(run())
     last = store.get("owners", OWNER)["last_said"]
     assert last["text"] == "Who is the nominee?" and last["gap"] == key
+
