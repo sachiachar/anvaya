@@ -469,7 +469,7 @@ def list_kept(owner_id: str) -> dict:
     owner_or_404(owner_id)
     cat = knowledge.catalog(owner_id)
     return {"items": sorted(({"id": cid, "collection": e["collection"], "type": e["graph"]["type"],
-                              "title": e["title"], "description": e["description"]}
+                              "title": e["title"], "description": e["description"], "kept_at": e.get("kept_at")}
                              for cid, e in cat["concepts"].items() if e["graph"]["status"] == "stable"),
                             key=lambda i: (i["collection"], i["title"].lower()))}
 

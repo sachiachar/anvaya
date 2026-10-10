@@ -46,6 +46,7 @@
 - A gentle notice when the owner is close to, or has reached, today's allowance. Near the limit for spoken replies, replies stop being read aloud automatically, and the owner can turn it back on.
 
 **Keeping what matters**
+- **Each page in the book shows when it was kept**, as "Kept on 10 Oct 2026, 12:14", in your own time zone.
 - When Vikram says what he wants, for example "the Mysore flat should go to Sunita" or "I want to take Sunita to Kashi", Saathi notices it as a wish, even in the middle of a story, and offers it as a card to keep. A kept wish links to the people it's for.
 - After the handover, the family's assistant reads everything Vikram kept, so it understands questions worded differently or asked in another language ("Where are Papa's documents?" finds the papers in the blue folder). Each answer names the kept items it came from.
 - Cards can now say where an item's papers are kept, and who a property or wish is meant for. Kept items link to the people they name (a policy to its nominee, a story to the people in it), so the family's assistant and the knowledge map can follow them.

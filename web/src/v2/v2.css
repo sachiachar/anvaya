@@ -487,6 +487,7 @@ a { color: inherit; text-decoration-color: var(--gold); text-underline-offset: 3
 .v2-pages > li:first-child { border-top: 0; }
 .v2-page-title { font: 500 1.0625rem/1.35 var(--serif); }
 .v2-page-desc { font-size: var(--step--1); color: var(--ink-2); }
+.v2-page-kept { margin: 2px 0 0; font-size: var(--step--1); color: var(--ink-2); font-style: italic; }
 
 /* ---- The book ------------------------------------------------------------------------------------- */
 .v2-book { display: grid; gap: 18px; }

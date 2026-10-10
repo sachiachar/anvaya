@@ -625,8 +625,9 @@ CARD_LISTS = {"inventory": ("missing_fields",), "moments": ("people", "places", 
 def as_item(cid: str, entry: dict, owner_id: str) -> dict:
     """A kept concept in the shape the rest of the app uses for cards."""
     lists = {f: [] for f in CARD_LISTS.get(entry["collection"], ()) if not entry["record"].get(f)}
+    # kept_at: when the owner kept it (UTC, ISO 8601), shown wherever kept items are listed (PR-2.13.1).
     return {**entry["record"], **lists, "id": cid, "owner_id": owner_id, "status": "approved",
-            "concept": entry["path"], "okf_status": entry["graph"]["status"]}
+            "concept": entry["path"], "okf_status": entry["graph"]["status"], "kept_at": entry.get("kept_at")}
 
 
 def items(owner_id: str, collection: str, *, include_replaced: bool = False, **where: Any) -> list[dict]:

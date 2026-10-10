@@ -7,6 +7,10 @@ import { friendlyError } from "../copy";
 import { ShowHow } from "../demo";
 import { Chevron, Close } from "../icons";
 
+/** When a page was kept, in the reader's own time zone: "10 Oct 2026, 12:14". */
+const keptOn = (iso: string) => new Date(iso).toLocaleString(undefined, {
+  day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
 type Chapter = { key: string; title: string; empty: string; match: (i: KeptItem) => boolean };
 
 const CHAPTERS: Chapter[] = [
@@ -109,6 +113,7 @@ export default function Book({ onTalkAbout, onReview }: { onTalkAbout: (question
                         <div>
                           <p className="v2-page-title">{i.title}</p>
                           {i.description && <p className="v2-page-desc">{i.description}</p>}
+                          {i.kept_at && <p className="v2-page-kept">Kept on {keptOn(i.kept_at)}</p>}
                         </div>
                         <button className="v2-remove" disabled={busy} onClick={() => setConfirm(i)} aria-label={`Remove “${i.title}”`}><Close /></button>
                       </li>
