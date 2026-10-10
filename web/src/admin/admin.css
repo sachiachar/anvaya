@@ -288,7 +288,6 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .lm-hit:focus-visible { outline: 3px solid var(--pa-accent); outline-offset: 4px; }
 .lm-group { fill: var(--lm-group); }
 .lm-group-label { fill: var(--pa-muted); font: 600 14px ui-monospace, Menlo, monospace; letter-spacing: 0.12em; }
-.lm-edge { stroke: var(--lm-edge); stroke-width: 1.6; }
 .lm-arrowhead { fill: var(--lm-edge); }
 .lm-edge-label { fill: var(--pa-muted); font-size: 13px; text-anchor: middle; paint-order: stroke; stroke: var(--lm-group); stroke-width: 6px; stroke-linejoin: round; }
 .lm-gate rect { fill: var(--lm-rule); }
@@ -353,3 +352,39 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .uc-switch label.on { background: var(--pa-gold); color: #0b132b; }
 }
+
+/* ---- The loop map: guardian-led layout, highlighting and the story (PR-2.12) ------------- */
+.lm-modes { margin-left: auto; display: inline-flex; border: 1px solid var(--pa-line); border-radius: 999px; padding: 3px; gap: 2px; }
+.lm-modes button { min-height: 32px; padding: 3px 14px; border-radius: 999px; background: transparent; color: var(--pa-text); border: none; font-size: 0.88rem; }
+.lm-modes button[aria-pressed="true"] { background: var(--pa-navy); color: #f7f5ef; }
+.lm-node, .lm-edge { transition: opacity 0.25s; }
+.lm-dim .lm-faded { opacity: 0.22; }
+.lm-dim .lm-edge:not(.lm-hot) { opacity: 0.18; }
+.lm-lit .lm-shape { stroke-width: 5; }
+.lm-edge path { fill: none; stroke: var(--lm-edge); stroke-width: 1.6; }
+.lm-edge.lm-coming path { stroke-dasharray: 7 6; }
+.lm-edge.lm-hot path { stroke: var(--lm-ink); stroke-width: 2.4; stroke-dasharray: 7 6; animation: lm-flow 0.9s linear infinite; }
+.lm-edge.lm-hot .lm-edge-label { fill: var(--lm-ink); font-weight: 700; }
+.lm-arrowhead-hot { fill: var(--lm-ink); }
+@keyframes lm-flow { to { stroke-dashoffset: -13; } }
+@media (prefers-reduced-motion: reduce) { .lm-edge.lm-hot path { animation: none; } .lm-node, .lm-edge { transition: none; } }
+.lm-node .lm-sub { fill: var(--pa-muted); font-size: 13px; text-anchor: middle; }
+.lm-node-coming .lm-shape { stroke-dasharray: 9 6; }
+.lm-node-coming .lm-state { fill: var(--lm-rule); }
+.lm-steps { display: flex; gap: 4px; margin: 4px 0 10px; }
+.lm-steps i { flex: 1; height: 4px; border-radius: 2px; background: var(--pa-line); }
+.lm-steps i.on { background: var(--pa-navy); }
+.lm-who { font: 600 0.8rem ui-monospace, Menlo, monospace; color: var(--pa-muted); margin: 0 0 6px; }
+.lm-story { font-size: 1.02rem; line-height: 1.55; margin: 0 0 14px; }
+.lm-story-ctl { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+.lm-story-ctl .pa-muted { margin-left: auto; font-size: 0.85rem; }
+.lm-coming-note { background: var(--pa-warn-soft); color: var(--pa-warn); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; font-weight: 600; }
+.lm-decides { border-left: 3px solid var(--lm-rule); padding: 2px 0 2px 12px; }
+.lm-decides b { color: var(--lm-rule); }
+.lm-chip.lm-comingchip { background: transparent; color: var(--lm-rule); border: 2px dashed var(--lm-rule); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .lm-modes button[aria-pressed="true"] { background: var(--pa-gold); color: #0b132b; }
+  :root:not([data-theme="light"]) .lm-steps i.on { background: var(--pa-gold); }
+}
+.lm-gate rect, .lm-gate text { stroke: none; } /* the edge's stroke must not reach the gate pill */
+.lm-node-coming .lm-state { font-size: 11px; }
