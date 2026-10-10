@@ -275,7 +275,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .crash button { min-height: 44px; padding: 10px 20px; border-radius: 10px; border: 0; background: var(--pa-navy); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
 
 /* ---- The agents map ------------------------------------------------------------- */
-.lm { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; margin-bottom: 16px; }
+.lm { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; margin-bottom: 16px; }
 .lm-map { background: var(--pa-surface); border: 1px solid var(--pa-line); border-radius: 16px; padding: 12px; min-width: 0; }
 .lm-bar { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; padding: 4px 8px 10px; font-weight: 600; }
 .lm-bar .pa-muted { font-weight: 400; font-size: 0.85rem; }
@@ -388,3 +388,12 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 }
 .lm-gate rect, .lm-gate text { stroke: none; } /* the edge's stroke must not reach the gate pill */
 .lm-node-coming .lm-state { font-size: 11px; }
+/* The simpler layout: the guardian as a bar, straight lines, smaller titles. */
+.lm-node .lm-title { font-size: 17px; }
+.lm-small .lm-title { font-size: 14px; }
+.lm-consent-line { stroke: var(--lm-edge); stroke-width: 1.6; }
+.lm-guardian .lm-shape { fill: var(--lm-node); stroke: var(--lm-assists); stroke-width: 3; }
+.lm-guardian.lm-lit .lm-shape, .lm-guardian.lm-selected .lm-shape { stroke-width: 5; }
+.lm-bar-title { fill: var(--lm-ink); font: 700 21px Lora, Georgia, serif; }
+.lm-bar-sub { fill: var(--pa-muted); font-size: 14px; }
+.lm-bar-status { fill: var(--lm-assists); font-size: 15px; font-weight: 700; text-anchor: end; }
