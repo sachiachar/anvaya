@@ -484,6 +484,22 @@ a { color: inherit; text-decoration-color: var(--gold); text-underline-offset: 3
 }
 .v2-chip span { color: var(--muted); font-weight: 400; }
 .v2-chip[aria-pressed="true"] { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 14%, var(--surface)); }
+/* Where a family answer came from (PR-14.3): one chip per kept item, under the answer. */
+.v2-sources { display: grid; gap: 6px; }
+.v2-sources-label { font-size: var(--step--1); color: var(--muted); }
+.v2-sources .v2-chips { list-style: none; margin: 0; padding: 0; gap: 6px; }
+.v2-source {
+  display: inline-block; padding: 5px 12px; border-radius: 16px; line-height: 1.4;
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--line)); background: color-mix(in srgb, var(--gold) 8%, var(--surface));
+  color: var(--ink); font: 500 var(--step--1) var(--sans);
+}
+.v2-source svg { width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; color: var(--gold-ink); }
+.v2-source span { color: var(--muted); font-weight: 400; }
+.v2-turn.assistant > p + p, .v2-turn.assistant > * + .v2-answer-quote, .v2-turn.assistant > .v2-answer-quote + p { margin-top: 10px; }
+.v2-answer-quote {
+  margin: 0; padding: 2px 0 2px 14px; border-left: 2px solid var(--gold); white-space: pre-line;
+  font: italic 400 var(--step-0)/1.5 var(--serif); color: var(--ink-2);
+}
 .v2-pages { list-style: none; margin: 0; padding: 0; display: grid; }
 .v2-pages > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px 0; border-top: 1px solid var(--line); }
 .v2-pages > li:first-child { border-top: 0; }
