@@ -2,6 +2,7 @@
 decision → card → Keep → plan version → next step, with no words anywhere. Synthetic data only."""
 
 import json
+import re
 
 import pytest
 from app import audit_chain
@@ -52,7 +53,8 @@ def test_a_deflected_secret_is_followed_from_its_event_to_the_safe_route(client,
     assert chain["cards"] == [] and chain["turn"]["held_back"] == 1
     [plan] = [p for p in chain["plans"] if p["cause"].get("guardian") == statement["id"]]
     assert plan["current"] == "safe:secret" and chain["reply"]["step"] == "safe:secret"
-    assert "4471" not in json.dumps(chain)
+    # As a whole word: a random id or a timestamp (1760164471.5) may contain these digits by chance.
+    assert not re.search(r"\b4471\b", json.dumps(chain))
 
 
 def test_a_plan_step_shows_only_its_kind():
