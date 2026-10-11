@@ -6,7 +6,8 @@ already cover stops being a research subject. All data here is synthetic."""
 import time
 
 from app import fraud_guides, fraud_pipeline
-from app.store import new_id, store
+from app.fraud_bundle import records
+from app.store import new_id
 from tests.test_fraud_autonomy import clean, dream, research, stub  # noqa: F401  (fixtures and run helpers)
 from tests.test_fraud_pipeline import KEY, scenario, tactic
 
@@ -29,7 +30,7 @@ def test_descriptions_count_only_when_the_titles_share_something():
 
 
 def put_scenario(title: str, claim: str = "") -> None:
-    store.put("fraud_scenarios", {"id": new_id("scn"), "at": time.time(), "guide_key": KEY, "scenario": title,
+    records.put("fraud_scenarios", {"id": new_id("scn"), "at": time.time(), "guide_key": KEY, "scenario": title,
                                   "claim": claim, "coverage": "covered", "review": "unconfirmed"})
 
 
@@ -38,26 +39,26 @@ def test_research_does_not_add_a_tactic_dreaming_already_found(stub):  # noqa: F
     stub.tactics = [tactic("Forged registrar seal on certificates")]
     run = research()
     assert run["counts"]["already_known"] >= 1 and run["counts"]["found"] == 0  # each subject that brings it up skips it
-    assert store.list("fraud_drafts") == [] and store.list("fraud_auto") == []
+    assert records.list("fraud_drafts") == [] and records.list("fraud_auto") == []
     assert not any(t.name == "Forged registrar seal on certificates" for t in fraud_guides.current(KEY).tactics)
 
 
 def test_dreaming_does_not_add_a_scenario_research_already_found(stub):  # noqa: F811
-    store.put("fraud_drafts", {"id": new_id("drf"), "at": time.time(), "guide_key": KEY, "kind": "tactic",
+    records.put("fraud_drafts", {"id": new_id("drf"), "at": time.time(), "guide_key": KEY, "kind": "tactic",
                                "tactic": "Impostor poses as the nominee at the bank", "claim": "", "review": "pending"})
     stub.imagined = [scenario("Someone impersonating the beneficiary at the bank")]
     run = dream()
     assert run["counts"]["already_known"] >= 1
     assert not any(s["scenario"] == "Someone impersonating the beneficiary at the bank"
-                   for s in store.list("fraud_scenarios", guide_key=KEY))
+                   for s in records.list("fraud_scenarios", guide_key=KEY))
 
 
 def test_a_gap_the_guides_tactics_already_cover_is_no_longer_a_research_subject():
     guide = fraud_guides.current(KEY)
     covered = guide.tactics[0].name
-    store.put("fraud_scenarios", {"id": "scn_known", "at": time.time(), "guide_key": KEY, "coverage": "gap",
+    records.put("fraud_scenarios", {"id": "scn_known", "at": time.time(), "guide_key": KEY, "coverage": "gap",
                                   "scenario": covered, "claim": "", "review": "unconfirmed"})
-    store.put("fraud_scenarios", {"id": "scn_new", "at": time.time(), "guide_key": KEY, "coverage": "gap",
+    records.put("fraud_scenarios", {"id": "scn_new", "at": time.time(), "guide_key": KEY, "coverage": "gap",
                                   "scenario": "Voice clone calls the insurer to change the payout account",
                                   "claim": "", "review": "unconfirmed"})
     ids = {s["id"] for s in fraud_pipeline.subjects(guide)}
