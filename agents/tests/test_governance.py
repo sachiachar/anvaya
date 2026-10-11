@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from app import auth, gemini, main
+from app import auth, fraud_guides, gemini, main
 from app.config import settings
 from app.governance import core
 from app.governance.seed import clear_samples as seed
@@ -230,10 +230,11 @@ def test_fraud_page_lists_the_india_guide_and_research_saves_it_first(client, mo
     for collection in ("fraud_guides", "fraud_guide_versions", "fraud_runs", "fraud_run_lock"):
         for doc in store.list(collection):
             store.delete(collection, doc["id"])
+    fraud_guides.clear_saved()
     guides = client.get("/api/platform/fraud", headers=h("judge")).json()["guides"]
     india = next(g for g in guides if g["id"] == "IN.death_certificate")
     assert india["version"] == 1 and india["trust_tier"] == "machine-confirmed" and india["signals"] == 8
     assert client.post("/api/platform/fraud/guides/IN.death_certificate/research", headers=h("judge")).status_code == 403
     assert client.post("/api/platform/fraud/guides/IN.death_certificate/research", headers=h("risk")).status_code == 200
-    assert store.get("fraud_guide_versions", "IN.death_certificate.v1")
+    assert fraud_guides.current("IN.death_certificate").version == 1  # saved in the bundle as version 1
     assert store.get("fraud_guides", "IN.death_certificate")["status"] == "research_requested"

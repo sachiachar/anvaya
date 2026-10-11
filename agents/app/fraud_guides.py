@@ -1,9 +1,9 @@
 """Fraud reference guides (PR-2.3): what a genuine document looks like, and how forgeries are made.
 
 One guide per kind of document and country. Every item carries a knowledge label saying how
-we know it (docs/proposals/fraud-foresight.md §3). Each saved version is kept; a copy built
-into the code is used when the store has none or is unavailable, so a check always has its
-guide.
+we know it (docs/proposals/fraud-foresight.md §3). Guides are saved in the platform's OKF bundle
+(fraud_bundle.py), with every change to an item kept as an event; a copy built into the code is
+used when the bundle has none or is unavailable, so a check always has its guide.
 
 Only checked knowledge reaches the certificate check (`signs_for_check`): imagined items
 never do, and projections (validated scenarios) make up at most a third of the signs.
@@ -19,6 +19,7 @@ from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
+from . import fraud_bundle
 from .step_types import CHANNELS, FLAGS, STEP_TYPES
 from .store import store
 
@@ -131,22 +132,45 @@ def signs_for_check(guide: Guide) -> list[Sign]:
     return known + projections
 
 
-# ---- Storage: every version kept, the built-in copy as a fallback --------------------
+# ---- Storage: the platform's OKF bundle (fraud_bundle.py), the built-in copy as a fallback ----
+# Guides saved before PR-2.14.1 sit in Firestore (`fraud_guide_versions`); each is copied into the
+# bundle once, version by version, the first time it is read.
+
+_migrated: set[str] = set()  # guide keys this process has already looked for in the old collection
 
 
-def _latest_stored(key: str) -> Guide | None:
-    versions = store.list("fraud_guide_versions", key=key)
-    if not versions:
-        return None
-    latest = max(versions, key=lambda v: v["version"])
-    return _with_built_in_dates(Guide.model_validate({k: v for k, v in latest.items() if k != "id"}))
+def _migrate(key: str) -> None:
+    if key in _migrated:
+        return
+    versions = sorted(store.list("fraud_guide_versions", key=key), key=lambda v: v["version"])
+    built_on = None
+    for v in versions:
+        try:
+            fraud_bundle.save_guide({k: val for k, val in v.items() if k != "id"}, built_on=built_on,
+                                    at=v.get("updated_at") or None, action="Copied from Firestore")
+        except fraud_bundle.Stale:  # another instance is copying it, or has copied it
+            break
+        built_on = v["version"]
+    _migrated.add(key)
+
+
+def _latest_stored(key: str, *, fresh: bool = False) -> Guide | None:
+    data = fraud_bundle.load_guide(key, fresh=fresh)
+    if data is None and key not in _migrated:
+        _migrate(key)
+        data = fraud_bundle.load_guide(key, fresh=True)
+    return _with_built_in_dates(Guide.model_validate(data)) if data else None
 
 
 def current_all() -> list[Guide]:
     """Every current guide, read strictly: if the store can't be read this raises instead of
     falling back to the built-in copy, so the next-step check (PR-13.3) fails closed rather than
     forgetting the tactics reviewers approved."""
-    saved = {v["key"] for v in store.list("fraud_guide_versions")}
+    if "*" not in _migrated:
+        for k in {v["key"] for v in store.list("fraud_guide_versions")}:
+            _migrate(k)
+        _migrated.add("*")
+    saved = set(fraud_bundle.guide_keys())
     return [g for k in sorted(set(BUILT_IN) | saved) if (g := _latest_stored(k) or BUILT_IN.get(k))]
 
 
@@ -154,10 +178,21 @@ def current(key: str) -> Guide | None:
     """The latest saved version, or the built-in copy if none is saved or the store fails."""
     try:
         stored = _latest_stored(key)
-    except Exception:  # Firestore unavailable: the check still runs on the built-in copy
+    except Exception:  # storage unavailable: the check still runs on the built-in copy
         log.warning("fraud guide store unavailable; using the built-in copy of %s", key)
         stored = None
     return stored or BUILT_IN.get(key)
+
+
+def clear_saved() -> None:
+    """Forget every saved guide (tests): the bundle, and which old Firestore versions were copied."""
+    fraud_bundle.clear()
+    _migrated.clear()
+
+
+def history(key: str, item_id: str | None = None) -> list[dict]:
+    """The changes to a guide, or to one of its items (its bundle id, e.g. "IN.death_certificate/signs/seal"), oldest first."""
+    return fraud_bundle.history(key, item_id)
 
 
 CODE_FIELDS = ("applies_from", "code_check")  # sign fields that code enforces, added after guides were saved
@@ -177,15 +212,19 @@ def _with_built_in_dates(guide: Guide) -> Guide:
 
 
 def _save_next(key: str, build: Callable[[Guide | None], Guide]) -> Guide:
-    """Write the next version, built from the latest one. Each version id is written only once;
-    if someone else saved first, the next version is built again from theirs, so no change is lost."""
+    """Write the next version, built from the latest one. A version is written only on top of the one
+    it was built from; if someone else saved first, the next version is built again from theirs, so no
+    change is lost."""
     for _ in range(5):
-        latest = _latest_stored(key)
+        latest = _latest_stored(key, fresh=True)
         guide = build(latest)
         saved = guide.model_copy(update={"version": (latest.version + 1) if latest else 1, "updated_at": time.time()})
-        if store.create("fraud_guide_versions", {"id": f"{saved.key}.v{saved.version}", **saved.model_dump()}):
-            store.put("fraud_guides", summary(saved))
-            return saved
+        try:
+            fraud_bundle.save_guide(saved.model_dump(), built_on=latest.version if latest else None, at=saved.updated_at)
+        except fraud_bundle.Stale:
+            continue
+        store.put("fraud_guides", summary(saved))  # the portal's row: status and summary, not the knowledge
+        return saved
     raise RuntimeError(f"Couldn't save a new version of {key}")
 
 
@@ -196,7 +235,7 @@ def save_version(guide: Guide) -> Guide:
 
 def ensure_saved(key: str) -> bool:
     """Before a guide's first run: a built-in guide is saved as version 1. False if there's no such guide."""
-    if store.get("fraud_guides", key):
+    if _latest_stored(key, fresh=True):
         return True
     if key not in BUILT_IN:
         return False
