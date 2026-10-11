@@ -95,3 +95,48 @@ def test_unchanged_items_are_not_rewritten():
     count = len(fraud_guides.history(KEY))
     fraud_guides.save_version(INDIA.model_copy(update={"title": "Renamed guide"}))
     assert len(fraud_guides.history(KEY)) == count and fraud_guides.current(KEY).version == 2
+
+
+# ---- Research records (PR-2.14.2) ---------------------------------------------------------------
+
+records = fraud_bundle.records
+
+
+def test_old_records_are_copied_once_and_seeded_examples_are_not():
+    store.put("fraud_scenarios", {"id": "scn_old", "at": 1.0, "guide_key": KEY, "scenario": "Synthetic old scenario",
+                                  "review": "unconfirmed"})
+    store.put("fraud_scenarios", {"id": "scn_seed", "at": 1.0, "guide_key": KEY, "scenario": "Example", "seeded": True})
+    store.put("fraud_decisions", {"id": "scn_done", "at": 1.0})
+    assert [s["id"] for s in records.list("fraud_scenarios")] == ["scn_old"]
+    assert records.get("fraud_decisions", "scn_done")
+    store.put("fraud_scenarios", {"id": "scn_late", "at": 2.0, "guide_key": KEY, "scenario": "Written after the copy"})
+    records.forget_cache()
+    assert not records.get("fraud_scenarios", "scn_late")  # copied once only
+    assert store.get("fraud_scenarios", "scn_old")  # the Firestore copy is left for a person to remove
+    for collection in ("fraud_scenarios", "fraud_decisions"):
+        for doc in store.list(collection):
+            store.delete(collection, doc["id"])
+
+
+def test_each_record_is_a_concept_with_its_history():
+    records.put("fraud_drafts", {"id": "drf_1", "at": 1.0, "guide_key": KEY, "kind": "tactic",
+                                 "tactic": "Synthetic forged stamp", "review": "pending"})
+    records.update("fraud_drafts", "drf_1", {"review": "added"})
+    front, body = parse(media.load(fraud_bundle.OWNER, f"fraud/{KEY}/research/drafts/drf_1.md").decode())
+    assert front["type"] == "Fraud Draft" and front["record"]["review"] == "added" and "Synthetic forged stamp" in body
+    events = [e for e in fraud_bundle.records._catalog(fresh=True)["events"] if e["item"] == "drf_1"]
+    assert [e["action"] for e in events] == ["Creation", "Update"]
+    records.delete("fraud_drafts", "drf_1")
+    assert records.get("fraud_drafts", "drf_1") is None
+    assert not media.load(fraud_bundle.OWNER, f"fraud/{KEY}/research/drafts/drf_1.md")
+
+
+def test_a_decision_is_recorded_only_once():
+    assert records.create("fraud_decisions", {"id": "scn_x", "at": 1.0})
+    assert not records.create("fraud_decisions", {"id": "scn_x", "at": 2.0})
+    assert records.get("fraud_decisions", "scn_x")["at"] == 1.0
+
+
+def test_updating_a_missing_record_fails():
+    with pytest.raises(KeyError):
+        records.update("fraud_scenarios", "scn_missing", {"review": "added"})
