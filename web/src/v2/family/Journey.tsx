@@ -14,6 +14,7 @@ import { friendlyError } from "../copy";
 import FilePick from "../FilePick";
 import { Check } from "../icons";
 import SwitchTo from "../SwitchTo";
+import { Sample } from "../Samples";
 import After from "./After";
 import Tracker from "./Tracker";
 
@@ -215,6 +216,7 @@ function WhenTheTimeComes({ parent }: { parent: string }) {
       </ol>
       <FilePick label={busy ? "Checking…" : "Start the handover: upload the certificate"} accept="image/*,application/pdf" disabled={busy}
         onFile={(f) => run(async () => { await api.reportDeath(f); })} />
+      <Sample which="certificate" />
       {error && <p className="v2-error" role="alert">{friendlyError(new Error(error))}</p>}
     </section>
   );

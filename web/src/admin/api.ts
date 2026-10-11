@@ -187,6 +187,17 @@ export type ModelKeys = { days: number; totals: Partial<Record<KeySource, KeyUse
 export type AuditEntry = { id: string; at: number; actor: string; role: string; action: string; target: string;
   reason: string | null };
 
+/** The fraud knowledge as a graph (the Fraud page's graph view). It holds no owner data. */
+export type GraphGroup = "guide" | "sign" | "tactic" | "scenario" | "source" | "safeguard" | "candidate" | "gap" | "draft" | "ruled_out";
+export type GraphNode = {
+  id: string; group: GraphGroup; label: string; title: string; text?: string; status?: string; url?: string;
+  auto?: boolean; coverage?: string; version?: number; cue?: { owners: number } | null;
+  history?: { guide: string; item: string } | { collection: string; item: string };
+};
+export type GraphLink = { source: string; target: string; kind: string };
+export type FraudGraph = { nodes: GraphNode[]; links: GraphLink[]; guides: { id: string; title: string }[] };
+export type GraphEvent = { at: string; action: string; version?: number; reason?: string };
+
 const p = (path: string) => `/platform${path}`;
 
 export const platform = {
@@ -205,6 +216,9 @@ export const platform = {
   decideGuardian: (id: string, decision: "confirm" | "reverse", reason: string) =>
     request<GuardianEvent>(p(`/guardian/${id}/decision`), json({ decision, reason })),
   fraud: () => request<Fraud>(p("/fraud")),
+  fraudGraph: (guide?: string) => request<FraudGraph>(p(`/fraud/graph${guide ? `?guide=${encodeURIComponent(guide)}` : ""}`)),
+  fraudHistory: (ref: GraphNode["history"]) =>
+    request<{ events: GraphEvent[] }>(p(`/fraud/history?${new URLSearchParams(ref as Record<string, string>)}`)),
   setCueMinOwners: (min_owners: number, reason: string) =>
     request<CuePrivacy>(p("/privacy/cue-min-owners"), json({ min_owners, reason })),
   decideScenario: (id: string, decision: "approve" | "discard", reason: string) =>

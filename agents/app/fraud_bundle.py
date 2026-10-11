@@ -83,9 +83,10 @@ def clear() -> None:
     """Remove the whole bundle (tests, and a demo reset of the platform's fraud knowledge)."""
     for name in media.names(OWNER, f"{ROOT}/"):
         media.delete(OWNER, name)
-    for name in (CATALOG,):
+    for name in (CATALOG, RECORDS):
         media.delete(OWNER, name)
     forget_cache()
+    records.forget_cache()
 
 
 # ---- Reading ------------------------------------------------------------------------------------
@@ -276,3 +277,177 @@ def _retry(attempt):
         except media.Changed:
             time.sleep(random.uniform(0.01, 0.08))
     raise RuntimeError("the fraud knowledge is busy; try again")
+
+
+# ---- Research records (PR-2.14.2) ---------------------------------------------------------------
+# Scenarios of every status, drafts waiting for review, items added on their own and reviewer
+# decisions. They used to be Firestore collections; `records` keeps the same small interface (get,
+# list, put, create, update, delete), so the pipeline and the portal changed only which store they
+# call. Each record is a concept file with an event per change; `.records.json` is the machine copy,
+# written with conditional writes. Run logs, locks, counters and the pause state stay in Firestore.
+
+RECORDS = f"{ROOT}/.records.json"
+COLLECTIONS = {"fraud_scenarios": ("research/scenarios", "Fraud Scenario Candidate"),
+               "fraud_drafts": ("research/drafts", "Fraud Draft"),
+               "fraud_auto": ("research/added", "Added Fraud Item"),
+               "fraud_decisions": ("research/decisions", "Reviewer Decision")}
+TITLE_FIELDS = ("scenario", "tactic", "title", "name", "look_for")
+
+
+class Records:
+    def __init__(self) -> None:
+        self._cache: dict[str, Any] = {"at": 0.0, "cat": None}
+
+    # Reading: the copy a write in this process left, or one at most CACHE_SECONDS old.
+    def _catalog(self, fresh: bool = False) -> dict:
+        with _lock:
+            cat = self._cache["cat"]
+            if not fresh and cat is not None and time.time() - self._cache["at"] < CACHE_SECONDS:
+                return cat
+        cat, _ = self._load()
+        if not cat.get("migrated"):
+            cat = self._migrate()
+        with _lock:
+            self._cache.update(at=time.time(), cat=cat)
+        return cat
+
+    def _load(self) -> tuple[dict, int]:
+        data, version = media.load_versioned(OWNER, RECORDS)
+        return (json.loads(data) if data else {"okf_version": OKF_VERSION, "records": {}, "events": []}), version
+
+    def forget_cache(self) -> None:
+        with _lock:
+            self._cache.update(at=0.0, cat=None)
+
+    def get(self, collection: str, doc_id: str) -> dict | None:
+        doc = self._catalog()["records"].get(collection, {}).get(doc_id)
+        return json.loads(json.dumps(doc)) if doc else None
+
+    def list(self, collection: str, **where: Any) -> list[dict]:
+        docs = self._catalog()["records"].get(collection, {}).values()
+        return [json.loads(json.dumps(d)) for d in docs if all(d.get(k) == v for k, v in where.items())]
+
+    def history(self, collection: str, doc_id: str) -> list[dict]:
+        """The changes to one record, oldest first."""
+        return [e for e in self._catalog(fresh=True)["events"] if e["collection"] == collection and e["item"] == doc_id]
+
+    # Writing: each change is decided on the latest catalog, so overlapping writes never lose one.
+    def put(self, collection: str, doc: dict) -> dict:
+        doc = _plain(doc)
+        self._change(collection, doc["id"], lambda _old: doc)
+        return doc
+
+    def create(self, collection: str, doc: dict) -> bool:
+        doc = _plain(doc)
+        made = [False]
+
+        def build(old):  # runs once per attempt: only the attempt that was written counts
+            made[0] = old is None
+            return doc if old is None else old
+
+        self._change(collection, doc["id"], build)
+        return made[0]
+
+    def update(self, collection: str, doc_id: str, fields: dict) -> dict:
+        def build(old):
+            if old is None:
+                raise KeyError(f"{collection}/{doc_id}")
+            return {**old, **_plain(fields)}
+
+        return self._change(collection, doc_id, build)
+
+    def delete(self, collection: str, doc_id: str) -> None:
+        self._change(collection, doc_id, lambda _old: None)
+
+    def _change(self, collection: str, doc_id: str, build) -> dict | None:
+        folder, kind = COLLECTIONS[collection]
+
+        def attempt():
+            cat, version = self._load()
+            if not cat.get("migrated"):  # old records are copied in before the first change
+                self._migrate()
+                cat, version = self._load()
+            docs = cat["records"].setdefault(collection, {})
+            old = docs.get(doc_id)
+            new = build(json.loads(json.dumps(old)) if old else None)
+            if new == old:
+                return cat, new, None
+            path = _record_path(folder, new or old, doc_id)
+            stamp = _iso(time.time())
+            action = "Deletion" if new is None else "Creation" if old is None else "Update"
+            if new is None:
+                docs.pop(doc_id, None)
+            else:
+                docs[doc_id] = new
+            event = {"at": stamp, "collection": collection, "item": doc_id, "action": action, "path": path,
+                     "guide": (new or old).get("guide_key")}
+            cat["events"] = (cat["events"] + [event])[-MAX_EVENTS:]
+            media.save_if(OWNER, RECORDS, json.dumps(cat, ensure_ascii=False).encode(), "application/json", version)
+            return cat, new, (path, kind, event)
+
+        cat, new, written = _retry(attempt)
+        with _lock:
+            self._cache.update(at=time.time(), cat=cat)
+        if written:
+            path, kind, event = written
+            if new is None:
+                media.delete(OWNER, f"{ROOT}/{path}")
+            else:
+                media.save(OWNER, f"{ROOT}/{path}", _record_file(kind, new, event["at"]).encode(), "text/markdown")
+            name = f"{event['at'].replace(':', '')}-{collection}-{_safe(doc_id)}-{event['action'].lower()}.json"
+            media.save(OWNER, f"{ROOT}/.events/{name}", json.dumps(event, ensure_ascii=False).encode(), "application/json")
+        return json.loads(json.dumps(new)) if new else None
+
+    def _migrate(self) -> dict:
+        """Copy the records Firestore held before PR-2.14.2, once. A record already in the bundle wins.
+        The Firestore copies are left for a person to remove after checking."""
+        from .store import store
+
+        def attempt():
+            cat, version = self._load()
+            if cat.get("migrated"):
+                return cat
+            for collection in COLLECTIONS:
+                docs = cat["records"].setdefault(collection, {})
+                for doc in store.list(collection):
+                    if not doc.get("seeded"):  # old portal examples aren't knowledge
+                        docs.setdefault(doc["id"], _plain(doc))
+            cat["migrated"] = True
+            media.save_if(OWNER, RECORDS, json.dumps(cat, ensure_ascii=False).encode(), "application/json", version)
+            for collection, docs in cat["records"].items():
+                folder, kind = COLLECTIONS[collection]
+                for doc_id, doc in docs.items():
+                    media.save(OWNER, f"{ROOT}/{_record_path(folder, doc, doc_id)}",
+                               _record_file(kind, doc, _iso(time.time())).encode(), "text/markdown")
+            return cat
+
+        return _retry(attempt)
+
+
+def _plain(doc: dict) -> dict:
+    """The record as plain JSON values (a Firestore timestamp becomes text), so YAML and JSON both hold it."""
+    return json.loads(json.dumps(doc, ensure_ascii=False, default=str))
+
+
+def _safe(raw: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]", "_", str(raw)).lstrip(".")[:120] or "x"
+
+
+def _record_path(folder: str, doc: dict, doc_id: str) -> str:
+    guide = doc.get("guide_key")
+    return f"{_safe(guide)}/{folder}/{_safe(doc_id)}.md" if guide else f"{folder}/{_safe(doc_id)}.md"
+
+
+def _record_file(kind: str, doc: dict, at: str) -> str:
+    title = next((str(doc[f]) for f in TITLE_FIELDS if doc.get(f)), doc["id"])
+    status = doc.get("review") or doc.get("status") or "recorded"
+    front = {"type": kind, "title": title[:200], "description": str(doc.get("claim") or title)[:200],
+             "tags": ["fraud", *([doc["guide_key"]] if doc.get("guide_key") else [])],
+             "generated": {"by": "anvaya/fraud-pipeline", "at": at},
+             "status": "deprecated" if status in ("removed", "faded", "rejected", "retired") else "draft"
+             if status in ("pending", "unconfirmed") else "stable",
+             "id": doc["id"], "record": doc}
+    return render(front, f"# {title}\n\nStatus: {status}.\n")
+
+
+records = Records()

@@ -4,7 +4,8 @@ import { authEnabled, signInWithGoogle, signOutUser, watchUser } from "../auth";
 import { useAction } from "../ui";
 import { ROLE_TEXT, friendlyError } from "./copy";
 import { ShowHow } from "./demo";
-import { KNOWLEDGE_MAP_URL, Nav, type OwnerTab, personLabel, personRole } from "./nav";
+import { ADMIN_URL, KNOWLEDGE_MAP_URL, Nav, type OwnerTab, personLabel, personRole } from "./nav";
+import Tour, { forgetTour, reopenTour, tourWanted } from "./Tour";
 import { Book as BookIcon, Check, Chevron, Close, Lock, Mic, People, ThreadMark } from "./icons";
 import KnowledgeMap from "./KnowledgeMap";
 import { ModelKey } from "./ModelKey";
@@ -16,8 +17,6 @@ import Journey from "./family/Journey";
 import Team from "./team/Team";
 import { forgetRecipientKeyOnThisDevice, hasRecipientKeys } from "../vaultCrypto";
 
-// The platform admin opens the separate admin portal (PR-12.9).
-const ADMIN_URL = import.meta.env.VITE_ADMIN_URL ?? (import.meta.env.DEV ? "/admin.html" : "https://anvaya-admin.web.app");
 const SHOW_HOW_KEY = "anvaya.v2.showHow";
 
 const OWNER_TABS: { id: OwnerTab; label: string; icon: () => ReactNode }[] = [
@@ -35,6 +34,9 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [drawer, setDrawer] = useState(false);
+  const [tour, setTour] = useState(false); // "Start here" (PR-14.1), once the copy is known
+  const [tourVisit, setTourVisit] = useState(0); // reopening starts it fresh, from step 1
+  useEffect(() => { if (ready) setTour(tourWanted()); }, [ready]);
   const [tab, setTab] = useState<OwnerTab>("talk");
   const [talkTopic, setTalkTopic] = useState<string | null>(null); // "Talk about this" from the book
   const [topicVisit, setTopicVisit] = useState(0); // a fresh Talk for each topic picked; clearing it doesn't restart Talk
@@ -114,6 +116,7 @@ export default function App() {
         <main className="v2-main">
           {error && <p className="v2-error" role="alert">{error}</p>}
           {!ready && !error && <p className="v2-muted">Opening your demo…</p>}
+          {ready && tour && <Tour key={tourVisit} onClose={() => setTour(false)} />}
           {ready && person && <div key={person.id} className="v2-stack">{screen(person, owner)}</div>}
         </main>
 
@@ -133,7 +136,8 @@ export default function App() {
         {drawer && (
           <DemoDrawer people={people} acting={acting} onSwitch={switchTo} onClose={() => setDrawer(false)}
             showHow={showHow} onToggleShowHow={toggleShowHow} askNickname={askNickname}
-            onNicknameDone={() => setAskNickname(false)} email={email} />
+            onNicknameDone={() => setAskNickname(false)} email={email}
+            onShowTour={() => { reopenTour(); setTourVisit((v) => v + 1); setTour(true); setDrawer(false); }} />
         )}
       </div>
     </Nav.Provider>
@@ -267,9 +271,10 @@ function SignIn({ denied, error, onError }: { denied: string | null; error: stri
 
 /** Everything that exists only for the demo, out of the customer's way: who is acting, reset,
  *  how Saathi works, the nickname and the knowledge map. */
-function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHow, askNickname, onNicknameDone, email }: {
+function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHow, askNickname, onNicknameDone, email, onShowTour }: {
   people: DemoPerson[]; acting: PersonId; onSwitch: (id: PersonId) => void; onClose: () => void;
   showHow: boolean; onToggleShowHow: () => void; askNickname: boolean; onNicknameDone: () => void; email: string | null;
+  onShowTour: () => void;
 }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [nickname, setNickname] = useState("");
@@ -330,6 +335,13 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
         <section aria-labelledby="demo-options">
           <p id="demo-options" className="v2-group-label">Options</p>
           <div className="v2-group">
+            <button className="v2-row-btn" onClick={onShowTour}>
+              <span className="v2-row-text">
+                <b>Show the tour</b>
+                <span>Start here: the demo in five steps</span>
+              </span>
+              <span className="v2-row-chev" aria-hidden="true"><Chevron /></span>
+            </button>
             <label className="v2-row-btn v2-toggle-row">
               <span className="v2-row-text">
                 <b>Show how Saathi works</b>
@@ -382,7 +394,7 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
               <div className="v2-confirm v2-group-confirm" role="alert">
                 <p>Restore your demo copy to the start? Everything you kept or changed in it is cleared. Nobody else's copy is affected.</p>
                 <div className="v2-row">
-                  <button className="v2-btn danger" disabled={busy} onClick={() => run(async () => { await api.seed(); location.reload(); })}>Reset my demo</button>
+                  <button className="v2-btn danger" disabled={busy} onClick={() => run(async () => { await api.seed(); forgetTour(); location.reload(); })}>Reset my demo</button>
                   <button className="v2-btn quiet" onClick={() => setConfirmReset(false)}>Keep it</button>
                 </div>
               </div>

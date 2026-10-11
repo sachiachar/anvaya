@@ -14,8 +14,10 @@ from typing import Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import audit_chain, demo, fraud_cues, fraud_guides, fraud_pipeline, model_access, scheduler
+from .. import (audit_chain, demo, fraud_bundle, fraud_cues, fraud_graph, fraud_guides, fraud_pipeline, model_access,
+               scheduler)
 from ..config import settings
+from ..fraud_bundle import records
 from ..store import store
 from . import billing, core, guardian, keys
 from .core import Actor, actor, audit, need, platform_settings, registry, small
@@ -341,25 +343,40 @@ def decide_guardian(event_id: str, body: GuardianDecision, who: Actor = Depends(
         "decided_by": who.email or "local", "decision_reason": body.reason})
 
 
+@router.get("/fraud/graph")
+def get_fraud_graph(guide: str | None = None, _: Actor = Depends(actor)) -> dict:
+    """The fraud knowledge as nodes and links for the Fraud page's graph view (no owner data in it)."""
+    return fraud_graph.build(guide)
+
+
+@router.get("/fraud/history")
+def get_fraud_history(item: str, guide: str | None = None, collection: str | None = None,
+                      _: Actor = Depends(actor)) -> dict:
+    """The changes to one node of the graph: a guide item, or a research record."""
+    if not guide and collection not in fraud_bundle.COLLECTIONS:
+        raise HTTPException(400, "Say which guide or collection the item is in.")
+    return {"events": fraud_graph.history(guide=guide, collection=collection, item=item)}
+
+
 @router.get("/fraud")
 def get_fraud(_: Actor = Depends(actor)) -> dict:
     ensure_current()
     fraud_pipeline.expire_stale()  # a run left 'running' by a restart doesn't block the page for good
-    scenarios = sorted((s for s in store.list("fraud_scenarios") if s.get("review") != "faded"),
+    scenarios = sorted((s for s in records.list("fraud_scenarios") if s.get("review") != "faded"),
                        key=lambda s: -s["at"])
     return {"scenarios": scenarios,
             "coverage": {"covered": sum(s["coverage"] == "covered" for s in scenarios),
                          "partly": sum(s["coverage"] == "partly" for s in scenarios),
                          "gaps": sum(s["coverage"] == "gap" for s in scenarios),
-                         "faded": len(store.list("fraud_scenarios", review="faded"))},
-            "drafts": sorted(store.list("fraud_drafts", review="pending"), key=lambda d: -d["at"]),
+                         "faded": len(records.list("fraud_scenarios", review="faded"))},
+            "drafts": sorted(records.list("fraud_drafts", review="pending"), key=lambda d: -d["at"]),
             "privacy": _cue_privacy(),
             "runs": sorted(store.list("fraud_runs"), key=lambda r: -r["started_at"])[:10],
             "guides": fraud_guides.summaries(),
             # What the pipeline added on its own (PR-2.7.y): a person can remove any of it, and 1 in 10
             # is marked for an optional spot check. Adding pauses for a guide after 2 removals in a week.
             # Every active one, spot checks first, so nothing added is ever out of a person's reach.
-            "added": sorted(store.list("fraud_auto", status="active"), key=lambda a: (not a["spot_check"], -a["at"])),
+            "added": sorted(records.list("fraud_auto", status="active"), key=lambda a: (not a["spot_check"], -a["at"])),
             "adding_paused": sorted(a["id"] for a in store.list("fraud_autonomy") if a.get("paused"))}
 
 
@@ -381,11 +398,11 @@ def remove_added(item_id: str, body: AddedDecision, who: Actor = Depends(need("r
 @router.post("/fraud/added/{item_id}/keep")
 def keep_added(item_id: str, body: AddedDecision, who: Actor = Depends(need("review_fraud"))) -> dict:
     """A spot check found it right: it stays, and is no longer marked for checking."""
-    item = store.get("fraud_auto", item_id)
+    item = records.get("fraud_auto", item_id)
     if not item or item["status"] != "active":
         raise HTTPException(404, "Nothing active with that id was added.")
     audit(who, "fraud.added_kept", item_id, body.reason, kind=item["kind"])
-    return store.update("fraud_auto", item_id, {"spot_check": False, "checked_at": time.time()})
+    return records.update("fraud_auto", item_id, {"spot_check": False, "checked_at": time.time()})
 
 
 @router.post("/fraud/guides/{guide_id}/resume-adding")
@@ -400,7 +417,7 @@ def resume_adding(guide_id: str, body: AddedDecision, who: Actor = Depends(need(
 
 def _claim(item_id: str) -> None:
     """Only one decision per scenario or draft, even if two reviewers press at the same moment."""
-    if not store.create("fraud_decisions", {"id": item_id, "at": time.time()}):
+    if not records.create("fraud_decisions", {"id": item_id, "at": time.time()}):
         raise HTTPException(409, "This has already been reviewed.")
 
 
@@ -413,7 +430,7 @@ class ScenarioDecision(BaseModel):
 def decide_scenario(scenario_id: str, body: ScenarioDecision, who: Actor = Depends(need("review_fraud"))) -> dict:
     """Approve a confirmed scenario (it becomes validated and joins the guide), or discard any
     open one (it becomes invalidated, and the dreamer is told it's ruled out)."""
-    scenario = store.get("fraud_scenarios", scenario_id)
+    scenario = records.get("fraud_scenarios", scenario_id)
     if not scenario:
         raise HTTPException(404, "scenario not found")
     if scenario["review"] not in ("pending", "unconfirmed"):
@@ -424,7 +441,7 @@ def decide_scenario(scenario_id: str, body: ScenarioDecision, who: Actor = Depen
     audit(who, f"fraud.scenario.{body.decision}", scenario_id, body.reason)
     if body.decision == "approve":
         fraud_pipeline.approve_scenario(scenario)
-    return store.update("fraud_scenarios", scenario_id, {
+    return records.update("fraud_scenarios", scenario_id, {
         "review": "approved" if body.decision == "approve" else "discarded",
         "label": "validated" if body.decision == "approve" else "invalidated",
         "reviewed_by": who.key, "reviewed_at": time.time()})
@@ -433,7 +450,7 @@ def decide_scenario(scenario_id: str, body: ScenarioDecision, who: Actor = Depen
 @router.post("/fraud/drafts/{draft_id}/decision")
 def decide_draft(draft_id: str, body: ScenarioDecision, who: Actor = Depends(need("review_fraud"))) -> dict:
     """Approve a researched tactic (a new guide version), or discard it."""
-    draft = store.get("fraud_drafts", draft_id)
+    draft = records.get("fraud_drafts", draft_id)
     if not draft:
         raise HTTPException(404, "draft not found")
     if draft["review"] != "pending":
@@ -442,7 +459,7 @@ def decide_draft(draft_id: str, body: ScenarioDecision, who: Actor = Depends(nee
     audit(who, f"fraud.draft.{body.decision}", draft_id, body.reason)
     if body.decision == "approve":
         fraud_pipeline.approve_draft(draft)
-    return store.update("fraud_drafts", draft_id, {
+    return records.update("fraud_drafts", draft_id, {
         "review": "approved" if body.decision == "approve" else "discarded",
         "label": "derived" if body.decision == "approve" else "invalidated",
         "reviewed_by": who.key, "reviewed_at": time.time()})
