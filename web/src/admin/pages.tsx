@@ -11,6 +11,7 @@ import { POLL_MS, usePoll } from "./usePoll";
 
 // The charts library loads only when the dashboard opens.
 const UsageCharts = lazy(() => import("./usageCharts"));
+const FraudGraphView = lazy(() => import("./fraudGraph"));
 
 // ---- Shared pieces --------------------------------------------------------------
 
@@ -740,6 +741,11 @@ export function FraudPage({ me }: { me: Me }) {
             </tr>
           ))}</tbody>
         </table>}
+      </Section>
+      <Section title="Knowledge graph">
+        <Suspense fallback={<p className="pa-muted">Loading the graph…</p>}>
+          <FraudGraphView />
+        </Suspense>
       </Section>
       <Section title="Safeguard coverage map">
         {data.scenarios.length === 0 && <Empty>No scenarios yet. "Dream now" adds them.</Empty>}

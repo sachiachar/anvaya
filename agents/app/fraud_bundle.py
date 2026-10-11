@@ -327,6 +327,10 @@ class Records:
         docs = self._catalog()["records"].get(collection, {}).values()
         return [json.loads(json.dumps(d)) for d in docs if all(d.get(k) == v for k, v in where.items())]
 
+    def history(self, collection: str, doc_id: str) -> list[dict]:
+        """The changes to one record, oldest first."""
+        return [e for e in self._catalog(fresh=True)["events"] if e["collection"] == collection and e["item"] == doc_id]
+
     # Writing: each change is decided on the latest catalog, so overlapping writes never lose one.
     def put(self, collection: str, doc: dict) -> dict:
         doc = _plain(doc)
