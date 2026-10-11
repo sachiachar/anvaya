@@ -137,6 +137,20 @@ flowchart LR
 
 ## 4. AI-first loops
 
+**The system view.** The admin portal's Agents page (`web/src/admin/loopMap.tsx`) draws every loop, live, around the guardian:
+
+![The admin portal's Agents page: every loop around the guardian, with its autonomy and the gates where a person decides](assets/admin-agents-map.png)
+
+*Screenshot of the Agents page in local development, with synthetic data and no agent working.*
+
+- **Top row:** what the guardian decides with. The fixed rules feed it directly. Every hour, the dreamer and the researcher add to the fraud guide, which also feeds it. A tactic joins the guide on its own only when 2 independent sources confirm it.
+- **Guardian bar:** the central control. Everything new the owner says, and every family question, passes it first. It decides allow, deflect or block.
+- **Left panel:** while the owner is here. The planner (no AI) gives Saathi each step. Cards wait for the owner's Keep before they reach kept knowledge.
+- **Right panel:** when the time comes. The certificate check only assists, 2 reviewers release the vault, and the family assistant answers questions.
+- **Bottom bar:** the gateway. Every model call passes it: a registered agent, an allowed model and budget left.
+- **Labels:** ACTS (within fixed limits), PROPOSES (a person says yes), ASSISTS (advice only), NO AI (code and people), STORE (where knowledge is kept). A hand marks a gate where a person must act.
+- **Live:** the map checks every 15 seconds. A turning ring shows a model call or fraud run in progress. Select a loop for its numbers.
+
 | Loop | Code | Input → output | Autonomy | Human checkpoint |
 | --- | --- | --- | --- | --- |
 | Conversation (typed, photo, document) | `loops.understand`, then `loops.respond` (PR-2.12.3) | Message or file → moments, inventory, people, the owner's mood and how they answered; then, after the guardian and the plan, a reply that carries out the plan's current step in its tone | Propose (reading), act within limits (reply) | Cards start as `pending` |
