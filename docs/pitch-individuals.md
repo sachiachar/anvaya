@@ -1,6 +1,6 @@
 # Anvaya, for you and your family
 
-*Team Saathi · Revision 2, 3 October 2026 · the full picture is in [concept.md](concept.md); the pitch to banks and insurers is in [pitch-institutions.md](pitch-institutions.md)*
+*Team Saathi · Revision 3, 12 October 2026 · the full picture is in [concept.md](concept.md); the pitch to banks and insurers is in [pitch-institutions.md](pitch-institutions.md)*
 
 ---
 
@@ -31,9 +31,13 @@ No forms. No lawyer's office. Just a conversation, in your own language, wheneve
 
 ## What it feels like
 
-- **Tap the microphone and just talk.** It feels like a phone call with an old family friend. Saathi answers out loud, in your language, and you can interrupt any time.
+- **Tap the microphone and just talk.** It feels like a phone call with an old family friend. Saathi answers out loud, in your language, and you can interrupt any time. If your phone blocks the microphone, Saathi tells you how to allow it, or you can simply type.
+- **Saathi knows where to begin.** It starts with the people who matter to you and a story or two. Later it asks where things are kept. For your wishes, it waits until you are ready.
+- **Saathi listens to how you feel.** If you sound sad, it simply listens, and the practical questions wait for another day. If you sound tired, it offers to stop. If you are enjoying a memory, it enjoys it with you.
 - **Or type, or share a photo.** Snap your insurance policy and Saathi reads it for you.
 - **You decide what is kept.** Small cards appear as you talk: a story, a piece of advice, a bank account, a family member. You tap **Keep** or **Not now**. Only what you keep becomes part of what your family will one day receive.
+- **Your words, as you said them.** Each card says only what you said. If a detail is missing, Saathi leaves it empty and asks you later. It never guesses.
+- **A book for your family.** Everything you keep becomes a book, with chapters for your stories, money matters, wishes and people. Each page shows the day you kept it, and the cover shows how ready it is.
 - **Your conversation stays private.** It's held only so Saathi can follow along, with account and card numbers hidden. It's never handed over, and you can delete it whenever you like.
 - **Keep your real voice.** For any story, you can keep the recording of you telling it, so one day your family hears it from you, not about you.
 - **Leave voice letters.** Record a message for someone special or a moment you may not be there for: *"For Priya, on her wedding day."* It stays sealed until the time comes, and reaches only the person you chose.
@@ -66,6 +70,7 @@ If you choose one, and only if you agree, Saathi sends them a short summary so y
 - A **waiting period** follows. If there has been a mistake, one tap on your phone cancels everything.
 - The person you chose **unlocks your vault on their own phone**.
 - They can **ask Saathi**, "What insurance did Papa have?", and hear the answer in your own words, with where it came from. If you never said it, Saathi says so honestly. It never guesses.
+- They can **ask about anything you kept**, freely. If they mention someone asking them for a fee, Saathi gently adds that banks don't ask for fees on a call.
 - Where you kept a recording, Saathi offers to **play your real voice** telling the story. And each **voice letter** reaches the person it was meant for.
 - Saathi prepares a **checklist and draft claim letters** for every bank and insurer, and trusted partners are there for what comes next.
 
@@ -76,9 +81,11 @@ Something this precious needs watching over, not just at the end, but all along 
 - **You hear first.** If anyone ever reports your passing, we tell you straight away, with a link to cancel. One tap, and nothing moves.
 - **Big changes take a breath.** Changing who receives your vault, or who your nominee is, takes a short pause and your own confirmation. If the change comes from a phone we haven't seen before, we check with you first.
 - **Your voice alone can't change anything important.** We always ask you to confirm on your own screen, so even a copy of your voice could never take over.
+- **Saathi notices another voice.** If someone else joins your conversation, Saathi warmly asks who is there. What was said then is marked, so you can decide calmly what to keep. Saathi never records anyone's voiceprint.
+- **Nothing risky reaches your book.** Everything new is checked before Saathi offers it to keep. A password someone asked you for, or a payment someone else wants, is never kept.
 - **No one can pressure you through us.** If it ever seems someone is pushing you to change your wishes, Saathi won't confront anyone. It simply holds the change, and checks with you privately, later, when you're alone. You stay in charge.
 - **We watch ourselves too.** Two different people approve every handover. They can't pick which cases they review, and we keep an eye out for anything unusual in how our own team works.
-- **Our checks keep learning.** The tricks people try change over time, so our checks are updated as new ones appear.
+- **Our checks keep learning.** The tricks people try change over time. Every hour, we look for new ones. What two independent sources confirm is added, our team checks the rest, and our team can remove anything.
 
 ## Vikram's story
 
@@ -101,6 +108,7 @@ Something this precious needs watching over, not just at the end, but all along 
 - **You decide.** Only what you keep reaches your family, and nothing is shared with a partner until you agree. You can delete your conversation at any time.
 - **Yours to take with you.** What you keep is stored in an open, standard format, so it never depends on us alone.
 - **No made-up answers.** If you never said it, Saathi says so.
+- **Your words, as you said them.** Saathi never adds a detail you didn't say.
 - **Your real voice, never a copy.** Your family hears the recordings you chose to keep and the letters you left. We never clone your voice or build an avatar of you.
 - **No advice we aren't licensed to give.** Legal and financial advice comes only from licensed partners.
 - **No paid influence.** Partners can't buy a better place or a recommendation.

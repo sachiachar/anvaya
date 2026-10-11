@@ -1,6 +1,6 @@
 # Anvaya
 
-*Team Saathi · BFSI track · Revision 5, 3 October 2026*
+*Team Saathi · BFSI track · Revision 6, 12 October 2026*
 
 *The full picture. The focused pitches are [pitch-individuals.md](pitch-individuals.md) and [pitch-institutions.md](pitch-institutions.md); costs and margins are in [business-model.md](business-model.md); how it is built is in [architecture.md](architecture.md); what is available in each version is in [release-notes.md](release-notes.md).*
 
@@ -109,13 +109,19 @@ flowchart LR
 
 ### 1. While you are here: talk with Saathi
 
-- **Tap the microphone and just talk.** It feels like a phone call. Saathi answers out loud, in your language, and you can interrupt at any time.
+- **Tap the microphone and just talk.** It feels like a phone call. Saathi answers out loud, in your language, and you can interrupt at any time. If the phone blocks the microphone, Saathi says why and how to allow it, or you can simply type.
+- **Saathi knows what to talk about next.** It follows one gentle plan: first the people who matter, then a story, then where money matters are kept, and later wishes and advice. Saathi asks about most things, but for wishes it waits until you are ready.
+- **Saathi listens to how you feel.** Its tone fits the moment: warm for stories, gentle for wishes, clear for money matters. If you sound sad, it simply listens, and the practical questions wait for another day. If you sound tired, it offers to stop.
 - **Or type, or share a photo or document.** Snap a photo of an insurance policy and Saathi reads it for you.
 - **Saathi suggests what to keep.** Small cards appear: a story, a piece of advice, a bank account, a family member. You tap **Keep** or **Not now**.
+- **Your words, as you said them.** Each card says only what you said. A detail nobody said stays empty, and Saathi asks about it later instead of guessing.
+- **Checked before it is offered.** Everything new you say passes the guardian (see below) before it becomes a card. A password someone asked you for, or a payment someone else wants, never becomes part of what you keep.
+- **Another voice is noticed.** If someone else joins the conversation, Saathi warmly asks who is there. What was said then is marked, so you decide calmly what to keep. Saathi never tries to tell who it is, and keeps no voiceprint.
+- **A book for your family.** Everything you keep becomes a book, with chapters for stories and advice, money matters, wishes and people. Each page shows the day you kept it.
 - **Keep your real voice.** For any story, you can choose to keep the recording of you telling it, so your family can one day hear it from you. Each recording is kept only if you say so.
 - **Voice letters.** Record a message for a particular person or moment, such as "for Priya's wedding" or "for Ajay when he turns 18". It stays sealed until the handover, and then reaches only the person you chose.
 - **Next steps.** Saathi notices what your family would still be missing, such as "no nominee on this policy" or "no will for the flat", and offers simple next steps, each with a button.
-- **Gentle questions about what matters most.** Saathi knows how the pieces fit together: each policy should have a nominee, each property its papers and the person it's meant for. When the moment is right, it asks about the most important missing piece, one at a time. "Skip" is always respected, and never asked again. Your readiness shows as how complete the picture is, for example "14 of 19 pieces in place".
+- **Gentle questions about what matters most.** Saathi knows how the pieces fit together: each policy should have a nominee, each property its papers and the person it's meant for. When the moment is right, it asks about the most important missing piece, one at a time. "Skip" is always respected, and never asked again. The cover of your book shows how ready it is, as a score out of 100, with the pages still to write.
 - **A secure vault.** Passwords and account details are locked on your own phone. Nobody else can read them: not Anvaya, not your bank, not Saathi.
 - **You choose who receives the vault**, usually a son, daughter or spouse. They accept in their own app, and you confirm a matching code.
 
@@ -136,7 +142,8 @@ flowchart LR
 ### 4. The handover: for the family and the institution
 
 - The person you chose **unlocks the vault on their own phone**.
-- Your family can **ask Saathi questions**, such as "What insurance did Papa have?". Saathi answers only from what you actually recorded, shows where each answer came from, and says so honestly when something was never recorded.
+- Your family can **ask Saathi questions**, such as "What insurance did Papa have?". Saathi answers only from what you actually recorded, shows where each answer came from, and says so honestly when something was never recorded. Each source shows what kind of item it is, such as a policy or a story, and your own words appear as a quote.
+- Your family can **ask freely**. Only two kinds of question are turned away: one for a vault secret, and one that tries to steer Saathi. If they mention someone asking for a fee, the answer adds one helpful line, such as "banks don't ask for fees on a call".
 - When a story was kept with your voice, Saathi offers to play it: *"Would you like to hear him tell it?"* What plays is **your real recording**, never an imitation.
 - Each **voice letter** reaches the person it was meant for.
 - Saathi prepares a **checklist and draft claim letters** for each bank and insurer.
@@ -272,6 +279,7 @@ For costs, margins and the assumptions behind them, see [business-model.md](busi
 - **You decide.** Only what you keep reaches your family, and nothing is shared with a partner until you agree. You can delete your conversation at any time.
 - **Yours to take with you.** What you keep is stored in an open, standard format (Google Cloud's Open Knowledge Format), so it never depends on us alone.
 - **No made-up answers.** If you never said it, Saathi says so.
+- **Your words, as you said them.** Saathi never adds a detail you didn't say.
 - **No legal or financial advice from Saathi.** Licensed partners provide it.
 - **No paid influence.** Partners can't buy a better place or a recommendation.
 - **Your real voice, never a copy.** Your family can hear the recordings you chose to keep and the voice letters you left. Anvaya never clones a voice or builds an avatar.
@@ -304,18 +312,30 @@ Fraud can enter anywhere in the journey, not only with a forged certificate at t
 | Someone else on the owner's phone, or a cloned voice | Voice alone never authorises an important action; it needs confirmation on the owner's own device, plus a spoken random phrase for high-risk requests |
 | Pressure from someone close to the owner | The change is held, and Saathi checks with the owner privately, later; the owner stays in charge |
 | A sudden change of recipient or nominee | A cooling-off delay and a separate confirmation; blocked during an open case |
-| A forged certificate or false claimant | Checks tuned to each document type and country, kept current by research into new tactics; fixed rules; two independent reviewers |
+| Someone else joining the owner's conversation | Saathi asks who is there, what was said then is marked before the owner decides to keep it, and our team gets a quiet note |
+| A secret passed on, or a payment someone else asked for | Everything new the owner says passes the guardian first, so it never becomes part of what is kept |
+| A forged certificate or false claimant | Checks tuned to each document type and country, kept current by a fraud reference that grows every hour; fixed rules; two independent reviewers |
 | A false report of passing | The owner is told straight away, with a one-tap cancel link |
-| A family member probing for too much | Questions stay within the recipient's entitlement, and every question is kept for audit |
+| A family member probing for too much | Questions about what the owner kept are answered freely; a request for a vault secret, or words that try to steer Saathi, are turned away; every question is kept for audit |
 | An insider | Random case assignment, exclusion of reviewers linked to a case, and checks on unusual reviewer patterns |
 
 The guardian can **continue, add a check, reduce what Saathi may do on its own, pause for a reviewer, or block**. It never approves or rejects anything itself: people decide, and every intervention is explained, logged and reversible. It also red-teams itself, regularly imagining new ways around each safeguard and showing which safeguard catches each one.
+
+**A fraud reference that grows every hour.** Every hour, the service researches new fraud tactics.
+- A tactic that at least two independent websites confirm is added on its own. Anything with one source waits for a reviewer.
+- A new warning sign for the certificate check always waits for a reviewer.
+- It only adds. A reviewer can remove anything it added, and two removals in a week pause it until someone resumes it.
+- The same fraud is never added twice, even when it is worded differently, such as "forged seal" and "fake stamp".
+- The reference is kept in the same open format as what owners keep, with a history of every change. Our team sees it as a connected map of warning signs, tactics, sources and safeguards, with the gaps marked.
+
+**Every conversation can be followed.** Our team can follow one conversation from start to finish: what the guardian decided about each thing the owner said, what was offered and kept, and what Saathi did next. It shows only decisions, never what was said.
 
 ## Governed by design
 
 Every part of Saathi that acts on its own is an **agent with a name, one job, and only the tools and models it's allowed**. They all work within budgets.
 
 - **Identified and limited.** Each agent is registered with its role, its permitted tools and models, and its limits. Anything else is refused and recorded.
+- **Clear about how much it may do on its own.** Each card, next step and certificate check shows a label: **Assist** prepares the facts for a person to decide, **Propose** suggests and the owner decides, and **Act** acts on its own within set limits. People decide everything that matters.
 - **Fair for everyone.** Each person has a daily allowance, so no one can use up the service for others. **Safety always comes first:** cancelling a false report and checking certificates keep working even when an allowance runs out.
 - **No runaway costs.** Limits on each request, budgets per agent, customer and bank, alerts, an automatic switch that pauses optional features, and a hard ceiling at Google Cloud.
 - **More only with approval.** Extra allowance is a purchase for direct customers, the bank's decision for its customers, and needs two people for anything larger. Every grant is time-limited and logged.
@@ -328,19 +348,21 @@ Saathi is not a set of screens. It is a companion with clear limits on what it m
 
 | What Saathi does | Who decides |
 | --- | --- |
-| Listens, transcribes, reads documents, suggests cards | Saathi, within fixed rules |
+| Chooses what to talk about next | One conversation plan; Saathi asks, or waits until **you are ready** |
+| Listens, transcribes, reads documents, suggests cards | Saathi, within fixed rules; the guardian checks everything new first |
 | Finds gaps and matches them to kinds of partners | Saathi suggests; **you choose** |
 | Asks about the most important missing piece | Saathi asks once; **you can skip** |
 | Anything that gets saved or shared | Saathi suggests; **you decide** |
 | Checks certificates and legal proof for forgery | The checks assist; **a person decides** |
 | Watches every step for misuse (the guardian) | Adds checks, pauses or blocks; **people review and can reverse** |
+| Adds new fraud tactics to the fraud reference | Only what two independent websites confirm; it only adds, and **a reviewer can remove anything** |
 | Answers the family's questions and drafts claims | Only from what was recorded, always with sources |
 
 ## Where we are today
 
 | Live now | Coming in the prototype release (18 October 2026) | Later (finale and bank pilot) |
 | --- | --- | --- |
-| Voice and typed conversation, photos and documents; Keep cards; next steps; the vault; two-reviewer verification and waiting period; the family's questions with sources; claims checklist and letters; one mocked legal partner | A private demo for each judge; the guardian's core checks (two real reviewers, owner alert with cancel, fraud reference guides, fixed checks); the bank's claim file and view; accounts discovered and their readiness checked at the source (simulated Account Aggregator flow and real statement upload); owner-only access to the conversation with numbers hidden; kept knowledge in the open format with gentle gap questions; governed agents with allowances and a governance view; published quality measures | Playback of real recordings and voice letters; live Account Aggregator connection through a licensing bank; signs of pressure with a private check-in; cooling-off for recipient changes; cloned-voice signals; insider-pattern checks; a key per owner and per-bank stores; export; bank budgets and audit export; trigger-moment prompts; single sign-on and in-app embedding; India data residency; the full partner catalogue |
+| Voice and typed conversation, photos and documents; one conversation plan, with a tone for each step; Keep cards that say only what was said; next steps; the family book with a readiness score; the vault; two-reviewer verification and waiting period; the family's questions with sources; claims checklist and letters; one mocked legal partner; a private demo copy for each person, with a first-visit tour and specimen documents; the guardian's core checks (two real reviewers, owner alert with cancel, a check on everything new before it is kept, another voice noticed, fixed checks); a fraud reference that grows every hour, in the open format, shown as a map; one conversation traceable from start to finish; owner-only access to the conversation with numbers hidden; kept knowledge in the open format with gentle gap questions; governed agents with allowances, autonomy labels and a governance view; published quality measures; sign-in that can open the demo to every judge, each with their own copy | The bank's claim file and view; accounts discovered and their readiness checked at the source (simulated Account Aggregator flow and real statement upload) | Playback of real recordings and voice letters; live Account Aggregator connection through a licensing bank; signs of pressure with a private check-in; cooling-off for recipient changes; cloned-voice signals; insider-pattern checks; a key per owner and per-bank stores; export; bank budgets and audit export; trigger-moment prompts; single sign-on and in-app embedding; India data residency; the full partner catalogue |
 
 See [release-notes.md](release-notes.md) and the [release plan](https://github.com/sachiachar/anvaya/milestone/1).
 
