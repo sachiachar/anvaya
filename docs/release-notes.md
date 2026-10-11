@@ -27,6 +27,10 @@
 - **Our team, in the new design:** each check sign by sign, Confirm for the loss and for the legal authority by two different reviewers, and a written reason, typed in the page, to go against a "not valid" check. The audit log is under each case.
 - **The knowledge map, in the new design:** "Open the knowledge map" in the Demo menu opens it in its own window, in the brand's navy and gold. Items appear the moment they're kept, and removing one asks first, in the page.
 - Everything that's only for the demo now sits in one Demo drawer: whose screen to show, "Show how Saathi works", the optional nickname, the knowledge map and "Reset my demo", which now asks before it clears anything.
+- **"Start here", a tour for the first visit:** the demo opens with a short tour in five steps, from Vikram's first conversation to Priya's questions about him. The last step opens the admin portal, to see the agents at work.
+- Each step of the tour has buttons that go to the right person and screen. The tour folds to a thin bar. Closing it is remembered in this browser. "Show the tour" in the Demo menu opens it again, and "Reset my demo" starts it over.
+- **Specimen documents for the handover:** the tour and Priya's upload steps offer a specimen certificate of passing and a specimen succession certificate. With them, anyone can finish the demo without a document of their own.
+- Each specimen says on the page that it isn't a valid document, and its people and numbers are made up. So the checks flag it as "Needs a closer look", which shows them at work. Our team can still confirm it.
 - **Switching people without the Demo menu:** a row of names under the header (Vikram, Priya, Anjali, Rahul, Admin) shows who is acting, and one tap switches. All five fit on a phone. The row hides during a live call, because switching would end it.
 - **No dead ends:** where the next step belongs to someone else, the screen says so and offers "Switch to …". Vikram, waiting for Priya to accept, can switch to Priya. Priya, waiting for Vikram to approve or to seal the vault, can switch to Vikram, on his Family tab. On the handover tracker, Priya can switch to a reviewer, and to Vikram during the waiting period. Reviewers can switch to the other reviewer, or to Priya when it's her turn. The server still checks who acts at every step.
 - Priya now sees when Vikram has approved her phone but hasn't sealed the vault yet, with a way to switch to him. Before, she saw only "You're set up".
@@ -182,7 +186,7 @@
 - Spend can't yet be split by agent or tenant on the bill; those show use instead.
 
 ### Next
-Opening the demo to every judge, with a guided tour · guardian checks at every step · a claim file and bank view · accounts checked at the source · measured AI quality.
+Opening the demo to every judge · guardian checks at every step · a claim file and bank view · accounts checked at the source · measured AI quality.
 
 ## Prototype 0.1 · 28 September 2026 (AI Builder Cup 2026)
 

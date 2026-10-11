@@ -1,0 +1,2 @@
+# Hand-written PDFs: their byte offsets must not change with line-ending conversion.
+*.pdf binary

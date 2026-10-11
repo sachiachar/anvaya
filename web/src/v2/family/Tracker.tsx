@@ -8,6 +8,7 @@ import FilePick from "../FilePick";
 import { Check } from "../icons";
 import { Nav, samePerson } from "../nav";
 import SwitchTo from "../SwitchTo";
+import { Sample } from "../Samples";
 
 export default function Tracker({ status, parent }: { status: Case; parent: string }) {
   const { busy, error, run } = useAction();
@@ -34,8 +35,11 @@ export default function Tracker({ status, parent }: { status: Case; parent: stri
       done: Boolean(status.authority_check) && s !== "death_confirmed",
       now: s === "death_confirmed",
       action: s === "death_confirmed" && !status.authority_check ? (
-        <FilePick label={busy ? "Checking…" : "Upload proof"} accept="image/*,application/pdf" disabled={busy}
-          onFile={(f) => run(async () => { await api.submitAuthority(f); })} />
+        <>
+          <FilePick label={busy ? "Checking…" : "Upload proof"} accept="image/*,application/pdf" disabled={busy}
+            onFile={(f) => run(async () => { await api.submitAuthority(f); })} />
+          <Sample which="authority" />
+        </>
       ) : s === "death_confirmed" && secondReviewer ? (
         <SwitchTo to={secondReviewer.id}>Switch to {secondReviewer.name} (our team) to confirm</SwitchTo>
       ) : undefined,
