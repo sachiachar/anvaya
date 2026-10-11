@@ -9,6 +9,7 @@ import pytest
 
 from app import fraud_cues, fraud_pipeline, knowledge, media
 from app.fraud_pipeline import Imagined
+from app.fraud_bundle import records
 from app.store import new_id, store
 from tests.test_fraud_pipeline import KEY, Stub, clean, scenario  # noqa: F401  (the pipeline's fixtures)
 from tests.test_governance import client, h  # noqa: F401  (the portal fixture, signed-in roles)
@@ -151,7 +152,7 @@ def test_a_scenario_keeps_only_a_real_cue(monkeypatch):
     invented = scenario("Something else entirely")
     invented.cue = "anything the model likes"
     _dream_with(monkeypatch, [real, invented, scenario("A third, far one", "far")])
-    saved = {s["scenario"]: s.get("cue") for s in store.list("fraud_scenarios")}
+    saved = {s["scenario"]: s.get("cue") for s in records.list("fraud_scenarios")}
     assert saved["Claim as the nominee of a policy with none recorded"]["owners"] == 7
     assert saved["Something else entirely"] is None
     Imagined(scenarios=[real])  # the schema accepts a cue

@@ -21,6 +21,7 @@ from app.fraud_pipeline import (
 )
 from app.web_search import Answer as Grounded
 from app.governance import core
+from app.fraud_bundle import records
 from app.store import store
 from tests.test_governance import client, h  # noqa: F401  (the portal fixture, signed-in roles)
 
@@ -146,7 +147,7 @@ def test_source_indexes_outside_the_list_are_ignored():
 def test_a_run_keeps_two_close_and_one_far_variant_per_sequence_within_limits(stub):
     run = dream()
     assert run["status"] == "done"
-    scenarios = store.list("fraud_scenarios", guide_key=KEY)
+    scenarios = records.list("fraud_scenarios", guide_key=KEY)
     assert run["counts"]["sequences"] == 2 and len(scenarios) == 6
     for seq in {s["sequence_id"] for s in scenarios}:
         mine = [s for s in scenarios if s["sequence_id"] == seq]
@@ -161,23 +162,23 @@ def test_a_run_keeps_two_close_and_one_far_variant_per_sequence_within_limits(st
 
 def test_confirmed_scenarios_wait_for_review_and_unconfirmed_ones_dont(stub):
     dream()
-    assert {s["review"] for s in store.list("fraud_scenarios")} == {"pending"}
-    assert all(s["label"] == "simulated" and s["evidence"] == 2 for s in store.list("fraud_scenarios"))
+    assert {s["review"] for s in records.list("fraud_scenarios")} == {"pending"}
+    assert all(s["label"] == "simulated" and s["evidence"] == 2 for s in records.list("fraud_scenarios"))
     clean_all()
     stub.confirm = False
     dream()
-    assert {s["review"] for s in store.list("fraud_scenarios")} == {"unconfirmed"}
+    assert {s["review"] for s in records.list("fraud_scenarios")} == {"unconfirmed"}
 
 
 def clean_all():
-    for doc in store.list("fraud_scenarios"):
-        store.delete("fraud_scenarios", doc["id"])
+    for doc in records.list("fraud_scenarios"):
+        records.delete("fraud_scenarios", doc["id"])
 
 
 def test_a_safeguard_outside_the_fixed_list_counts_as_a_gap(stub):
     stub.coverage = "a guard dog"
     dream()
-    assert {(s["caught_by"], s["coverage"]) for s in store.list("fraud_scenarios")} == {(None, "gap")}
+    assert {(s["caught_by"], s["coverage"]) for s in records.list("fraud_scenarios")} == {(None, "gap")}
 
 
 def test_imagined_tactics_never_seed_new_scenarios(stub, monkeypatch):
@@ -187,14 +188,14 @@ def test_imagined_tactics_never_seed_new_scenarios(stub, monkeypatch):
     monkeypatch.setitem(BUILT_IN, KEY, guide)
     dream()
     assert not any("imagined tactic zulu" in p for p in stub.prompts)
-    assert not any(s["sequence_id"] == "dreamt" for s in store.list("fraud_scenarios"))
+    assert not any(s["sequence_id"] == "dreamt" for s in records.list("fraud_scenarios"))
 
 
 def test_least_dreamed_sequences_go_first(stub):
     dream()
-    first = {s["sequence_id"] for s in store.list("fraud_scenarios")}
+    first = {s["sequence_id"] for s in records.list("fraud_scenarios")}
     dream()
-    second = {s["sequence_id"] for s in store.list("fraud_scenarios")} - first
+    second = {s["sequence_id"] for s in records.list("fraud_scenarios")} - first
     assert first and second and not first & second
 
 
@@ -208,7 +209,7 @@ def test_the_dreamer_sees_events_without_case_keys_or_owner_data(stub):
 
 
 def test_rejected_scenarios_go_back_as_ruled_out(stub):
-    store.put("fraud_scenarios", {"id": "scn_old", "at": time.time(), "guide_key": KEY, "scenario": "Old idea yankee",
+    records.put("fraud_scenarios", {"id": "scn_old", "at": time.time(), "guide_key": KEY, "scenario": "Old idea yankee",
                                   "label": "invalidated", "review": "discarded", "coverage": "gap"})
     dream()
     assert any("Old idea yankee" in p for p in stub.prompts if "Already ruled out" in p)
@@ -217,17 +218,17 @@ def test_rejected_scenarios_go_back_as_ruled_out(stub):
 def test_scenarios_like_existing_ones_are_skipped(stub):
     stub.imagined = [scenario("Copy the QR code from a real certificate"), scenario("Copy the QR code from a real certificate")]
     dream()
-    assert len(store.list("fraud_scenarios")) == 1  # the same idea is kept once, across sequences too
+    assert len(records.list("fraud_scenarios")) == 1  # the same idea is kept once, across sequences too
 
 
 def test_unconfirmed_scenarios_fade_after_three_runs(stub):
     stub.confirm = False
     dream()
-    first = {s["id"] for s in store.list("fraud_scenarios")}
+    first = {s["id"] for s in records.list("fraud_scenarios")}
     for _ in range(3):
         stub.imagined = []
         dream()
-    assert {s["id"] for s in store.list("fraud_scenarios", review="faded")} == first
+    assert {s["id"] for s in records.list("fraud_scenarios", review="faded")} == first
 
 
 def test_one_run_at_a_time_and_a_stuck_run_times_out():
@@ -275,7 +276,7 @@ def test_a_reviewer_can_stop_a_run_and_it_keeps_what_was_checked(stub, monkeypat
     done = asyncio.run(fraud_pipeline.dream(run))
     assert done["status"] == "stopped" and done["stopped_reason"] == "stopped by a reviewer"
     # the scenario being checked when Stop was pressed is finished and kept; nothing after it runs
-    assert len(store.list("fraud_scenarios")) == 2 and done["calls"]["fraud.researcher"] == 2
+    assert len(records.list("fraud_scenarios")) == 2 and done["calls"]["fraud.researcher"] == 2
     with pytest.raises(KeyError):
         fraud_pipeline.request_stop(run["id"])
 
@@ -296,11 +297,11 @@ def test_sign_text_that_reads_like_instructions_never_joins_a_guide(stub):
     stub.imagined = [scenario("Seal left off on purpose papa")]
     stub.imagined[0].document_sign = bad
     dream()
-    assert store.list("fraud_scenarios")[0]["document_sign"] is None
+    assert records.list("fraud_scenarios")[0]["document_sign"] is None
     stub.tactics = [tactic("Insider at the registrar quebec")]
     stub.tactics[0].sign = DocumentSign(look_for="x" * 301, genuine="fine")
     research()
-    assert store.list("fraud_drafts")[0]["sign"] is None
+    assert records.list("fraud_drafts")[0]["sign"] is None
 
 
 def test_only_web_links_are_kept_as_sources():
@@ -313,13 +314,13 @@ def test_only_web_links_are_kept_as_sources():
 def test_safeguard_names_match_in_any_case(stub):
     stub.imagined = [scenario("Pressure the reviewers romeo", targets="  Two Reviewers ")]
     dream()
-    assert store.list("fraud_scenarios")[0]["safeguard"] == "two reviewers"
+    assert records.list("fraud_scenarios")[0]["safeguard"] == "two reviewers"
 
 
 def test_two_approvals_at_once_both_reach_the_guide(stub):
     stub.tactics = [tactic("Registrar office insider kilo"), tactic("Hospital record forged lima")]
     research()
-    first, second = store.list("fraud_drafts")
+    first, second = records.list("fraud_drafts")
     real_latest = fraud_guides._latest_stored
     raced = []
 
@@ -340,7 +341,7 @@ def test_two_approvals_at_once_both_reach_the_guide(stub):
 def test_the_same_scenario_cant_be_decided_twice(client, stub):  # noqa: F811
     client.post(f"/api/platform/fraud/guides/{KEY}/dream", headers=h("risk"))
     scn = client.get("/api/platform/fraud", headers=h("risk")).json()["scenarios"][0]
-    store.create("fraud_decisions", {"id": scn["id"]})  # another reviewer's decision got there first
+    records.create("fraud_decisions", {"id": scn["id"]})  # another reviewer's decision got there first
     url = f"/api/platform/fraud/scenarios/{scn['id']}/decision"
     assert client.post(url, headers=h("risk"), json={"decision": "approve", "reason": "seen it"}).status_code == 409
 
@@ -365,7 +366,7 @@ def test_research_drafts_at_most_two_confirmed_tactics_and_changes_no_guide(stub
     stub.tactics = [tactic("Registrar office insider kilo"), tactic("Forged hospital record lima"),
                     tactic("Third tactic mike")]
     run = research()
-    drafts = store.list("fraud_drafts")
+    drafts = records.list("fraud_drafts")
     assert {k: run["counts"][k] for k in ("found", "confirmed", "unconfirmed", "drafts", "added")} == \
         {"found": 2, "confirmed": 2, "unconfirmed": 0, "drafts": 2, "added": 0}  # one website: drafts, not added
     assert {d["tactic"] for d in drafts} == {"Registrar office insider kilo", "Forged hospital record lima"}
@@ -378,13 +379,13 @@ def test_research_skips_known_and_unconfirmed_tactics(stub):
     stub.confirm = False
     run = research()
     assert {k: run["counts"][k] for k in ("found", "confirmed", "unconfirmed")} == {"found": 1, "confirmed": 0, "unconfirmed": 1}
-    assert store.list("fraud_drafts") == []
+    assert records.list("fraud_drafts") == []
 
 
 def test_approving_a_draft_adds_a_human_reviewed_tactic_and_sign(stub):
     stub.tactics = [tactic("Registrar office insider kilo")]
     research()
-    guide = fraud_pipeline.approve_draft(store.list("fraud_drafts")[0])
+    guide = fraud_pipeline.approve_draft(records.list("fraud_drafts")[0])
     added = guide.tactics[-1]
     assert added.name == "Registrar office insider kilo" and added.trust == "human-reviewed"
     assert guide.signs[-1].id == f"{added.id}_sign" and guide.signs[-1].trust == "human-reviewed"
@@ -395,7 +396,7 @@ def test_approving_a_draft_adds_a_human_reviewed_tactic_and_sign(stub):
 def test_approving_a_scenario_with_a_document_mark_adds_a_projection_sign(stub):
     stub.imagined = [scenario("A copied QR code oscar", sign=True)]
     dream()
-    scn = store.list("fraud_scenarios")[0]
+    scn = records.list("fraud_scenarios")[0]
     guide = fraud_pipeline.approve_scenario(scn)
     sign = next(s for s in guide.signs if s.id == scn["id"])
     assert sign.projection and sign.label == "validated" and sign.trust == "human-reviewed"

@@ -38,6 +38,7 @@ from google.genai import errors as genai_errors
 from pydantic import BaseModel, Field
 
 from . import fraud_cues, fraud_guides
+from .fraud_bundle import records
 from .fraud_guides import CHECKABLE, Guide
 from .gemini import CutOff, ModelBusy, generate_json
 from .governance import core as governance
@@ -226,9 +227,9 @@ def known_topics(guide: Guide) -> list[dict]:
     known = [{"title": t.name, "text": " ".join(s.text for s in t.steps)} for t in guide.tactics]
     known += [{"title": s.look_for, "text": ""} for s in guide.signs]
     known += [{"title": s.get("scenario", ""), "text": s.get("claim", "")}
-              for s in store.list("fraud_scenarios", guide_key=guide.key)]
+              for s in records.list("fraud_scenarios", guide_key=guide.key)]
     known += [{"title": d.get("tactic", ""), "text": d.get("claim", "")}
-              for d in store.list("fraud_drafts", guide_key=guide.key) if d.get("kind", "tactic") == "tactic"]
+              for d in records.list("fraud_drafts", guide_key=guide.key) if d.get("kind", "tactic") == "tactic"]
     return [k for k in known if k["title"] or k["text"]]
 
 
@@ -463,7 +464,7 @@ def _recent_events(n: int = 10) -> list[dict]:
 
 def _ruled_out(guide_key: str, n: int = 20) -> list[str]:
     """Rule 6: rejected scenarios go back to the dreamer as 'already ruled out'."""
-    rejected = store.list("fraud_scenarios", guide_key=guide_key, label="invalidated")
+    rejected = records.list("fraud_scenarios", guide_key=guide_key, label="invalidated")
     return [s["scenario"] for s in sorted(rejected, key=lambda s: -s["at"])[:n]]
 
 
@@ -530,13 +531,13 @@ async def _map(scenario: ImaginedScenario) -> tuple[str | None, str, str]:
 def _fade(guide_key: str) -> int:
     """Rule 5: unconfirmed scenarios are archived after 3 runs."""
     faded = 0
-    for s in store.list("fraud_scenarios", guide_key=guide_key, review="unconfirmed"):
+    for s in records.list("fraud_scenarios", guide_key=guide_key, review="unconfirmed"):
         seen = s.get("runs_seen", 0) + 1
         fields = {"runs_seen": seen}
         if seen >= FADE_AFTER_RUNS:
             fields["review"] = "faded"
             faded += 1
-        store.update("fraud_scenarios", s["id"], fields)
+        records.update("fraud_scenarios", s["id"], fields)
     return faded
 
 
@@ -609,7 +610,7 @@ async def dream(run: dict) -> dict:
                     checks_failed += 1
                     continue
                 checks_ok += 1
-                saved = store.put("fraud_scenarios", {
+                saved = records.put("fraud_scenarios", {
                     "id": new_id("scn"), "at": time.time(), "run_id": run["id"], "guide_key": guide.key,
                     "sequence_id": tactic.id, "scenario": scenario.title, "steps": scenario.steps,
                     "variant": scenario.variant, "claim": scenario.claim, "safeguard": scenario.targets,
@@ -628,7 +629,7 @@ async def dream(run: dict) -> dict:
                 if added:  # 2 independent websites report it: validated on its own (PR-2.7.y)
                     try:
                         approve_scenario(saved, auto=True)
-                        store.update("fraud_scenarios", saved["id"], {"review": "added", "label": "validated"})
+                        records.update("fraud_scenarios", saved["id"], {"review": "added", "label": "validated"})
                         _record_added(guide.key, "scenario", saved["id"], scenario.title, [saved["id"]],
                                       independent_sources(evidence.sources))
                         counts["added"] = counts.get("added", 0) + 1
@@ -686,7 +687,7 @@ def _slug(text: str) -> str:
 def subjects(guide: Guide) -> list[dict]:
     """Every research subject for a guide, in priority order: gaps, signs, safeguards, open subjects, tactics."""
     tactics = [{"title": t.name, "text": " ".join(x.text for x in t.steps)} for t in guide.tactics]
-    gaps = [s for s in store.list("fraud_scenarios", guide_key=guide.key)
+    gaps = [s for s in records.list("fraud_scenarios", guide_key=guide.key)
             if s.get("coverage") == "gap" and s.get("label") != "invalidated"
             and s.get("review") not in ("faded", "discarded", "removed")
             and not already_known({"title": s.get("scenario", ""), "text": s.get("claim", "")}, tactics)]
@@ -786,23 +787,23 @@ def _record_added(guide_key: str, kind: str, item_id: str, name: str, retires: l
     """The portal's list of what the pipeline added on its own, each with a way to retire it."""
     store.increment("fraud_auto_counts", guide_key, {"added": 1}, {"guide_key": guide_key})
     count = (store.get("fraud_auto_counts", guide_key) or {}).get("added", 1)
-    return store.put("fraud_auto", {
+    return records.put("fraud_auto", {
         "id": item_id, "at": time.time(), "guide_key": guide_key, "kind": kind, "name": name, "retires": retires,
         "sources": sources, "spot_check": count % SPOT_CHECK_EVERY == 1, "status": "active"})
 
 
 def remove_added(item_id: str) -> dict:
     """A person retires something the pipeline added. Two removals in a week pause adding for that guide."""
-    item = store.get("fraud_auto", item_id)
+    item = records.get("fraud_auto", item_id)
     if not item or item["status"] != "active":
         raise KeyError(item_id)
     fraud_guides.retire_items(item["guide_key"], set(item["retires"]))
-    item = store.update("fraud_auto", item_id, {"status": "removed", "removed_at": time.time()})
-    if item["kind"] == "scenario" and store.get("fraud_scenarios", item_id):  # ruled out from now on (rule 6)
-        store.update("fraud_scenarios", item_id, {"review": "removed", "label": "invalidated"})
+    item = records.update("fraud_auto", item_id, {"status": "removed", "removed_at": time.time()})
+    if item["kind"] == "scenario" and records.get("fraud_scenarios", item_id):  # ruled out from now on (rule 6)
+        records.update("fraud_scenarios", item_id, {"review": "removed", "label": "invalidated"})
     resumed = (store.get("fraud_autonomy", item["guide_key"]) or {}).get("resumed_at", 0)
     since = max(time.time() - REMOVAL_WINDOW_SECONDS, resumed)  # removals before a resume don't count again
-    removed = [a for a in store.list("fraud_auto", guide_key=item["guide_key"], status="removed")
+    removed = [a for a in records.list("fraud_auto", guide_key=item["guide_key"], status="removed")
                if a.get("removed_at", 0) > since]
     if len(removed) >= PAUSE_AFTER_REMOVALS:
         store.put("fraud_autonomy", {"id": item["guide_key"], "paused": True, "paused_at": time.time()})
@@ -916,16 +917,16 @@ async def research(run: dict) -> dict:
                     # The tactic is added on its own; its warning sign, written from one page's text,
                     # would go into every certificate check, so it always waits for a reviewer.
                     added = _add_tactic({**draft, "sign": None}, trust="machine-confirmed", auto=True)
-                    store.put("fraud_drafts", {**draft, "review": "added", "added_as": added})
+                    records.put("fraud_drafts", {**draft, "review": "added", "added_as": added})
                     if draft["sign"]:
-                        store.put("fraud_drafts", {**draft, "id": new_id("drf"), "kind": "sign",
+                        records.put("fraud_drafts", {**draft, "id": new_id("drf"), "kind": "sign",
                                                    "tactic_id": added["tactic"], "review": "pending"})
                     _record_added(guide.key, "tactic", added["tactic"], tactic.name, [added["tactic"]], sites)
                     counts["added"] += 1
                     guard.say("save", f"Added to the guide: “{tactic.name}” ({sites} independent sources)"
                               + ("; its warning sign waits for a reviewer" if draft["sign"] else ""), title=tactic.name)
                 else:
-                    store.put("fraud_drafts", {**draft, "review": "pending"})
+                    records.put("fraud_drafts", {**draft, "review": "pending"})
                     counts["drafts"] += 1
                     guard.say("save", f"New tactic waiting for a reviewer: “{tactic.name}” (fewer than "
                                       f"{AUTO_MIN_SOURCES} independent sources)", title=tactic.name)
