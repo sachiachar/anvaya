@@ -14,7 +14,8 @@ from typing import Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import audit_chain, demo, fraud_cues, fraud_guides, fraud_pipeline, model_access, scheduler
+from .. import (audit_chain, demo, fraud_bundle, fraud_cues, fraud_graph, fraud_guides, fraud_pipeline, model_access,
+               scheduler)
 from ..config import settings
 from ..fraud_bundle import records
 from ..store import store
@@ -340,6 +341,21 @@ def decide_guardian(event_id: str, body: GuardianDecision, who: Actor = Depends(
     return store.update("guardian_events", event_id, {
         "status": "confirmed" if body.decision == "confirm" else "reversed", "decided_at": time.time(),
         "decided_by": who.email or "local", "decision_reason": body.reason})
+
+
+@router.get("/fraud/graph")
+def get_fraud_graph(guide: str | None = None, _: Actor = Depends(actor)) -> dict:
+    """The fraud knowledge as nodes and links for the Fraud page's graph view (no owner data in it)."""
+    return fraud_graph.build(guide)
+
+
+@router.get("/fraud/history")
+def get_fraud_history(item: str, guide: str | None = None, collection: str | None = None,
+                      _: Actor = Depends(actor)) -> dict:
+    """The changes to one node of the graph: a guide item, or a research record."""
+    if not guide and collection not in fraud_bundle.COLLECTIONS:
+        raise HTTPException(400, "Say which guide or collection the item is in.")
+    return {"events": fraud_graph.history(guide=guide, collection=collection, item=item)}
 
 
 @router.get("/fraud")
