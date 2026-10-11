@@ -1,0 +1,542 @@
+# Anvaya: Architecture details (engineering reference)
+
+*Status: working prototype for the AI Builder Cup 2026 (BFSI track). Last updated 12 October 2026. The short overview for judges is [architecture.md](architecture.md); this file has every detail, module by module.*
+
+Anvaya is an app-based service. People talk with Saathi, an AI companion. They record their stories, financial inventory, family, wishes and secrets while they are alive. After a death is verified, the right people receive them. For the plain-language version, see [concept.md](concept.md).
+
+## 1. Goals and non-goals
+
+**Goals**
+
+- Run every part of the product as an **AI-first loop**. Each loop has an explicit autonomy level: Assist, Propose, or Act within limits.
+- Keep a person in control of every step that can't be undone: saving to the archive, sharing with a legal partner, choosing the vault recipient, confirming a death, releasing the vault.
+- Make the vault unreadable to the AI and to Anvaya itself.
+- Make capture as easy as a conversation: hands-free live voice, plus typing, photos and documents.
+- Run entirely on **Google Cloud** with **Gemini**.
+
+**Non-goals**
+
+- Voice cloning, avatars or generated speech "as the owner". We will never build these.
+- Legal or financial advice. Licensed partners give it.
+- Per-role permissions and multi-tenant access control. Only sign-in with an email allowlist is built; see section 8.
+
+## 2. System context
+
+```mermaid
+flowchart LR
+    owner(["Owner"]) --> app
+    family(["Family and vault recipient"]) --> app
+    team(["Anvaya reviewers"]) --> app
+    subgraph gcp ["Google Cloud"]
+        app["Web app on Firebase Hosting"] -->|"HTTPS /api"| api["Agents service on Cloud Run"]
+        app -->|"live call WebSocket"| api
+        api --> gemini["Gemini: chat, Live, TTS"]
+        api --> fs[("Firestore")]
+        api --> gcs[("Cloud Storage")]
+        api --> kms["Cloud KMS"]
+    end
+    api -.->|"consented summary"| legal(["Legal partner, mocked"])
+```
+
+- The **web app** is an installable, mobile-first React app. It holds all vault cryptography, the microphone capture and the audio playback.
+- The **agents service** is a Python FastAPI app on Cloud Run. It runs the Gemini steps, the live-call relay, the ADK handover agent, and the rules that keep people in control.
+- Firebase Hosting rewrites `/api/**` to Cloud Run.
+  - Its CDN keeps any answer that doesn't say otherwise. For example, it keeps a 404 for 10 minutes. A poll then keeps seeing an old answer. So every API answer says `Cache-Control: no-store`.
+  - Firebase Hosting can't proxy WebSockets. So in production the live call connects **directly to the Cloud Run URL** (`VITE_LIVE_URL`, set by `infra/deploy.sh`).
+
+## 3. Components
+
+### 3.1 Web app (`web/`)
+
+| File | Responsibility |
+| --- | --- |
+| `index.html`, `src/v2/main.tsx`, `src/v2/App.tsx` | The app. Its screens are in `src/v2/`. It has sign-in, the owner's tabs (Talk, Kept, Family, Vault), the family and reviewer screens, the "I'm well, cancel this" alert, and the Demo drawer. A row of names under the header (Vikram, Priya, Anjali, Rahul, Admin) shows who is acting, and one tap switches (PR-14.2). The row hides during a live call, because a switch would end the call. The Demo drawer has: whose screen to show, "Show the tour", "Show how Saathi works" (only the autonomy labels, see `Autonomy.tsx`), the knowledge map, "Simulate a lost or new phone" when acting as Priya, your own model key (`ModelKey.tsx`), the nickname, and Reset my demo |
+| `src/v2/Tour.tsx`, `Samples.tsx`, `public/demo/` | "Start here" (PR-14.1): a tour in five steps for someone who opens the demo cold. Each step has buttons that go to the right person and screen. The last step opens the admin portal's Agents page. The tour folds to a thin bar, and folds itself after a button changes the screen. It hides during a live call. Closing it is remembered in this browser, per demo copy. "Show the tour" opens it again from step 1, and Reset my demo starts it over. `Samples.tsx` offers two synthetic PDFs (a certificate of passing and a succession certificate) in the tour and on Priya's two upload steps. Each PDF says it is a specimen, so the certificate check flags it |
+| `src/v2/nav.ts`, `SwitchTo.tsx` | Who is acting, and a way to go to another person's screen (the `Nav` context). Wherever the next step belongs to someone else, a "Switch to …" button goes to that person. The server still checks the person on every request. `nav.ts` also holds the admin portal and knowledge map links |
+| `src/v2/Autonomy.tsx`, `demo.ts` | The autonomy labels (PR-14.6): ASSIST, PROPOSE or ACT, from the label the server sends with each card, next step and check. They show only with "Show how Saathi works" on. Each label is a button; a tap shows what it means ("Suggests. You decide."). All three use one neutral look, so a label never reads as a verdict |
+| `src/v2/v2.css`, `icons.tsx`, `copy.ts`, `FilePick.tsx` | Brand tokens (navy, gold, mist; daylight and dark), self-hosted fonts, line icons and the thread mark, customer wording and plain error messages, and the file picker |
+| `src/v2/owner/Talk.tsx`, `Transcript.tsx`, `Review.tsx`, `items.ts` | Talk: one screen from hello to saved. It shows a suggested topic and a microphone that goes live in place. The microphone has rings that move with whoever is speaking (`liveCall.ts` reports how loud each side is). During a call, the conversation shows underneath in its own scrolling box. Typing and photos are in the same place. At the end, a short summary shows everything Saathi picked up, marked to keep. The owner can Remove what isn't wanted, use one Keep for the rest, Decide later, or Discard the conversation. "Keep" is the one word for keeping a card (PR-14.7). **Microphone problems** (PR-14.11): Talk says why the microphone couldn't open: blocked (with steps for Chrome on a phone, Safari on an iPhone and a computer), not found, used by another app, or not allowed on this page. Each case offers Type instead and Try again. **A page that comes back:** a phone may throw away a hidden tab and reload it. When a call starts, the tab remembers where the conversation stood (`sessionStorage`, 6 hours at most). If the page comes back with that call still to review, it opens the call's own review, with the summary, Keep and Discard. This counts only when every new owner turn is from a live call and something still waits |
+| `src/v2/owner/Book.tsx` | Kept: the book of the owner's life. It has chapters (stories and advice, money matters, wishes, people), Remove with a confirmation, and the wish and legal-document tools. Each page shows when it was kept ("Kept on 10 Oct 2026, 12:14", in the reader's time zone; PR-2.13.1). It shows "pages still to write" from gaps and next steps. Next steps are worked out only on request. The cover shows the readiness score for everyone once Saathi has worked it out, and a link to the knowledge map (PR-14.10). "Nothing listed" waits until both the gaps and the next steps have loaded. A list that fails to load says so |
+| `src/v2/owner/FamilyTab.tsx`, `VaultTab.tsx` | Who receives the vault (invite, they accept, the codes match, seal), and access requests. Whether the vault is sealed and for whom. Locking new secrets on the phone: the tab shows each secret's name only, never its locked text |
+| `src/v2/family/` | The family side, one stage at a time (`Journey.tsx`): accept the vault (a key made on the phone and a recovery code), match the code, restore on a new phone, "When the time comes", and Start the handover. `Tracker.tsx`: the handover tracker, with the waiting countdown and the proof-of-authority upload. `After.tsx`, after release: the vault opened on the phone, Ask about the owner with sources, and the claims checklist with draft letters. Each source shows as a chip with the item's kind, from its id prefix: "Account or policy", "Story or wish" or "Family" (PR-14.3). Quoted lines in an answer show as quotes, without the `>` |
+| `src/v2/team/Team.tsx` | Our team's review. It shows each check sign by sign. Each of the two steps has its own Confirm, by different reviewers; the server enforces this. To go against a "not valid" check, the reviewer writes a reason in the page. It also shows the audit log, and access requests after a passing. The reviewer who confirmed the loss doesn't see the button to confirm the legal authority; a "Switch to …" button offers the other reviewer |
+| `src/v2/KnowledgeMap.tsx` | The demo's knowledge map. It opens from the Demo drawer in its own window (`/#knowledge-map`). It shows the owner's kept knowledge as a live graph. Remove is confirmed in the page |
+| `src/liveCall.ts` | Live call client. It sends microphone audio as 16 kHz PCM over WebSocket and plays 24 kHz PCM. It stops playback when interrupted. It also has mute and reports how loud each side is. A microphone failure raises `MicError`, with the browser's reason and its own message. Other failures keep their own message. An optional analyser on Saathi's playback (`saathiAnalyser`) serves the v3 trial page |
+| `public/pcm-recorder.js` | AudioWorklet that turns microphone audio into 100 ms PCM chunks |
+| `src/vaultCrypto.ts` | All vault cryptography (Web Crypto): data key, recipient key pair, recovery-code backup (PBKDF2), key fingerprint |
+| `src/api.ts`, `src/ui.tsx`, `src/ErrorBoundary.tsx` | Typed API client. `useAction`: a busy flag and an error message for one action. The crash screen with Reload, shared with the admin portal |
+| `public/fonts/` | Lora, Inter and Mukta (Devanagari) as woff2, each with its `OFL.txt`. The app loads them; the admin portal doesn't |
+| `admin.html`, `src/admin/` | The platform admin portal (PR-12), a separate site. `pages.tsx` has its pages. `usageCharts.tsx` draws the dashboard's usage charts, `loopMap.tsx` the agents map, and `fraudGraph.tsx` the fraud knowledge graph. These use Apache ECharts, which loads only on the page that needs it. See section 4.1 |
+
+### 3.2 Agents service (`agents/app/`)
+
+| Module | Responsibility |
+| --- | --- |
+| `main.py` | HTTP routes under `/api`, the live-call WebSocket, access gating, and readable errors for Gemini failures |
+| `planner.py` | The conversation planner (PR-2.12.2, PR-2.12.3): the only source of what Saathi talks about with the owner. It builds one plan per owner in code, gives each step a tone, and changes it with the owner's mood. Each change is a new version with its cause. See section 4.1 |
+| `guardian_inputs.py` | What the guardian is fed about a conversation (PR-2.12.1, PR-2.12.4). It screens each new piece of information the owner gives (allow, deflect or block), and each family question and answer. Its inputs are the fixed rules in `step_guard.py`, the approved fraud tactics, and words aimed at Saathi. The guardian module never imports it. See section 4.1 |
+| `audit_chain.py` | One owner turn's audit chain for the portal's Guardian page (PR-2.12.5): turn → guardian decision → card → Keep → plan version → next step. It holds ids, kinds, responses, rule names and times, never words. See section 4.1 |
+| `gaps.py` | Gaps and conflicts drive the conversation (PR-7.10). **What it finds:** fixed rules find what's missing in kept knowledge. This is an account or policy with no nominee; a wish that gives an account to someone other than its nominee; property that nobody is named to receive; a person with no relationship; or property or insurance with no record of where its papers are. It also finds what families most often can't find: a will, loans and debts, who to call first, and email and online accounts. Each of these stays a gap until anything kept mentions it, even "there's no will", in English or Hindi. **Checking again:** something kept with doubt (`unsure`, "I think it's Meena") comes back for a check after two weeks. A nominee, papers or the will come back once a year (`stale_after`, PR-7.6). Each comes back until the owner says it's right or keeps a new version. **Raising a gap:** gaps are ranked by harm, and the ones that are due (`due`) feed only the conversation planner (PR-2.12.2), never Saathi. A gap counts as asked when it is the plan step Saathi carried out (PR-2.12.3), and the reader of the next turn says how the owner answered (`gap_asks`: keys, times and outcomes, no words). **Reminders:** a gap asked before comes back only as a gentle reminder. The wait depends on its harm and grows each time: high 3, 7, 14, 14 days; medium 7, 14, 30; low 14, 30. "Not now" doubles the wait. "I'd rather not say" triples it. A gap never comes twice in one conversation. Saathi gives at most one reminder at a time, and none while a waiting card answers the gap. After the last reminder, Saathi stops raising the gap, but it stays in Kept as a page to write. The owner can skip any gap; then it's never raised again |
+| `fraud_guides.py` | Fraud reference guides (PR-2.3). For each document and country, a guide says what a genuine document looks like and how forgeries are made. Every item carries a knowledge label (observed, derived, simulated, validated, invalidated). Guides are saved in the platform's OKF bundle (`fraud_bundle.py`, PR-2.14.1). If none is saved or storage is down, a copy built into the code is used. Only checked knowledge reaches the certificate check. Design: `docs/proposals/fraud-foresight.md` |
+| `fraud_bundle.py` | Fraud knowledge as one platform-level OKF bundle (PR-2.14.1, PR-2.14.2): the guides and the research records. `fraud_guides.py` and `fraud_pipeline.py` read and write it. See section 5.1 |
+| `fraud_graph.py` | The fraud bundle as a graph of nodes and links, for the portal's Fraud page (PR-2.14.3). See section 5.1 |
+| `fraud_pipeline.py` | Fraud foresight pipeline (PR-2.5, PR-2.6). `fraud.dreamer` imagines attack scenarios against our safeguards. It uses the guide's checked tactics, the fixed list of safeguards and recent guardian events. `fraud.researcher` checks each scenario against web pages found with Exa (`web_search.py`). Each scenario is mapped to the safeguard that catches it, or marked a gap. "Confirmed" needs a cited page whose quoted sentence really appears in that page and supports the claim (`judge`). It runs on its own (PR-2.7.y, the owner's decision): research takes the next 2 subjects each hour (a gap dreaming found and never researched first, then the least recently researched among the guide's signs, our safeguards, fixed open subjects and its tactics; a subject that finds nothing new 3 times rests for a week), and dreaming takes each tactic in turn, never-dreamed ones first. What at least 2 independent websites confirm is added to the guide by itself, add-only, marked as added on its own and machine-confirmed; one source makes a draft for a reviewer. Independent means different registrable domains (`a.x.com` and `b.x.com` are one site), and blog or social hosts anyone can publish on don't count. An added tactic's warning sign never goes into the check on its own: it waits as a draft for a reviewer, and the sign check refuses wording that reads like an instruction. A person can remove anything added (it's retired in a new guide version), 1 in 10 is marked for a spot check, and 2 removals in a week (counted since the last resume) pause adding for that guide until someone resumes it. A removed scenario is ruled out for good. A gap that sources confirm is a guardian event for the team, never fed back to the dreamer; **the same fraud is never added twice:** research and dreaming check one list of what's known for the guide (`known_topics`: its tactics and signs, every scenario, ruled-out ones included, and every tactic waiting for review or added on its own). Two items are the same topic (`same_topic`) when their titles mostly share the same words, after words that name the same thing are folded together (forged and fake, seal and stamp, impostor and impersonating), or when their descriptions do and their titles share at least one word. A repeat is skipped and counted (`already_known`); a research subject that only brings up repeats counts as finding nothing new, so it rests after 3 runs; and a gap the guide's tactics already cover is no longer a research subject; an imagined gap no source reports stays on the coverage map. Unconfirmed scenarios fade after 3 runs. Only one run goes at a time. A run has a cap on model calls per agent, a Stop button, and a live log of each step for the portal. Runs happen hourly inside a Cloud Scheduler request (`/internal/fraud/cycle`, only the scheduler's account, `scheduler.py`), so Cloud Run keeps the CPU on: a run started in the background after a reply got almost no CPU and stalled. "Run now" queues the run and asks the scheduler to run at once, since the admin portal's own requests pass through Firebase Hosting, which cuts them off after 60 seconds |
+| `fraud_cues.py` | Anonymous starting points for dreaming, from kept knowledge (fraud-foresight §5). Fixed code reads only each owner's graph part (`knowledge.graph_parts`: types, links, which fields are present). It matches a closed list of patterns aligned with the gap check (`policy.nominee_missing`, `property.heir_missing`…) and counts owners. It drops counts under the minimum. The minimum is a platform admin's setting on the portal's Fraud page (audited, default 5). The admin can raise it but never set it below the privacy floor of 5. The dreamer gets only pattern, asset class and count, never a bundle. Twelve clearly labelled synthetic owners let the demo reach the minimum |
+| `knowledge.remove` | The owner removes something wrongly recorded, with Remove on a page of the book in Kept or on the knowledge map. The item and every earlier version are deleted from the bundle, with their history files. Other items' links are worked out again. The log keeps one line with no title or content ("An item was removed by the owner"). Owner only. Removal is refused while a release case is open, and for the vault recipient. These are not deleted: the recordings and documents the item came from, and the conversation history |
+| `proposals.lookalike` | Some new story or wish cards don't match a kept item by title or quote, but have the same kind, and the same people or a close title or summary. Such a card carries `looks_like`. The card asks the owner to Replace it or Keep both. Replace keeps the card as that item's next version (`replace: true` on the decision). The owner decides. `looks_like` never enters the bundle, and card edits can't set it |
+| `knowledge_map.py` | The knowledge map for the demo. It shows the owner's kept knowledge as a graph: the owner, kept concepts, institutions, and people a story mentions who aren't kept yet. Once the concepts' typed links (PR-7.9) exist, the map uses them. Until then, it uses the links the cards imply, marked `derived`: people a story or wish names (by name, or by relationship such as "my wife"); accounts and banks it names; a policy's nominee, holder and institution; and each person's relationship to the owner, or to the kept person they're related through ("wife of brother-in-law", "Bhaskar's son"). Gaps: an account or policy with no nominee. Owner only, read-only. The web app shows it at `/#knowledge-map` like Obsidian's graph view, in the brand's colours. It uses a small force layout with zoom, pan and drag, and no graph library. It refreshes every 2 seconds |
+| `loops.py` | One Gemini step per loop. **What Saathi remembers:** only what the owner kept (and cards waiting for Keep), the plan's current step (gaps reach Saathi only through the plan), and its own last message while it's the same conversation (`last_said`, 30 minutes). The last message lets a short answer still make sense. No earlier conversation is sent to Gemini, in typed chat or at the start of a call. So what the owner discarded or never kept can't steer Saathi. The module also holds the shared **Saathi persona**, the live-call instructions, and `reply_problems`. `reply_problems` checks every typed reply for wrong language or script, false "saved" claims and "shall I add" questions. If needed, it rewrites the reply once |
+| `live.py` | Live-call relay between the browser and the Gemini Live API. It makes captions, saves each exchange and extracts cards |
+| `speech.py` | Natural voice for typed replies (Gemini TTS). It falls back through a list of TTS models, each with its own quota |
+| `proposals.py` | Turns AI suggestions into cards. It merges repeats and turns follow-up details into updates, without losing earlier facts. It creates family cards and applies Keep |
+| `grounding.py` | Checks every card against what was said, before it's saved (chat, voice notes and live calls). A card whose quote isn't in the owner's words from this turn is dropped. A value with no support is cleared, so it stays a gap: where papers are, the nominee, who it's for, the last 4 digits, places and new people's names. Support is the owner's words, Saathi's last message (so a "yes" confirms it) and what is kept. For a shared document, its account details and nominee come from the document. A value in another script than the owner's words is kept, because it can't be matched word by word. The log holds counts only, never words |
+| `tasks.py` | Next steps from the readiness loop. It rewrites the open list and merges near-duplicates. It never re-adds done or dismissed steps. At most 5 steps are open. Every step passes `step_guard` before it's stored, and again on every read |
+| `step_guard.py` | Never pursue a next step that could be part of a fraud (PR-13.3, `docs/proposals/listening.md` §6). Each step is typed from closed lists (`step_types.py`: type, channel, flags). Code also works out flags from the step's words (payment, secret, started by someone else, deadline). So the check never depends on a model setting them. The checks run in this order. (1) An unknown type, channel or flag means no. (2) A secret (OTP, password, PIN, plurals included; not a postal "PIN code") means no. The one exception: adding it to the owner's own vault in the app, when the step doesn't also say to share it. (3) A step that matches an approved tactic's `exploits` tags means no (`fraud_guides.Exploits`, checked against the same lists so a typo is refused; observed, derived or validated tactics only). If the guides can't be read, nothing is pursued, and the stored list stays as it is. A dropped step leaves a count in `steps_not_pursued` (rule, hashed copy key, time; no words or names). The portal's overview shows it. Saathi's instructions say to point to the safer way and never name a fraud |
+| `executor_agent.py` | Google ADK agent for the handover (the handover assistant). It reads the owner's kept-knowledge bundle (PR-7.5). While the bundle is small, the whole bundle goes in its instructions. Otherwise it gets `index.md` and the tools `read_bundle_index`, `read_concept` and `list_accounts`. It has a fallback model |
+| `release.py` | Vault release state machine: two-person rule, override reasons, waiting period, owner cancel |
+| `escrow.py` | Cloud KMS wrap and unwrap of the vault key blob |
+| `gemini.py` | Shared Gemini client with retries and backoff. `generate_json` uses Pydantic schemas. It uses the agent's primary model from the registry, then the agent's own fallback. An agent without one reports the model as busy |
+| `web_search.py` | Web search for the fraud researcher, with Exa (exa.ai). Our code searches. Gemini answers only from the returned pages and must quote them word for word. A source counts only if its quote is really in the page. Only agents whose policy grants `web_search` may search. Queries carry fraud research only, never owner data |
+| `schemas.py` | Pydantic models used as Gemini `response_schema` and as the API contract |
+| `store.py` | Document store: `memory` (tests), `file` (local demo, survives restarts), `firestore` (Google Cloud). Its calls block. So the live call, the Talk route and sign-in run them in worker threads (`asyncio.to_thread`). Saving cards holds the owner's `proposals.saving` lock, so two saves at once can't make the same card |
+| `knowledge.py` | The owner's kept-knowledge bundle (OKF). Keep is the commit. Every kept item carries `kept_at`, the time it was kept (UTC; PR-2.13.1). See section 5.1 |
+| `media.py`, `config.py` | Original media (Cloud Storage or local folder); settings from the environment |
+
+### 3.3 Models (set per agent in `agents/registry.yaml`, allowed in `agents/policies.yaml`)
+
+Each agent's models, in the order it tries them, are in the registry; its policy lists the models it may use. Neither comes from an environment variable, so changing a model is a reviewed change to those files (PR-10.11).
+
+| Use | Default | Why |
+| --- | --- | --- |
+| Chat, extraction, reasoning | `gemini-3.1-flash-lite` | Cheapest model that is served and fast (~2–3 s) |
+| Fallback when overloaded | `gemini-3.5-flash-lite` | Separate capacity; used after retries on 429/5xx |
+| Live voice call | `gemini-3.8-live` | Two-way audio, ~1.3 s response, can be interrupted |
+| Spoken replies (TTS) | `gemini-3.8-flash-lite-tts`, then `gemini-3.8-flash-tts`, then `gemini-3.1-flash-tts-preview` | Each has its own quota; tried in order |
+| Voice | `Sulafat` (`GEMINI_TTS_VOICE`) | A warm voice, used for both TTS and live calls |
+
+**Your own model key (PR-10.10, `governance/keys.py`).** Anyone who signs in may add their own Gemini key. This is optional. It can be a Google AI Studio key (free or paid) or a Vertex AI express-mode key.
+
+```mermaid
+flowchart LR
+    call["Model call the person causes"] --> has{"Own key saved?"}
+    has -->|"yes"| own["Their own key"]
+    has -->|"no"| platform["Platform key<br/>(GOOGLE_API_KEY)"]
+    own -->|"401, 403, 404, 429<br/>or API key not valid"| platform
+    own -->|"other errors"| fail["Error; no move<br/>to the next key"]
+```
+
+- Every model call that a person causes goes down a chain of keys, whatever the agent: Saathi, the live call, spoken replies, handover, safety checks, and fraud runs they start.
+- Their own key comes first. The platform key (`GOOGLE_API_KEY`) is used only as failover.
+- A call moves to the next key on 401, 403, 404, 429 or "API key not valid". Other errors don't move on.
+- Someone without a key uses the platform key, as before.
+- A fraud run stores who started it. So every step uses their key, even after the request has finished.
+- The handover assistant's ADK models (`KeyedGemini`) choose the client on each call. So the one shared Runner serves everyone with their own key.
+- A key is tested before it's saved (`access.tester`). The test makes one tiny call per model, on that key alone. A person can run at most 10 tests a minute.
+- The ledger records which key answered (`key_sources`, and per person in `key_usage`). Calls on a person's own key don't count against their daily allowance. The registry, limits and kill switch still apply.
+- The portal's **Model keys** page reports whose key answered and each person's key status. A platform admin can turn the feature off or limit the kinds of key, for everyone or for one person. The admin can also test a saved key again, or remove it.
+
+## 4. AI-first loops
+
+**The system view.** The admin portal's Agents page (`web/src/admin/loopMap.tsx`) draws every loop, live, around the guardian:
+
+![The admin portal's Agents page: every loop around the guardian, with its autonomy and the gates where a person decides](assets/admin-agents-map.png)
+
+*Screenshot of the Agents page in local development, with synthetic data and no agent working.*
+
+- **Top row:** what the guardian decides with. The fixed rules feed it directly. Every hour, the dreamer and the researcher add to the fraud guide, which also feeds it. A tactic joins the guide on its own only when 2 independent sources confirm it.
+- **Guardian bar:** the central control. Everything new the owner says, and every family question, passes it first. It decides allow, deflect or block.
+- **Left panel:** while the owner is here. The planner (no AI) gives Saathi each step. Cards wait for the owner's Keep before they reach kept knowledge.
+- **Right panel:** when the time comes. The certificate check only assists, 2 reviewers release the vault, and the family assistant answers questions.
+- **Bottom bar:** the gateway. Every model call passes it: a registered agent, an allowed model and budget left.
+- **Labels:** ACTS (within fixed limits), PROPOSES (a person says yes), ASSISTS (advice only), NO AI (code and people), STORE (where knowledge is kept). A hand marks a gate where a person must act.
+- **Live:** the map checks every 15 seconds. A turning ring shows a model call or fraud run in progress. Select a loop for its numbers.
+
+| Loop | Code | Input → output | Autonomy | Human checkpoint |
+| --- | --- | --- | --- | --- |
+| Conversation (typed, photo, document) | `loops.understand`, then `loops.respond` (PR-2.12.3) | Message or file → moments, inventory, people, the owner's mood and how they answered; then, after the guardian and the plan, a reply that carries out the plan's current step in its tone | Propose (reading), act within limits (reply) | Cards start as `pending` |
+| Live call | `live.call` + `loops.extract_from_exchange` | Streaming audio → spoken reply + captions; after each exchange → cards | Act within limits | Cards start as `pending` |
+| Curation | `proposals.save_*`, `proposals.approve` | Cards → merged or updated archive items | Propose | Owner taps Keep |
+| Readiness → next steps | `loops.assess_readiness` + `tasks.refresh` | Archive, vault state, closed steps → score + up to 5 actionable steps | Act within limits | Owner acts, marks done or dismisses |
+| Planning | `loops.find_legal_needs` | Wishes + inventory → legal needs | Propose | Owner consent before `legal-handoff` |
+| Activation | `loops.check_document` + `loops.review_summary` | Certificate or proof image, with the fraud reference guide → verdict, likelihood genuine and a result for each warning sign | Assist | Two reviewers; override needs a reason |
+| Handover | `executor_agent.ask` (ADK) | Question → answer with cited sources. The model cites kept items by id; the server lists only real kept items as sources, then removes only the citations from the answer text (`clean_answer`). A citation of an id that isn't a kept item becomes "(source not found)", so a made-up fact never reads like a supported one | Act within limits | Only after release |
+| Settlement | `loops.plan_settlement` | Inventory → checklist + draft letters | Propose | Executor reviews and sends |
+| Fraud foresight | `fraud_pipeline.dream` + `fraud_pipeline.research` | Guide, safeguards, guardian events → scenarios with sources and the safeguard that catches each; new tactics with sources | Propose | What at least 2 independent websites confirm joins the guide on its own, add-only (the owner's decision), and a reviewer can remove it. One source makes a draft for a reviewer. A new warning sign always waits for a reviewer |
+
+**Rules enforced in code, not just in prompts**
+
+- *Replies* (`loops.reply_problems`):
+  - A reply uses the script of the owner's latest message.
+  - It never claims "noted" or "saved". It never asks "shall I add".
+  - It never talks about the owner's own death ("final wishes", "after you're gone"; `tone.py`).
+  - A reply that breaks a rule is regenerated once, with the broken rule named.
+  - Live audio can't be regenerated. So for live calls, the rules are in the instructions, and each spoken reply is checked after it is said (PR-2.12.3). A broken rule becomes an event for the team and a one-time correction for Saathi.
+- *Next steps* (`tone.step_problems`): the owner is alive. So a step's title, reason and question use no death words at all. The readiness planner writes such a step again once, then leaves it out. Such steps saved earlier are hidden when the list is read.
+- *Cards* (`proposals`): a repeat of a kept item adds nothing. A follow-up detail becomes an update card. It **combines** with the saved summary instead of replacing it. The same institution and last 4 digits update the same card.
+- *Documents* (`loops.review_summary`):
+  - The wrong document type scores 0 %. The wrong person is capped at 30 %.
+  - A warning sign that our team has reviewed, if found, caps the score at 50 %.
+  - Any concern or any warning sign found means "Needs a closer look".
+  - Every sign in the guide gets a result (found, ruled out or can't tell). Signs the model invents are dropped.
+  - A sign can apply only from a date (`applies_from`, e.g. "no QR code" from 1 October 2023). The check reads the dates of registration and of death (asked as YYYY-MM-DD). Code rules the sign out, whatever the model said, only when the registration is before the sign's date and on or after the death. A forger who backdates the registration to before the death doesn't get the sign ruled out, and "dates impossible" catches that. An unreadable date, or one that could be read two ways (10/03/2023), leaves the model's result as it is. The model's note stays visible beside the reason. A guide version saved before this change takes the date from the built-in sign with the same id. A version that clears it on purpose keeps it cleared, and a malformed date is refused when the guide loads.
+  - A sign can also be checked in code (`Sign.code_check`), from what the model read, and code can only add it, never rule it out. `registration_year` (on `registration_details`): the year in the registration number must match the year of registration or of the death (a late registration may be numbered by the year of the death). The model reads only that year, never the number itself, so no ID number is kept (rule 5). No year, or no readable date, leaves the model's result.
+  - Imagined (`simulated`) signs never reach the check. Projections are at most a third of its signs.
+- *Next steps* (`tasks`): near-duplicates are merged, except when they name different institutions (LIC vs SBI). Done or dismissed steps never come back, even reworded. At most 5 steps are open.
+- *Structured output*: every Gemini call returns a Pydantic schema. So the app never parses free text.
+
+**One companion everywhere.** `loops.persona` defines Saathi once. Saathi is warm and addresses the owner as "{first name} ji". It matches their language and is honest about what is saved. It gives no legal advice, and it asks who unknown people are. Both the typed chat and the live call use it.
+
+### 4.1 Guardian layer (built: the guardian core, guardian-led conversations, the fraud guide, dreaming and research; most Gemini detectors are planned)
+
+Fraud can enter at any loop, not only at activation. So a **guardian** watches every loop. It changes the course of a loop before an action takes effect. It is tracked as PR-2 ([#2](https://github.com/sachiachar/anvaya/issues/2)).
+
+```mermaid
+flowchart LR
+    loop["Any loop<br/>(conversation, curation, recipient change,<br/>activation, release, handover)"] -->|"event: who, action,<br/>data, autonomy, device"| guard["Guardian"]
+    rules["Fixed rules"] --> guard
+    gem["Gemini detectors<br/>(pressure, probing, synthetic audio,<br/>hidden instructions)"] --> guard
+    kb[("Fraud reference guides<br/>researched + dreamt")] --> guard
+    guard -->|"continue · add a check ·<br/>reduce autonomy · pause · block"| loop
+    guard --> team["Team: Guardian page<br/>review, reverse, measure"]
+```
+
+| Part | What it does |
+| --- | --- |
+| **Event record** | Every loop records what it is about to do, before it takes effect: who, action, data without secrets, autonomy level, device. |
+| **Detectors** | Fixed rules for hard facts. For example: the owner was active recently, a recipient change came from a new device, or a certificate was used before. Gemini detectors for softer signals: pressure in a conversation, probing questions, synthetic or replayed audio, hidden instructions in documents. Fraud reference guides for each document type and country. A research agent (Gemini with Exa web search, `web_search.py`) keeps them current, and a dreaming agent red-teams them. |
+| **Responses** | Continue; add a check (key code, liveness phrase, delay); reduce autonomy one level (Act within limits → Propose → a person decides); pause for a reviewer and alert the owner; block. A readable policy file maps risk to response. |
+| **Enforcement** | Saving, recipient changes, release and the handover assistant ask the guardian first and obey it. The guardian runs with its own permissions. Agents can't bypass it. It has no vault access. |
+| **Governance** | A Guardian page shows every intervention with its reason. People confirm or reverse each one, and the decision is logged. The page also shows false-alarm rates, reviewer pattern analytics, and the dreaming agent's safeguard coverage map. |
+
+**How it's built** (`agents/app/governance/`, one layer shared by the gateway, the guardian and the portal):
+- `core.py`: the registry and policies, roles and permissions, the audit log, the gateway's `check_call` (registry, policy, kill switch, the service's daily ceiling and the person's allowance), `record_usage` (daily ledger with calls, tokens and minutes; never dollars), `record_blocked` and `record_intervention`;
+- `guardian.py`: **the guardian core** (PR-2.7, part 1). An action asks it (`decide`). It writes the action down first (`guardian_actions`: who as a hashed key, the action, the item ids, the agent's autonomy, app or live call; no text; kept 30 days). A repeat, such as the same step on the next run or a retried refused call, replaces its record instead of adding one. A record written after the action is saved (document checks, confirmations) never turns a saved action into an error: a failure is logged. Then it runs that action's detectors. A detector reads the facts it's given and returns a risk level (none, low, medium, high) and a reason in fixed words, or nothing. Fixed rules and later Gemini signals use the same format. The policy file `agents/guardian.yaml` turns the highest risk into one response: continue, add a check, reduce autonomy, pause or block. A rule fixed in code sets a floor, so the file can make a response stricter but never let through what the code forbids. Any response but "continue" becomes an event for a risk reviewer. The guardian imports only the store and the governance core, and never reads the vault, the escrow or media; a test checks this (PR-2.7.5). These ask it and record what happened: next steps (every one; the step guard obeys it), refused model calls, document checks and reviewer confirmations.
+  - **Where actions ask first and obey** (PR-2.7.4, part 2). Each rule below is a floor in code; the policy file can only make it stricter:
+    - **each new piece of information the owner gives** (guardian-led conversations, PR-2.12.1; design in `docs/proposals/guardian-led-conversations.md`). After grounding, and before any card is saved, `guardian_inputs.screen` asks the guardian about each card (`owner_statement`), and once about what the owner said when there is no card. Its facts come from the fixed rules (`step_guard.statement_signals`: a secret passed on, paying or changing something because someone else asked, being rushed) and the fraud module (approved, active tactics whose warning flags the owner's words show). Words aimed at Saathi ("ignore your instructions") are blocked. A secret, a fixed rule or a tactic is **deflected**: a new response between reduce autonomy and pause, meaning no card and, from PR 2, a safe-route step in the plan. If the fraud guides can't be read, the card goes ahead with a reviewer's look. Only allowed cards are saved (`proposals.save_screened`), each with the `guardian_action` that allowed it. The owner's turn keeps the decision ids (`guardian`) and how many were held back. The records hold the turn and card ids, never the words. Typed chat and live calls both do this. A deflected statement then gives the planner its safe-route step (below);
+    - **the conversation planner** (`planner.py`, PR-2.12.2): the only source of what Saathi talks about with the owner. A new owner starts from the initial plan, `agents/conversation_plan.yaml` (reviewed like code, checked at start-up, copied into the image). The plan is built in code, in this order: safe-route steps after a guardian deflection (fixed words chosen by what was found, for this conversation only); the initial steps not done yet (a step is done when an item of its kind is kept, or the owner declines it); the gaps that are due (`gaps.due`); and the readiness planner's suggestions Saathi can talk about. The gap finder and the readiness planner feed only the plan. **Each step says who starts it:** Saathi opens with it, or Saathi waits for the owner (wishes, advice, low-harm gaps and suggestions). Every step passes the guardian's next-step check (`step_guard.pursue`); if the fraud guides can't be read, the stored plan stays as it is. The plan changes after a guardian deflection or block (`after_statements`), a Keep, a readiness run, a step outcome (`step_outcome`, reported by Saathi from PR-2.12.3), and on read when it's over an hour old. Each change is a new version in `plan_versions` with its cause (cold start, guardian action id, kept card id, readiness, outcome, time), holding step ids, sources and who starts each, never any words; kept 30 days (TTL in the release). `GET /api/owners/{id}/plan` returns the current step and the next ones; the Talk screen shows the current step, except a safe-route step, which is for Saathi's next reply;
+    - **Saathi carries out the plan** (PR-2.12.3). **Typed chat** is two steps: `loops.understand` (capture.extractor) reads the turn: what was said, the cards, the owner's mood from a closed list (calm, happy, sad, anxious, tired, upset) and how they answered the step Saathi carried out last. Then the guardian screens each new piece of information, the plan takes in the decisions, the mood and the outcome in one version (`planner.after_turn`), and only then does `loops.respond` (saathi.chat) reply, from the plan's current step and its tone. Saathi's instructions carry no gaps and no "follow-up of your own": it carries out the step, and a step that waits for the owner is raised only if they bring it up. **Each step has a tone** (warm, gentle, light, clear, reassuring, patient), given to Saathi in words: the initial plan file sets it, gaps about the family's future are gentle and the rest clear, safe-route steps are reassuring. **The mood changes the plan, in code:** sad or upset puts a listening step first and holds back practical (clear) steps for this conversation; tired puts an offer to stop first and makes every step patient; happy makes warm steps light. A mood lasts for the conversation. Steps Saathi opens come first (up to 5), steps that wait for the owner after (up to 3). **A call** gives Saathi two tools, `current_step` and `report_step` (registry and voice policy, checked by the gateway with `check_tool`): it reads the step at the start and after each answer, so the plan and its tone change during the call. Each exchange's extractor reports mood and outcome as in typed chat. A spoken reply can't be taken back, so it's checked after the fact with the typed chat's rules (`reply_problems`): a broken rule becomes an event for the team, and the next `current_step` carries a one-time `correct` note. "Talk about this" sends the step it opens, so the next answer is judged against that step;
+    - **keeping a card:** a card that passes on a secret or a payment someone asked for (`step_guard.reply_problem`) is blocked, with a 409. A warning such as "never share your OTP" is kept;
+    - **changing the vault recipient:** a second change within a day is paused (the change is held); replacing the recipient of a sealed vault gets a reviewer's look. A change while a release case is open is refused, as before;
+    - **the release:** when the waiting period ends, the guardian is asked once. If a document check found warning signs, or a reviewer overrode a "not valid", the release is paused (`release_hold` on the case, which `release.refresh` respects). The vault stays closed until a risk reviewer decides;
+    - **another voice heard** (PR-2.13.2). On a call, the owner's side of each exchange is buffered in memory (at most 90 seconds) and sent once, as a WAV, to the extractor with that exchange's transcript; it says whether more than one person spoke (`voices`: one, more or unclear), never who. Voice notes in typed chat get the same answer from `understand`. Another voice is an `owner_statement` decision with `another_voice` (an `add_check` event for the team, refs `voice: another`), a mark on that exchange's cards (`another_voice`, shown on the Keep screen), and a warm "who's with you" step at the front of the plan, once a conversation (`planner.VOICE_STEP`). **On a call this is fast.** Saathi hears the room live. It has a third tool, `voice_joined` (registry and voice policy). It calls the tool when it hears a second voice or two voices at once. Code then adds the warm step at once with `planner.voice_heard`, which changes nothing else in the plan. The tool returns the step, with any waiting `correct` note, so Saathi asks in its next words. The guardian's decision and the card marks come when the exchange is saved. Its refs list who heard the voice (`heard_by`). The plan stores `voice_at`, so the step comes once a conversation, even after Saathi asked it. The extractor's check is the backup. It can hear a voice that Saathi didn't report and put the warm step first. Then code sends Saathi a short note (`live.VOICE_NOTE`, never stored) to call `current_step`, once a call. The note waits while the owner or Saathi is speaking, and goes when that turn ends. No audio is stored and no voiceprint is made;
+    - **one audit chain** (PR-2.12.5, `audit_chain.py`). A risk reviewer can follow one owner turn on the portal's Guardian page: turn → guardian decision → card → Keep → plan version → next step. The links: each guardian action keeps the event it raised (`event_id`); each card keeps the decision that allowed it (`guardian_action`); the Keep decision keeps the card, that decision and the kept item (a kept card is deleted); each plan version keeps its cause (the turn, a guardian action or a card); Saathi's reply turn keeps the step it carried out. `GET /api/platform/guardian/conversations` lists the latest turns (hashed key and counts), `GET /api/platform/guardian/chain/{turn}` and `.../events/{event}/chain` return the chain. It holds ids, responses, rule names, kinds and times, never words: a plan step shows only its kind (`gap:nominee`, `safe:secret`), never the account it's about. A demo admin sees only their own copy's chains;
+    - **the family's questions and answers** (PR-2.12.4). Getting what the owner kept stays easy, so the guardian stops only two things, without a model call: a vault secret (below) and words aimed at the assistant (`family_rules`). Everything else is answered. A fee or change someone else asked for (the fixed rules and the approved fraud tactics), a request to approve a change, or a family dispute adds one fixed note under the answer (`guardian_inputs.NOTES`). A fee, a change of bank details, or more than 30 questions in an hour from one person also gets a quiet look from our team (an `add_check` event the family never sees). The answer asks the guardian too (`family_answer`, linked to its question by id) before it's shown: full numbers are masked to their last 4 characters (`knowledge.mask`, as the stored turn already is), and only an answer that would help pass on a secret or pay someone who asked is replaced;
+    - **the family's questions:** a question for a secret (a password, an OTP or a PIN; a postal PIN code isn't one) gets a plain answer that the vault is released separately. No model is called.
+  - **Held actions** (PR-2.7.6, `guardian_holds`): a paused action is kept on the server with what it needs to finish. On the portal's Guardian page, "reverse" (the guardian was wrong) finishes it: the change is made, or the vault is released. "Confirm" (the guardian was right) cancels it: the change isn't made, or the case is stopped. The owner sees each held action, and each one cancelled in the last week, in the app (`GET /owners/{id}/guardian/held`, a fixed message each). The code that owns an action registers how to finish and cancel it (`guardian.on_review`). Only one recipient change waits at a time, and a reversed one is made only if the owner's choice is still the one it changes from. A release has one event and one hold per case, even if two requests arrive at once. "I'm well" closes a held release. A reviewer's decision is claimed once (`guardian_decisions`); if finishing fails, the claim is let go and the decision can be made again;
+  - **What the guardian records today** (PR-15.6). Each is one open event for a risk reviewer to confirm or reverse. The responses below are today's, from `agents/guardian.yaml` and the rules fixed in code:
+    - the step guard drops a next step (`block`, the rule only, once per step);
+    - a reviewer goes against a "not valid" check (`add_check`, the case id; never the reviewer's name or reason, which stay in the case's audit trail). It is recorded only once the confirmation is saved;
+    - an allowance refuses a call (`pause`, once per person, measure, day and limit, so a raised allowance that runs out too is new) or the daily ceiling does (`pause`, once per measure, line and day, for the whole service);
+    - a certificate check finds warning signs (`add_check`, the case id and up to 5 sign ids from the fraud guide).
+  - Reasons are fixed text from code, because judges and the fraud dreamer read them. The fraud dreamer skips the daily-limit refusals, which are routine.
+  - Each event carries the copy's hashed key, or `service` for the whole service. A demo admin sees only their own copy's events and the whole service's. Events with neither (from before PR-15.6, or recorded with no one signed in) are the team's only;
+  - **A simple trace for the agents panel** (PR-15.7). `record_usage` also writes one short line per call to `agent_steps`: the time, the copy's hashed key, the agent, the model, the tokens or minutes, the result (done or failed) and whose key answered. It holds no text. `GET /api/agents/steps` returns the caller's own copy's last 50 steps from the past 24 hours, newest first. It reads only today's and yesterday's lines. It merges calls the gateway stopped (from `gateway_blocked`, with its fixed reason; a key fallback isn't a stop), and adds each agent's purpose and autonomy and the count of next steps not pursued. Resetting a demo deletes its lines and starts its panel empty (`trace_marks`). The admin portal shows the same list (PR-14.5): `GET /api/platform/agents/steps` returns the signed-in person's own copy only, for every role. The Agents page shows it under the loop map as "Your demo's recent steps", and updates it every 15 seconds. Each line has an `expire_at` two days on, and Firestore deletes it then: every API release turns on the TTL policy on `agent_steps.expire_at` if it isn't on yet (`deploy.yml`, and `infra/deploy.sh` for a new project). The deployer has `roles/datastore.indexAdmin` for this (`infra/setup-github-actions.sh`), which can't read or write documents. Each card, next step and document check the app receives also carries its agent's autonomy label, from the policy;
+- `billing.py`: actual spend from the Cloud Billing export to BigQuery (PR-10.9). This is the only source of dollar figures. It's cached for an hour and covers up to yesterday. The portal says "not available yet" rather than estimating;
+- `portal.py`: the platform admin portal API under `/api/platform` (PR-12), with roles checked on the server;
+  - **Usage charts** on the dashboard. `record_usage` also adds each call to its hour in `usage_hours` (calls, tokens, minutes and errors per agent). Each row's `expire_at` is its hour plus 14 days, and Firestore deletes it then (TTL turned on by each release). `GET /api/platform/overview` returns `hourly` (the last 14 days) and `daily_by_agent` (30 days, from `usage_days`). The page draws them with Apache ECharts, which loads only on the dashboard;
+  - **The agents map** (`GET /api/platform/agents/live`, polled every 15 seconds by the Agents page). `LOOPS` says which agents each loop on the map holds. A test checks that every registered agent is on exactly one loop. Each model call writes an open row in `agent_open_calls` when it starts and deletes it in a `finally` when it ends (`core.working`, and `call_started`/`call_ended` for a live call). An agent with an open row is working. A row that a stopped server left behind stops counting after the agent's longest call (5 minutes, or its `max_call_minutes`), and Firestore deletes it after 1 day (`expire_at`, TTL turned on by each release). `record_usage` also writes the agent's last call to `agent_pulse` (time, model, result). A fraud agent is also working while its fraud run is running. Paused uses the same rules as the gateway (`core.paused_by`). The rows hold only the agent and the time: no user and no text. A failed write there never stops a model call;
+- `files.py`: strict schemas for the two files, and the checks between them (PR-10.11).
+  - `agents/registry.yaml` says what each agent is: its purpose, status, kind and the models it tries in order. It also lists every model and tool.
+  - `agents/policies.yaml` says what each agent may do: its autonomy, allowed models and thinking level, tools with their scope, limits per call and per run, and its per-person budget pool. It also holds the daily allowances and the service's daily ceiling.
+  - **The service's daily ceiling** (PR-15.1, `service_ceiling`): 10 million tokens and 300 voice minutes a day, for all demo copies together. It counts only what our key spends. Calls on a person's own key don't count. As it fills, the gateway refuses optional agents (live voice, spoken replies, summaries) from 80%, and every other agent from 90%. The last 10% is the safety reserve. Safety-critical agents (certificate checks, the guardian) are never refused, even past 100%, because a handover must never wait on the budget. Live voice is limited by voice minutes, and every other agent by tokens. Live voice's tokens still count toward the tokens ceiling, because our key pays for them. Testing a person's own key before it's saved is never refused, because it calls only that key. A live call also ends when the service's voice minutes run out. Minutes it holds are given back on the day they were held, even when the call ends after midnight. Each refusal is recorded as a blocked call of kind `ceiling`. The portal overview shows today's use. A Google Cloud budget alert (`infra/budget-alert.sh`, run by a person) backs this up by email.
+  - The gateway denies by default. It refuses and records an agent with no policy, an agent that isn't active, and a model or tool that the policy doesn't list.
+  - The gateway reads the validated files, never the raw YAML. A broken file stops the API at start-up.
+  - Still planned: a daily cap per agent, who may start each agent, guardrails, one decision point for the AI and tool gateways, and the decision log ([agent-security.md](proposals/agent-security.md));
+- `seed.py`: nothing is seeded; the portal shows only real data. On the first portal request after a release, it removes any examples that earlier versions seeded. It keeps real data and the kill switch.
+
+The portal is a separate entry point (`web/admin.html`). Its own Firebase Hosting site, `anvaya-admin`, serves it.
+
+**Avatar trial (v3).** `web/v3.html` (`web/src/v3/`) is a separate trial of Saathi as a talking face, served at `/v3.html` on the app's site. The app doesn't link to it and it links nowhere. It shares only the API client, sign-in and the live call. The face is an SVG drawn in code, with no library: its mouth follows Saathi's voice frame by frame from an analyser on the call's playback (`LiveCall.saathiAnalyser`; loudness opens it, brightness shapes it). It nods and its gold rings swell while the owner speaks, and it glances up while thinking. Its expression follows the tone of the plan's current step, which the page reads again after each exchange. A tap on the face starts or ends a call, and "Try the expressions" previews each tone and state without a call. Nothing about the face is sent anywhere.
+
+**Rules for the guardian:**
+- It never approves or rejects a case; people decide.
+- Hard rules are fixed rules, never the model's judgment.
+- Unconfirmed scenarios can only raise "needs attention".
+- Interventions are explained and feel like care, not accusation.
+- Voice alone never authorises an important action, because cloned voices can't be reliably detected.
+
+## 5. Data model
+
+| Collection | Key fields | Notes |
+| --- | --- | --- |
+| `owners` | name, age, city, country, `family[]`, `language`, `readiness_score`, `vault_invite`, `vault_recipient` (name, relationship, public_key_jwk, key_backup, **status**), `vault_escrow` | The family list only grows when the owner keeps family cards |
+| `turns` | role (owner or assistant), text, heard, attachment, language, proposals {moments, inventory, people} | The conversation, from typed and live turns |
+| `moments` | kind, title, summary, quote, people, places, year, status, `updates?` | `updates` points to the kept moment an update card changes |
+| `inventory` | category, institution, product, account_hint (last 4), nominee, missing_fields, status, `updates?` | Merged by institution and last 4 digits |
+| `people` | name, relationship, status | Family cards; kept ones are added to `owners.family` |
+| `tasks` | title, why_it_matters, action (talk, legal, vault, institution, family), steps, severity, status (open, done, dismissed) | Next steps |
+| `vault_items` | category, iv, ciphertext, ai_label? | Ciphertext only |
+| `cases` | state, certificate_check, authority_check (with verdict), death_confirmed_by, wait_until, history | Release case and audit log |
+| `access_requests` | name, relationship, contact, note, status (pending_owner, pending_review, approved, declined) | Family members who weren't listed |
+| `handoffs`, `legal_documents` | Consented legal summaries; signed documents | Never contain vault data |
+| `conversation_plans`, `plan_versions` | The current plan per owner: steps (source, who starts it, tone), mood, finished steps; each version's cause | Versions hold ids, sources and who starts each step, never words (section 4.1) |
+| `guardian_actions`, `guardian_events`, `guardian_holds`, `guardian_decisions` | What each action asked, the open events for a risk reviewer, held actions, and claimed decisions | Hashed keys and ids only, no text (section 4.1) |
+| `fraud_runs`, `fraud_subjects`, `fraud_dreamed`, `fraud_auto_counts`, `fraud_autonomy`, `fraud_guides` | Fraud run machinery: run logs and locks, research-subject rotation, the dreamed list, counters, the pause state, and each guide's status row | The fraud knowledge itself is in the platform OKF bundle (section 5.1) |
+
+### 5.1 Storage layout (kept-knowledge bundle built; buckets per tenant planned)
+
+**Buckets per tenant and region; inside each, a folder per owner, a key per owner, and access tokens limited to one owner.** Tracked in [PR-6 (#17)](https://github.com/sachiachar/anvaya/issues/17) and [PR-7 (#18)](https://github.com/sachiachar/anvaya/issues/18).
+
+| Layer | Design |
+| --- | --- |
+| **Buckets** | One per region (`anvaya-in`, `anvaya-sg`), one per licensing bank or insurer (encrypted with that institution's own key), and one for judges' demos. Never one per owner: bucket creation is rate-limited, and the names can be probed. |
+| **Folder per owner** | `owners/<owner-id>/`, holding the kept-knowledge bundle (OKF), uploads and recordings. |
+| **Key per owner** | Envelope encryption: a data key per owner, wrapped by Cloud KMS. Destroying it makes the owner's data unreadable everywhere, including backups. |
+| **Tokens limited to one owner** | For each request, the API exchanges its credential for a short-lived token. The token is restricted to that owner's folder (Credential Access Boundaries). So Cloud Storage itself refuses access to any other owner. |
+
+**What lives where**
+- **Kept knowledge is an OKF bundle in Cloud Storage** ([OKF v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md)). **Built (PR-7.1, 7.2, 7.4, `knowledge.py`).** Until PR-6's buckets exist, it is in the owner's folder of the private media bucket (`<owner>/kept/`):
+  - one Markdown concept per kept item, with `type`, `sources`, `generated`, `verified: human:owner-<id>`, `status` and `stale_after`;
+  - an `index.md` that is regenerated after each Keep, and a history log per date.
+  - **Keep is the commit:** only owner-confirmed knowledge enters the bundle. The draft leaves Firestore. An update writes a new version and marks the old one `deprecated`.
+  - each concept keeps its **graph part** (`type`, `status`, typed links) apart from its content. So fixed-code readers never read text or sources. These readers are the gap check and the anonymous fraud cues in `docs/proposals/fraud-foresight.md` §5;
+  - a machine copy (`.catalog.json`) is written with conditional writes. It can be rebuilt from the concept and event files. `index.md` and `log.md` are rewritten from it the same way. So overlapping Keeps never lose an item, and an older Keep never overwrites a newer index. Each request reads the catalog once;
+  - identifiers (9 or more digits with any separators, and PAN) keep only their last 4 characters. Dates and amounts are left alone. The vault can't enter. Only the demo's own seeding may add something the owner didn't confirm, and it is labelled as such.
+- **Fraud knowledge is one platform-level OKF bundle** (`fraud_bundle.py`, PR-2.14.1, issue #203), in the private media bucket at `platform/fraud/`. It holds no owner data.
+  - One folder per guide (`IN.death_certificate/`), with `index.md` and one concept per warning sign, tactic, scenario and source (`signs/<id>.md` and so on). An item keeps its id, so the certificate check names the same sign as before.
+  - A changed item is rewritten, and an event file records the change (creation, update, retirement, deletion) with the guide version. A retired item stays, with status `deprecated`. The guide's version number still goes up with each change.
+  - `.catalog.json` is written with a conditional write. A save built on an older guide version is refused (`Stale`), and `fraud_guides` builds it again from the latest version. So two approvals at once both reach the guide.
+  - Reads reuse the catalog for 10 seconds per instance. A save in the same instance refreshes it at once.
+  - Guides saved in Firestore before the move (`fraud_guide_versions`) are copied in once, version by version, when first read. The Firestore `fraud_guides` rows stay as the portal's status and summary.
+  - **Research records** (PR-2.14.2): scenarios of every status, drafts waiting for review, items added on their own and reviewer decisions. Each is a concept under `<guide>/research/{scenarios,drafts,added,decisions}/`, with an event per change. `fraud_bundle.records` has the same small interface as the store (get, list, put, create, update, delete). Its machine copy is `.records.json`, written with conditional writes, so `create` still records a decision only once.
+  - Records saved in Firestore before PR-2.14.2 are copied in once, on first use. Old seeded portal examples are skipped. The Firestore copies stay until a person removes them; the app no longer reads or writes them.
+  - Run logs, locks, research-subject rotation, the dreamed list, counters and the pause state stay in Firestore. They need atomic updates and are not knowledge.
+  - **Graph view** (`fraud_graph.py`, `web/src/admin/fraudGraph.tsx`): the Fraud page draws the bundle as a force graph (ECharts, loaded only on that page). Nodes are guides, signs, tactics, scenarios, sources, safeguards, scenarios being checked, gaps and drafts. Links are "in guide", "caught by", "cites", "imagined from" and "sign for". `GET /api/platform/fraud/graph` serves it and `GET /api/platform/fraud/history` gives one node's events. A common-gap cue shows only its owner count. Text from web pages is escaped in tooltips, and only http(s) source links open.
+- **Firestore holds workflow data only:** pending cards, cases and reviews, guardian records, conversation plans, next steps, access requests, the fraud runs' machinery (never fraud knowledge), and the family's conversation with the handover assistant (PR-15.8). Each family question rebuilds a short-lived ADK session from the conversation's last 6 turns, and the session is deleted once the answer is in, so a restart, a release or a second instance never loses a conversation. Two records: `handover_conversations` holds only a conversation's last 6 turns, with the answers as the model gave them, citations included, so it keeps citing; `handover_turns` holds every question for our team's audit, with the answer as the family saw it (ids removed) and the source ids. Questions the guardian blocked are recorded too. Long numbers are masked to their last 4 characters in both, kept-item ids left whole. Only the same person in the same copy can continue a conversation; one that's gone (reset, expired) simply starts again. A demo reset deletes both, and Firestore deletes them after 30 days (TTL, turned on by each release). The admin portal never shows them, and they are never logged.
+- **The conversation:**
+  - sensitive details are masked before storage (Sensitive Data Protection);
+  - only the owner can reach it;
+  - it's kept only while useful;
+  - it's never released in the handover;
+  - the owner can delete it, by destroying its key.
+- **The family's assistant** (the handover assistant; built, PR-7.5):
+  - While the kept bundle is under about 20,000 tokens, the assistant gets the whole bundle in its instructions. The bundle is built fresh for each question, from current versions only.
+  - Above that size, it gets `index.md` and the concepts it opens.
+  - Kept text is fenced as information, never instructions.
+  - Every source shown is a real kept item, with its title.
+  - It never reads the conversation, another owner's bundle or the vault.
+  - Context caching can come later.
+- **The bundle is a graph** (typed links built, PR-7.3 and 7.9). Each kept item links to the people it names:
+  - an account or policy links to its `nominee` and `holder`;
+  - property or a wish links to who it's `intended_for`;
+  - a story links to the `people` it mentions.
+
+  Links are frontmatter fields (bundle paths) and ordinary Markdown links in the body. A full name must match a kept person. A first name matches only if exactly one kept person has it. Keeping or replacing a person relinks the items that name them. The graph part also records which key fields are present (`has`: nominee, holder, intended for, papers), never their values. Still to come: `covered_by` (a will) and `contact`. No graph database.
+- **Statements and wishes** (PR-13.1, `docs/proposals/listening.md` §3). Each card also carries what was said as statements: subject, predicate and object. The predicate comes from a closed list in `schemas.py` (facts, wishes and feelings). A predicate outside the list is stored as `other` with its words, and is never acted on. A wish predicate (wants to give, wants done, wants the family to know, wants to change, wants to do, promised to) makes the card a wish; code decides this. A kept wish starts in `wish_state: kept` and links to the people in it (`wants`, `promised_to`, `worries_about`). The graph part adds only closed values: the predicates used and the wish state.
+  - A fixed-rule check against the expected links for each type finds **gaps and conflicts**. It ranks them by impact on the family (built, PR-7.10, `gaps.py`).
+  - Saathi raises at most one gently, and "skip" is remembered (built).
+  - Still to come (F-7): readiness as **link coverage**, shown as a knowledge coverage map, with the family's checklist from the graph.
+
+## 6. API surface
+
+All routes are under `/api`, except the internal fraud cycle.
+
+| Area | Routes |
+| --- | --- |
+| Conversation | `GET/POST /owners/{id}/conversation`, `POST /owners/{id}/conversation/prompt` (the companion asks from a next step), `POST /owners/{id}/conversation/summary` (a few sentences that sum up a conversation that just ended. It is shown, never stored. Numbers are masked in code), `POST /owners/{id}/conversation/forget` (Discard. It deletes those turns, and their shared files and cached spoken replies. It also deletes every card from them that is still waiting for Keep and that no other conversation mentions. It never deletes anything kept). A live-call exchange is stored as soon as it ends. It is marked `saving` until its cards are ready, so the end-of-call review can wait for it. The call's request waits up to 30 seconds for its saves before ending. A `saving` mark older than two minutes no longer counts. `WS /owners/{id}/live`, `POST /speech` |
+| Cards | `POST /proposals/{id}/decision` (moments, inventory, people; approve or reject) |
+| Kept | `GET /owners/{id}/kept` (each item with `kept_at`), `DELETE /owners/{id}/kept/{item_id}` (Remove), `GET /owners/{id}/knowledge-map`, `GET /owners/{id}/gaps`, `POST /owners/{id}/gaps/{key}/skip` |
+| Plan and guardian | `GET /owners/{id}/plan` (the current step and the next ones), `GET /owners/{id}/guardian/held` (held actions, a fixed message each) |
+| Legacy capture (older routes) | `POST /owners/{id}/capture/audio`, `POST /owners/{id}/documents`, `POST /owners/{id}/wishes`, `GET /owners/{id}/review`, `GET /owners/{id}/archive` |
+| Next steps | `POST /owners/{id}/readiness`, `GET /owners/{id}/tasks`, `POST /tasks/{id}` |
+| Legal | `POST /owners/{id}/legal-needs`, `POST /owners/{id}/legal-handoff`, `POST /owners/{id}/legal-documents` |
+| Vault | `POST/GET /owners/{id}/vault/invite`, `POST/GET /owners/{id}/vault/recipient`, `POST /owners/{id}/vault/recipient/decision`, `POST /owners/{id}/vault/escrow`, `POST/GET /owners/{id}/vault/items` |
+| Release | `POST /owners/{id}/death-report`, `POST /owners/{id}/release/authority`, `GET /owners/{id}/release`, `POST /owners/{id}/alive`, `GET /owners/{id}/vault/release-bundle` |
+| Review | `GET /admin/cases`, `POST /admin/cases/{id}/confirm-death`, `POST /admin/cases/{id}/confirm-authority` (body: `reviewer`, `override_reason?`) |
+| Access | `POST/GET /owners/{id}/access-requests`, `GET /admin/access-requests`, `POST /access-requests/{id}/decision` |
+| Handover | `POST /owners/{id}/ask`, `POST /owners/{id}/settlement` |
+| Own model key | `GET/PUT/DELETE /model-access`, `POST /model-access/test` (the signed-in person's own key only) |
+| Usage | `GET /agents/steps` (the caller's own copy's recent AI steps), `GET /allowance`, `POST /allowance/request` |
+| Platform admin portal | Under `/platform`, roles checked on the server: overview, agents (`/agents`, `/agents/steps`, `/agents/live`), approvals, guardian (events, decisions, `/guardian/conversations`, `/guardian/chain/{turn}`, `/guardian/events/{event}/chain`), fraud (`/fraud`, `/fraud/graph`, `/fraud/history`, runs, decisions, removing or keeping added items, resuming adding), demos, the cue minimum, the kill switch, the audit log, and model keys (section 4.1) |
+| Internal | `POST /internal/fraud/cycle`, outside `/api` (the hourly fraud cycle; only Cloud Scheduler's service account) |
+| Other | `POST /demo/seed` (resets the caller's own copy), `GET /owners/{id}`, `GET /me` (includes the caller's `owner_id`), `POST /me/nickname`, `GET /healthz` |
+
+Every route works only on the caller's own demo copy. Another copy's owner or document gets **404** (`demo.py`). `ask`, `settlement` and `vault/release-bundle` return **403** until the case is `released`. Gemini failures return readable errors: 503 for no credentials or voice unavailable, 502 for model errors.
+
+## 7. Key flows
+
+### 7.1 Live call
+
+```mermaid
+sequenceDiagram
+    actor Owner
+    participant App
+    participant API as Agents service
+    participant Live as Gemini Live
+    participant G as Gemini (extraction)
+    Owner->>App: Tap the microphone
+    App->>API: WebSocket /live
+    API->>Live: connect (Saathi persona + kept items + its last message, if recent; tools current_step, report_step, voice_joined)
+    loop the whole call
+        Live->>API: current_step (at the start and after each answer)
+        API-->>Live: the plan's current step and its tone
+        App->>API: mic audio (16 kHz PCM, 100 ms chunks)
+        API->>Live: realtime audio
+        Live-->>API: voice (24 kHz PCM) + captions
+        API-->>App: voice + captions, stop playback if interrupted
+        API->>G: after each exchange: what's worth keeping? mood, outcome, voices
+        API->>API: grounding; the guardian screens each card; the plan takes in the result
+        API-->>App: turn + allowed cards (moments, inventory, people)
+    end
+    Owner->>App: End
+```
+
+### 7.2 Choosing and approving the vault recipient
+
+```mermaid
+sequenceDiagram
+    actor Vikram as Owner app
+    actor Priya as Recipient app
+    participant API as Agents service
+    participant KMS as Cloud KMS
+    Vikram->>API: POST vault/invite (Priya, daughter)
+    Priya->>API: GET vault/invite → "Vikram has chosen you"
+    Priya->>Priya: create key pair and recovery code, back up private key encrypted with the code
+    Priya->>API: POST vault/recipient (public key + encrypted backup) → status pending_owner
+    Vikram->>Vikram: compute key code from the public key
+    Note over Vikram,Priya: both phones show the same code, e.g. 3F9A-12C4-77B0-E1D2
+    Vikram->>API: POST vault/recipient/decision (approve)
+    Vikram->>Vikram: wrap the data key with Priya's public key
+    Vikram->>API: POST vault/escrow
+    API->>KMS: encrypt (outer layer)
+```
+
+A new phone downloads the encrypted key backup and unlocks it with the recovery code. The recovery code can be lost while the owner is alive. Then the recipient creates a new key, the old seal is cleared, and the owner approves and seals again. Once a case is open, the key can't be replaced.
+
+### 7.3 Release
+
+```mermaid
+stateDiagram-v2
+    [*] --> reported: certificate uploaded, AI verdict attached
+    reported --> death_confirmed: a reviewer confirms, with a reason if AI said not valid
+    death_confirmed --> death_confirmed: proof of authority uploaded, AI verdict attached
+    death_confirmed --> waiting: a different reviewer confirms authority
+    waiting --> released: waiting period ends, owner silent
+    reported --> cancelled: owner taps "I'm OK"
+    death_confirmed --> cancelled: owner taps "I'm OK"
+    waiting --> cancelled: owner taps "I'm OK"
+```
+
+On `released`, KMS removes the outer layer. The recipient's phone then decrypts the vault locally.
+
+## 8. Security and privacy
+
+| Threat | Mitigation |
+| --- | --- |
+| Database leak exposes secrets | Secrets are ciphertext. The owner's phone seals the data key with the recipient's public key |
+| Insider or AI reads the vault | No server component can open the inner layer. The ADK agent has no vault tool. The AI never asks for passwords |
+| Someone makes themselves the recipient | The owner must invite. The owner confirms a key code that each phone computes from the key itself |
+| Lost phone | The private key is backed up, encrypted with a 125-bit recovery code (PBKDF2-SHA256, 600,000 iterations). Anvaya never sees the code |
+| False death report | AI verdict; reason required to override "not valid"; two different reviewers; waiting period; owner cancel |
+| Sensitive numbers leak through the AI | Masking rules in prompts; last 4 digits only; never asks for full numbers |
+| Sharing without consent | `legal-handoff` needs consent. While the owner is alive, access requests go to the owner. Neutral replies reveal nothing to strangers |
+| Public access to storage | Firestore rules deny clients; private bucket; least-privilege service account |
+| One judge reaching another judge's demo | Each Google account gets its own copy. The copy is chosen from the verified sign-in, never from the browser (`demo.py`). Every route checks that the owner or document belongs to the caller's copy, and answers **404** otherwise. Team lists show only the caller's copy. The live call closes for another copy's owner. Resetting touches only the caller's copy, including its recordings |
+| Someone acting outside their part | The switcher sends who is acting (`X-Acting-As`; `acting_as` on the live call). The server accepts only the people in the copy. It checks the person for each action (`demo.only`): only Vikram changes his vault, keeps cards or answers alerts; only Priya registers as recipient, reports, sends proof and opens the vault; only a reviewer confirms. The reviewer is the person acting, never a typed name. So one reviewer can't confirm both steps |
+| Identifying demo visitors | The portal lists demo copies by hashed key. After sign-in, a visitor may give their copy an optional nickname, once. The nickname is cleaned to one short line and shown only to platform admins. It is never written to logs or the audit log (`demo.set_nickname`, `portal.get_demos`) |
+| Someone seeing or using another person's model key | A key is found only from the verified sign-in (`governance.current_user`), never from an ID the browser sends. It is used only for calls that person causes. It is encrypted with its own Cloud KMS key (`MODEL_KEYS_KMS_KEY_NAME`, separate from the vault's). The person's user key is bound in as additional authenticated data, so a record copied to someone else won't decrypt. The key is never sent back to anyone, its owner included. The app and the portal see only its kind, last 4 characters and status. A platform admin sees everyone's usage and can test or remove a key, but never sees it. Key-shaped text is removed from every log record and from Gemini error messages. A request with a malformed key never repeats it. Without a KMS key on Firestore, saving is refused, and an unencrypted record there is never used |
+| Uninvited people using the demo | Google sign-in (Firebase Auth). The server verifies the ID token on every request (`auth.py`) and checks `ALLOWED_EMAILS` (addresses or `@domains`). The live call passes the token as `?token=`. For judging, `OPEN_SIGN_IN=true` lets any Google account with a verified email in (off by default). Each account still gets only its own copy, and the `demo_admin` role for that copy only, from its first request. In the portal, a `demo_admin` sees only its own approvals, audit entries and refused calls. A decision someone else made shows as "Anvaya team", never with that person's email or written reason. Per-person daily allowances limit what each account can spend, and a daily ceiling limits what the whole service spends |
+| A workflow on another branch deploying, or using the deployer's access | Workload Identity Federation gives Google credentials only to `deploy.yml` running on `main`, in environment `production` (limited to `main`), in this repository by its numeric id (`infra/setup-github-actions.sh`). The deployer has no broad project-wide roles. It acts only as the API's and the build's service accounts. It uses storage only on the source and build buckets. It writes only to the source-deploy image repository. It can update the Cloud Run service, but not change who may call it (#110) |
+
+**Known gaps before real users**
+
+1. **One judge plays every person in their copy.** Everyone signs in with Google (Firebase Auth), and only emails or domains on `ALLOWED_EMAILS` get in, or any Google account when `OPEN_SIGN_IN=true`. Each account has its own demo copy, and the server keeps copies apart. Inside a copy, the switcher chooses who acts (Vikram, Priya, Anjali, Rahul or the platform admin). The server checks that person on every action. In production, each person would sign in separately.
+2. **Keys in `localStorage`**, so one browser can play every role. Production needs non-extractable keys in IndexedDB, with passkeys.
+3. **KMS decrypt scope.** The API has both encrypt and decrypt. Move decrypt to a separate release service.
+4. **No notifications.** During the waiting period, the owner is alerted only inside the app. Add push, SMS and email.
+5. **Live calls** end after about 15 minutes (Gemini Live limit). `reply_problems` checks a spoken reply only after it is said, so it can't stop it.
+6. **Handover questions** are kept for 30 days (PR-15.8), but nothing yet lets a reviewer read them in a case: our team can look only in Firestore.
+7. **Participant consent** for other voices in live calls is a notice only.
+
+## 9. Environments and configuration
+
+| Setting | Local | Google Cloud |
+| --- | --- | --- |
+| `STORE` | `file` (`agents/data/store.json`, survives restarts) | `firestore` |
+| Gemini auth | `GOOGLE_API_KEY` (AI Studio) in `agents/.env` | Same AI Studio key, stored in Secret Manager (`gemini-api-key`) and injected as `GOOGLE_API_KEY`; `GOOGLE_GENAI_USE_VERTEXAI=false` |
+| `KMS_KEY_NAME` | empty (dev mode) | vault escrow key |
+| `MODEL_KEYS_KMS_KEY_NAME` | empty (dev mode: keys stored unencrypted, local only) | the `model-keys` KMS key; empty means people can't save their own key |
+| `MEDIA_BUCKET` | empty (local folder) | private bucket |
+| `GEMINI_TTS_VOICE` | `Sulafat` | same. Models aren't environment variables: they're in `agents/registry.yaml` and `agents/policies.yaml` (section 3.3); confirm they are served in your region |
+| `AUTH_REQUIRED`, `FIREBASE_PROJECT_ID`, `ALLOWED_EMAILS` | `true`, the project, your email | same (from `agents/.env` or `ALLOWED_EMAILS=… ./infra/deploy.sh`) |
+| `OPEN_SIGN_IN` | `false` | `true` lets any Google account in, for judging; then `ALLOWED_EMAILS` may be empty |
+| `VITE_FIREBASE_*` (web) | `web/.env` (public Firebase config) | same |
+| `RELEASE_WAIT_SECONDS` | 60 | 60 for the demo; days in production |
+| `VITE_LIVE_URL` | not set (Vite proxies the WebSocket) | `wss://<cloud-run-url>` (set by `deploy.sh`) |
+
+`infra/deploy.sh` does these steps:
+
+1. It enables the APIs.
+2. It creates the service account, Firestore, the private bucket, the KMS key and the `gemini-api-key` secret (from `agents/.env`).
+3. It deploys Cloud Run from `agents/`, with a 1-hour timeout for live calls.
+4. It builds `web/` with `VITE_LIVE_URL`.
+5. It deploys Firebase Hosting.
+
+Add Firebase to the Google Cloud project first (`firebase projects:addfirebase <project>`).
+
+**Why AI Studio, not Vertex AI (for now):** the same model names work locally and on Cloud Run. On Vertex AI, `gemini-3.8-live` is served only in `us-central1` (not `global`), and the 3.8 TTS models aren't served. So a later switch to Vertex AI needs region-specific model settings.
+
+**Free-tier note:** Gemini API keys on the free tier have small per-model limits (for example, 10 requests for one TTS model). Turn on billing for testing and demos.
+
+## 10. Testing
+
+Automated tests (`agents/tests/`) stub Gemini, so they run without credentials. They cover:
+
+- release rules: two-person rule, override reasons, waiting period, owner cancel;
+- more gaps: a will, papers, loans, who to call first and online accounts. Anything kept that mentions one closes it (Hindi too). "I will go" doesn't count as a will. Something kept with doubt is checked after two weeks, and things that change are checked once a year. Both stop once the owner says it's right;
+- what Saathi remembers: no earlier conversation reaches Gemini. A gap comes back only as a reminder, after its wait, at most one at a time, and never twice in one conversation. It stops after its last reminder. Discard forgets the questions Saathi asked;
+- access gating and consent; recipient invitation, approval and key changes;
+- sign-in: every API route and the live call need an allowed Google account;
+- people in a copy: the server knows who is acting, each person can only do their part, and one reviewer can't confirm both steps;
+- private demos: two judges at once never reach each other's copy, whoever they act as. This holds through any owner route, any document ID, the team lists or the live call. Resetting one copy leaves the other alone;
+- card merging (repeats, follow-ups that keep earlier facts, family), using real cases from test runs;
+- next-step rules (duplicates, reworded done steps, LIC vs SBI);
+- reply rules (script, false claims, "shall I add");
+- document verdict rules (wrong document scores 0);
+- governance: server-side roles, approvals, the kill switch, and a portal that never returns conversation text or names;
+- registry and policies: every agent has exactly one policy, and every policy has an agent. Each part lives in one file only. The check refuses each of these, with the reason: a missing policy, a model the policy doesn't allow, an unknown model, tool or pool, a wrong tool scope, a duplicate, a typo, an unknown value and a quoted number. No code takes a model from settings. The gateway follows the policy and refuses an agent that isn't active. Tools, limits, pools and thinking come from the policy. A call uses the registry's primary model, then its fallback. The portal shows both files;
+- the deploy identity (`test_ci_identity.py`): only `deploy.yml` signs in to Google, and every such job uses environment `production`. Google trusts only that workflow on `main`, by repository id. The deployer has no broad project-wide roles;
+- the gateway: every file that calls Gemini goes through it, every agent named in code is registered, and every call is recorded in the ledger;
+- limits per request: output caps, retries, input size, call length and reply length. Each agent's thinking level comes from its policy. An answer cut off at its output limit, or both models busy, gives a plain error;
+- fraud runs: one failed model call costs one item, not the run. A run that tried checks and got none to work fails, and so does a run where no imagining worked. Imagining that finds nothing new is still a finished run. A reason that stops every item (no search key, refused by the gateway, stopped) still stops the run;
+- no API answer, found or not, is kept by a cache;
+- responsiveness: Google's sign-in certificates are fetched once until they expire. A slow store doesn't hold up a live call. Two exchanges saved at once make one card;
+- people's own model keys:
+  - two people at once each use only their own key;
+  - ours is only the failover, never tried first, and a server error doesn't move on;
+  - safety checks, the handover assistant, the live call and fraud runs fail over too;
+  - a key is tested before it's saved, and a test stores nothing;
+  - a stored key never decrypts for anyone else;
+  - a key never reaches a response, a log record, the ledger, the store in plain text, or the audit log;
+  - platform admins see everyone's usage but no key; a demo user sees only their own;
+- guardian-led conversations: each new piece of information the owner gives goes to the guardian before any card is made (allow, deflect or block). A secret or a payment someone else asked for is deflected. Words aimed at Saathi are blocked. A live-call exchange is screened too, and no owner words are stored with a decision;
+- the conversation planner: a new owner starts from the initial plan; each step says who starts it; a Keep, an outcome or a deflection moves the plan on; a step the step guard drops never joins it; each version records its cause with no words;
+- Saathi follows the plan: each step has a tone, and the owner's mood changes the plan in code. Typed chat replies only after the guardian and the plan have seen the turn. On a call, the gateway checks `current_step` and `report_step`. A spoken reply that breaks a rule is recorded and corrected once;
+- another voice: the extractor says whether more than one person spoke, never who. Another voice marks the cards, records a look for the team and adds a warm step once a conversation. No audio or voiceprint is stored;
+- the family side through the guardian: only a vault secret and words aimed at the assistant are stopped. A fee, a change of bank details or many questions in an hour get a note or a quiet look. Full numbers are masked;
+- the audit chain: a reviewer follows a turn to its kept item or safe-route step by ids only, a plan step shows only its kind, and a demo admin sees only their own copy;
+- the fraud bundle and graph: the certificate check gets the same signs after the move to the bundle; the bundle follows OKF; every change is an event; old Firestore guides and records are copied in once; a write built on an old version is refused. The graph has the guide, its items and the research records as nodes;
+- fraud repeats: research and dreaming share one list of what's known, a reworded repeat is the same topic, and a gap the guide's tactics cover stops being a research subject;
+- the portal's usage charts (per agent by hour, 14 days; by day, 30 days), the agents map (an agent is working exactly while its call runs; every agent is on one loop; no user and no text) and the recent-steps list (own copy only; each card, step and check carries its autonomy label);
+- each kept item says when it was kept (`kept_at`);
+- dependencies: every direct dependency is in the inventory, and every installed package has an allowed licence. Every font folder carries its OFL licence and is in the inventory. The Python and Node versions agree everywhere.
+
+Every pull request runs the linters (ruff for `agents/`, Biome for `web/`), these tests and the web build ([.github/workflows/ci.yml](../.github/workflows/ci.yml)).
+
+We also checked these by hand: the vault and recovery round trip (Node Web Crypto), live calls through the WebSocket, and real Gemini runs of conversations and next steps.
+
+## 11. Design decisions
+
+| Decision | Choice | Why |
+| --- | --- | --- |
+| Capture | Hands-free live call (Gemini Live) as the main voice mode | Record-and-stop felt unnatural; a live call is how people actually talk |
+| One companion | Shared persona for chat and live | Consistent character, language and honesty |
+| Suggestions as cards | AI proposes, the owner keeps | AI-first, but nothing is saved without consent |
+| Rules in code | Merging, reply checks, card grounding, verdicts, next steps | Light models follow prompts most of the time; code makes it always |
+| Vault crypto | On the device, sealed for one approved person, plus KMS | Anvaya and the AI can never read secrets |
+| Cheaper models | Flash-Lite for most steps, with fallbacks | Low cost per family; resilient to overload and quotas |
+| Store abstraction | Memory, file or Firestore behind one interface | Tests run without the cloud; the local demo survives restarts |
+
+## 12. Roadmap
+
+Separate sign-in for each person outside the demo · notifications · a real legal-partner integration · Vertex AI RAG Engine for archive search · email and chat import · passkey-backed keys · a separate KMS release service · session resumption for long live calls · an evaluation set in CI · a pilot with a bank or insurer.
