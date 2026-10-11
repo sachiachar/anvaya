@@ -77,6 +77,8 @@ export type DocumentCheck = {
   /** One result per warning sign in the fraud reference guide (PR-2.3.5). Older cases have none. */
   signs?: SignFinding[];
   guide?: { key: string; title: string; version: number } | null;
+  /** How much the checker may do on its own, from its policy (PR-15.7): assist. */
+  autonomy?: Autonomy;
 };
 
 export type SignFinding = {
@@ -118,6 +120,8 @@ export type Proposal = (Moment | InventoryItem | Person) & {
   looks_like?: { id: string; title: string };
   /** Another voice was heard when this was said (PR-2.13.2): how many voices, never whose. */
   another_voice?: boolean;
+  /** How much the helper that made it may do on its own, from its policy (PR-15.7). */
+  autonomy?: Autonomy;
 };
 
 export type Turn = {
@@ -146,6 +150,7 @@ export type Task = {
   question_for_owner: string;
   steps: string[];
   severity: "high" | "medium" | "low";
+  autonomy?: Autonomy;
 };
 
 export type AllowanceMeasure = { used: number; limit: number; share: number; state: "ok" | "warning" | "reached" };

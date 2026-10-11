@@ -345,7 +345,7 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
             <label className="v2-row-btn v2-toggle-row">
               <span className="v2-row-text">
                 <b>Show how Saathi works</b>
-                <span>Shows the readiness score on Kept</span>
+                <span>The readiness score, and how much each helper may do on its own</span>
               </span>
               <input type="checkbox" role="switch" aria-checked={showHow} className="v2-toggle" checked={showHow} onChange={onToggleShowHow} />
             </label>

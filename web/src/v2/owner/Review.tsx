@@ -6,6 +6,7 @@
 import { useState } from "react";
 import type { Proposal } from "../../api";
 import { Check, Close } from "../icons";
+import AutonomyTag from "../Autonomy";
 import { canReplace, describe } from "./items";
 
 export type ReviewChoice = { p: Proposal; save: boolean; replace: boolean };
@@ -52,7 +53,7 @@ export default function Review({ items, summary, summaryState, meta, note = null
               return (
                 <li key={p.id} className={`v2-review-item${off ? " is-removed" : ""}`}>
                   <div className="v2-review-text">
-                    <p className="v2-eyebrow">{off ? "Won't be kept" : d.kind}</p>
+                    <p className="v2-eyebrow">{off ? "Won't be kept" : d.kind}{!off && <AutonomyTag level={p.autonomy} />}</p>
                     <p className="v2-review-title">{d.title}</p>
                     {!off && d.detail && <p className="v2-review-detail">{d.detail}</p>}
                     {!off && d.missing && <p className="v2-review-missing">{d.missing}</p>}
