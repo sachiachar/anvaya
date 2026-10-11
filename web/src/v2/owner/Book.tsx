@@ -4,6 +4,7 @@ import { useContext, useEffect, useState } from "react";
 import { api, type Gap, type KeptItem, type Task } from "../../api";
 import { useAction } from "../../ui";
 import { friendlyError } from "../copy";
+import AutonomyTag from "../Autonomy";
 import { ShowHow } from "../demo";
 import { Chevron, Close } from "../icons";
 
@@ -158,7 +159,7 @@ export default function Book({ onTalkAbout, onReview }: { onTalkAbout: (question
           ))}
           {tasks?.map((t) => (
             <li key={t.id} className={`sev-${t.severity}`}>
-              <p className="v2-step-title">{t.title}</p>
+              <p className="v2-step-title">{t.title}<AutonomyTag level={t.autonomy} /></p>
               <p className="v2-step-why">{t.why_it_matters}</p>
               {t.steps.length > 0 && <ol className="v2-step-list">{t.steps.map((s) => <li key={s}>{s}</li>)}</ol>}
               <div className="v2-row">

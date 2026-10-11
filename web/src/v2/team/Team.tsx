@@ -5,6 +5,7 @@
 import { useContext, useEffect, useState } from "react";
 import { type AccessRequest, api, type Case, type DocumentCheck } from "../../api";
 import { useAction } from "../../ui";
+import AutonomyTag from "../Autonomy";
 import { friendlyError } from "../copy";
 import { Nav, samePerson } from "../nav";
 import SwitchTo from "../SwitchTo";
@@ -117,7 +118,7 @@ function CheckView({ title, check }: { title: string; check: DocumentCheck }) {
   const found = signs.filter((s) => s.result === "found").length;
   return (
     <div className={`v2-check-box is-${v.tone}`}>
-      <p className="v2-check-title">{title}</p>
+      <p className="v2-check-title">{title}<AutonomyTag level={check.autonomy} /></p>
       <p className="v2-check-verdict">{v.text} · likely genuine {Math.round(check.confidence * 100)}%</p>
       <p className="v2-small">Looks like: {check.document_type}{check.person_named ? ` · names ${check.person_named}` : ""}{check.key_date ? ` · ${check.key_date}` : ""}</p>
       {check.concerns.length > 0 && <ul className="v2-concerns">{check.concerns.map((x) => <li key={x}>{x}</li>)}</ul>}
