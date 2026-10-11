@@ -5,7 +5,7 @@ import { api } from "../../api";
 import { useAction } from "../../ui";
 import { decryptSecret, unwrapAsRecipient } from "../../vaultCrypto";
 import { friendlyError } from "../copy";
-import { Lock, Send } from "../icons";
+import { Book as BookIcon, Lock, Send } from "../icons";
 
 export default function After({ parent }: { parent: string }) {
   return (
@@ -88,8 +88,24 @@ function Ask({ parent }: { parent: string }) {
           {thread.map((t, i) => (
             <li key={i} className="v2-turn">
               <div className="v2-turn owner"><p>{t.q}</p></div>
-              <div className="v2-turn assistant"><p>{t.a}</p></div>
-              {t.sources.length > 0 && <p className="v2-picked">From what {parent} kept · {t.sources.map((s) => s.title).join(" · ")}</p>}
+              <div className="v2-turn assistant"><Answer text={t.a} /></div>
+              {/* Where the answer came from, as chips (PR-14.3): only kept items the server checked. */}
+              {t.sources.length > 0 && (
+                <div className="v2-sources">
+                  <p className="v2-sources-label">From what {parent} kept</p>
+                  <ul className="v2-chips" aria-label={`Sources from what ${parent} kept`}>
+                    {t.sources.map((s) => {
+                      const kind = KIND[s.id.split("_")[0]];
+                      const title = s.title.trim() || kind || "Something kept";
+                      return (
+                        <li key={s.id} className="v2-source">
+                          <BookIcon />{title}{kind && title !== kind && <span> · {kind}</span>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
               {t.notes.map((n) => <p key={n} className="v2-note">{n}</p>)}
             </li>
           ))}
@@ -103,6 +119,36 @@ function Ask({ parent }: { parent: string }) {
       {busy && <p className="v2-muted v2-small">Saathi is looking through what {parent} kept…</p>}
       {error && <p className="v2-error" role="alert">{friendlyError(new Error(error))}</p>}
     </section>
+  );
+}
+
+/** What kind of kept item a source is, from its id: a story and the policy it's about can share a
+ *  title, and this tells them apart. The id can't tell a story from a wish, so those share one name;
+ *  the others are as on the review cards (items.ts). */
+const KIND: Record<string, string> = { m: "Story or wish", inv: "Account or policy", p: "Family" };
+
+/** The answer as plain paragraphs. The model quotes the owner as Markdown ("> …", or nested ">> …"),
+ *  on its own or straight after a line of text; those lines show as a quote, without the ">"
+ *  (PR-14.3: no raw codes or symbols in the answer). A ">" with no space after it (">50%") is text. */
+const QUOTE = /^\s*>+(?:\s+>+)*(?:\s+|$)/;
+function Answer({ text }: { text: string }) {
+  const parts: { quote: boolean; text: string }[] = [];
+  for (const block of text.split(/\n\s*\n/)) {
+    for (const line of block.split("\n")) {
+      const quote = QUOTE.test(line);
+      const body = quote ? line.replace(QUOTE, "") : line;
+      const last = parts[parts.length - 1];
+      if (last && last.quote === quote && !last.text.endsWith("\n\n")) last.text += `\n${body}`;
+      else parts.push({ quote, text: body });
+    }
+    if (parts.length) parts[parts.length - 1].text += "\n\n"; // a blank line always starts a new paragraph
+  }
+  return (
+    <>
+      {parts.map((p) => ({ ...p, text: p.text.trim() })).filter((p) => p.text).map((p, i) =>
+        // The parts never change order or content while shown, so the index is a stable key.
+        p.quote ? <blockquote key={i} className="v2-answer-quote">{p.text}</blockquote> : <p key={i}>{p.text}</p>)}
+    </>
   );
 }
 
