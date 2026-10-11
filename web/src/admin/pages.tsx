@@ -337,6 +337,7 @@ export function AgentsPage() {
     <>
       <p className="pa-lede">Each circle is a loop: an AI step that takes something in and gives something back. People stand at every gate where something becomes real. The map shows which agents are working now; select a loop for its numbers.</p>
       <LoopMap agents={data.agents} />
+      <RecentSteps />
       <p className="pa-lede">Every agent is registered with what it is (<span className="pa-mono">registry.yaml</span>) and has one policy for what it may do: its autonomy level, and only its allowed models and tools (<span className="pa-mono">policies.yaml</span>). The gateway refuses anything else and records it below.</p>
       <Section title="Agent registry and use, 30 days">
         <div className="pa-scroll">
@@ -380,6 +381,48 @@ export function AgentsPage() {
         </table>
       </Section>
     </>
+  );
+}
+
+const STEPS_POLL_MS = 15000;
+
+/** "Inside the agents" (PR-14.5): the last AI steps of your own demo copy, newest first, as they
+ *  happen. Every role sees only its own copy; the table below has the service's totals. */
+function RecentSteps() {
+  const load = useCallback(() => platform.agentSteps(), []);
+  const { data, error, reload } = useLoad(load);
+  useEffect(() => {
+    const timer = window.setInterval(() => { if (!document.hidden) reload(); }, STEPS_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [reload]);
+  return (
+    <Section title="Your demo's recent steps"
+      aside={<button type="button" className="pa-link" onClick={reload}>Refresh</button>}>
+      <p className="pa-muted">Each AI step in your own demo copy over the last 24 hours, newest first. It updates every 15 seconds.
+        Talk to Saathi as Vikram, then look here. Ids and numbers only: what was said stays in your copy.</p>
+      {!data ? <Loading error={error} /> : data.steps.length === 0 ? (
+        <Empty>No steps yet. Each AI step in your demo appears here.</Empty>
+      ) : (
+        <div className="pa-scroll">
+          <table>
+            <thead><tr><th>When</th><th>Agent</th><th>Autonomy</th><th>Model</th><th className="num">Tokens</th><th>Result</th></tr></thead>
+            <tbody>{data.steps.map((s, i) => (
+              <tr key={`${s.at}-${s.agent}-${i}`}>
+                <td>{fmt.when(s.at)}</td>
+                <td><span className="pa-mono">{s.agent}</span>{s.purpose && <div className="pa-sub">{s.purpose}</div>}</td>
+                <td>{fmt.label(s.autonomy)}</td>
+                <td className="pa-mono">{s.model ?? <span className="pa-muted">none</span>}
+                  {s.key === "yours" && <div className="pa-sub">your key</div>}</td>
+                <td className="num">{fmt.num(s.tokens)}{s.minutes > 0 && <div className="pa-sub">{fmt.num(s.minutes)} min</div>}</td>
+                <td><Status value={s.result} />{s.reason && <div className="pa-sub">{s.reason}</div>}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+      {data && <p className="pa-muted">Next steps Saathi didn't pursue in the last 30 days: {data.steps_not_pursued_30d}.
+        The step guard drops a step that could be part of a fraud.</p>}
+    </Section>
   );
 }
 

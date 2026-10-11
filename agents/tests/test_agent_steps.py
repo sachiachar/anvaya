@@ -137,3 +137,21 @@ def test_each_card_step_and_check_carries_its_autonomy_label(client):
     check = DocumentCheck(document_type="death certificate", is_expected_type=True, matches_expected_person=True,
                           confidence=0.9)
     assert loops.review_summary(check)["autonomy"] == "assist"
+
+
+# ---- The same steps in the admin portal (PR-14.5) ---------------------------------------------
+
+
+def test_the_admin_portal_shows_the_signed_in_persons_own_steps_only(client):
+    call(ME, "capture.extractor", tokens_in=1200, tokens_out=300)
+    call(OTHER, tokens_in=5)
+    body = client.get("/api/platform/agents/steps").json()
+    [step] = body["steps"]
+    assert set(step) == STEP_FIELDS and step["agent"] == "capture.extractor" and step["tokens"] == 1500
+    assert step["autonomy"] == "propose" and "steps_not_pursued_30d" in body
+    assert body == client.get("/api/agents/steps").json()  # the same list the app's own route gives
+
+
+def test_the_admin_portal_steps_need_a_platform_role(client, monkeypatch):
+    monkeypatch.setattr(core, "role_for", lambda email: "nobody")
+    assert client.get("/api/platform/agents/steps").status_code == 403
