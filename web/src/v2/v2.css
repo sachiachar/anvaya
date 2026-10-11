@@ -173,6 +173,38 @@ a { color: inherit; text-decoration-color: var(--gold); text-underline-offset: 3
 .v2-person[aria-pressed="true"] { background: var(--action); border-color: var(--action); color: var(--action-ink); }
 .v2-app:has(.v2-talk.is-live) .v2-people { display: none; }
 @media (max-width: 420px) { .v2-people-label { display: none; } } /* all five names fit on a phone */
+/* "Start here" (PR-14.1): a card above every screen that folds to a thin bar. Hidden during a
+   live call, like the names. */
+.v2-tour {
+  display: grid; gap: 12px; padding: 12px 14px 14px 16px; border-radius: var(--radius); background: var(--surface);
+  border: 1px solid var(--line); border-left: 3px solid var(--gold); box-shadow: var(--shadow);
+}
+.v2-tour.is-folded { padding-bottom: 12px; }
+.v2-app:has(.v2-talk.is-live) .v2-tour { display: none; }
+.v2-tour-head { display: flex; align-items: flex-start; gap: 8px; }
+.v2-tour-fold {
+  flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 28px; gap: 4px 8px; align-items: center;
+  padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; font: inherit;
+}
+.v2-tour-fold .v2-eyebrow { grid-column: 1; }
+.v2-tour-title { grid-column: 1; font: 500 var(--step-1)/1.25 var(--serif); color: var(--ink); }
+.v2-tour.is-folded .v2-tour-title { font-size: var(--step-0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v2-tour-chev { grid-column: 2; grid-row: 1 / span 2; display: grid; place-items: center; width: 28px; height: 28px; color: var(--muted); transform: rotate(-90deg); transition: transform 0.2s; }
+.v2-tour.is-folded .v2-tour-chev { transform: rotate(90deg); }
+.v2-tour-chev svg { width: 18px; height: 18px; }
+.v2-tour-body { display: grid; gap: 12px; }
+.v2-tour-points { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--ink-2); }
+.v2-tour-files { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--step--1); }
+.v2-tour-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 4px; border-top: 1px solid var(--line); }
+.v2-tour-nav .v2-link:disabled { visibility: hidden; }
+.v2-tour-dots { list-style: none; margin: 0; padding: 0; display: flex; gap: 4px; }
+.v2-tour-dots button {
+  width: 28px; height: 28px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; place-items: center;
+}
+.v2-tour-dots button::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.v2-tour-dots button[aria-current="step"]::before { background: var(--gold); width: 10px; height: 10px; }
+a.v2-switch { text-decoration: none; }
+
 /* "Switch to Priya": the next step belongs to someone else. */
 .v2-switch {
   display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 12px 6px 14px; border-radius: 999px;

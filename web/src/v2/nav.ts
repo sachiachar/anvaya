@@ -2,6 +2,9 @@ import { createContext } from "react";
 import type { DemoPerson, PersonId } from "../api";
 import { ROLE_TEXT } from "./copy";
 
+// The platform admin opens the separate admin portal (PR-12.9), as does the tour's last step.
+export const ADMIN_URL: string = import.meta.env.VITE_ADMIN_URL ?? (import.meta.env.DEV ? "/admin.html" : "https://anvaya-admin.web.app");
+
 export type OwnerTab = "talk" | "kept" | "family" | "vault";
 
 /** Who is acting in the demo, and a way to go to someone else's screen (PR-14.2): wherever the next
