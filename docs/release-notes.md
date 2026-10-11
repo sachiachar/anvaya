@@ -197,7 +197,7 @@ A claim file and bank view · accounts checked at the source · source chips tha
 
 ## Prototype 0.1 · 28 September 2026 (AI Builder Cup 2026)
 
-The first working prototype, built on Google Gemini and Google Cloud. See [architecture.md](architecture.md) for how it works and [use-cases.md](use-cases.md) for the full list of use cases.
+The first working prototype, built on Google Gemini and Google Cloud. See [architecture.md](architecture.md) for how it works.
 
 ### What's included
 

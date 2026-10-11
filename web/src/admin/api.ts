@@ -121,7 +121,7 @@ export type GuardianEvent = { id: string; at: number; response: "add_check" | "r
 
 export type Source = { title: string; url: string };
 
-/** Knowledge labels from docs/proposals/fraud-foresight.md §3. */
+/** Knowledge labels for fraud guide items (fraud_guides.py). */
 export type Label = "observed" | "derived" | "simulated" | "validated" | "invalidated";
 
 export type Scenario = { id: string; at: number; scenario: string; safeguard: string; caught_by: string | null;

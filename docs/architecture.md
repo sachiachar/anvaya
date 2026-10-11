@@ -1,6 +1,6 @@
 # Anvaya: Architecture
 
-*Status: working prototype for the AI Builder Cup 2026 (BFSI track). Last updated 12 October 2026. This is the overview for judges. Every detail, module by module, is in [architecture-details.md](architecture-details.md).*
+*Status: working prototype for the AI Builder Cup 2026 (BFSI track). Last updated 12 October 2026.*
 
 Anvaya is a family succession service. People talk with **Saathi**, a warm companion built on Gemini. Saathi helps them record their stories, money matters, family, wishes and secrets. When the time comes, a verified handover gives the right people what they need. All demo data is synthetic.
 

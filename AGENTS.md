@@ -14,10 +14,10 @@ Anvaya is an app with an AI companion, Saathi, for capturing a person's stories,
 | Platform admin portal | `web/src/admin/` (`admin.html`, built to `web/dist-admin/`, served as `anvaya-admin`) |
 | Tests | `agents/tests/` |
 | Cloud setup scripts | `infra/` |
-| Design | `docs/architecture.md` (overview for judges), `docs/architecture-details.md` (every detail), `docs/proposals/agent-governance.md` |
+| Design | `docs/architecture.md` |
 | Plan | GitHub issues: milestone "Prototype release" (PR-1 to PR-12); parent issue #43 for governance |
 
-Read [docs/architecture.md](docs/architecture.md) and [docs/architecture-details.md](docs/architecture-details.md) before changing anything in security, the vault or the handover.
+Read [docs/architecture.md](docs/architecture.md) before changing anything in security, the vault or the handover.
 
 ## Commands
 
@@ -100,7 +100,7 @@ gh api repos/<owner>/<action>/releases/latest --jq .tag_name   # a GitHub Action
 Update docs in the same PR as the code:
 
 - `docs/release-notes.md` for anything a user or judge would notice (Claude Code users can run `/release-notes` to draft the entry);
-- `docs/architecture-details.md` when the design, security model or tests change, and `docs/architecture.md` too when the overview no longer matches;
+- `docs/architecture.md` when the design, security model or tests change;
 - `README.md` when setup or commands change.
 
 How to write:

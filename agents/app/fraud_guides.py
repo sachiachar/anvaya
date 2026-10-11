@@ -1,7 +1,7 @@
 """Fraud reference guides (PR-2.3): what a genuine document looks like, and how forgeries are made.
 
 One guide per kind of document and country. Every item carries a knowledge label saying how
-we know it (docs/proposals/fraud-foresight.md §3). Guides are saved in the platform's OKF bundle
+we know it. Guides are saved in the platform's OKF bundle
 (fraud_bundle.py), with every change to an item kept as an event; a copy built into the code is
 used when the bundle has none or is unavailable, so a check always has its guide.
 
@@ -125,7 +125,7 @@ class Guide(BaseModel):
 
 def signs_for_check(guide: Guide) -> list[Sign]:
     """The signs the certificate check receives: active, checked knowledge only, and
-    projections at most a third of the total (rules 2 and 4 in fraud-foresight.md)."""
+    projections at most a third of the total (rules enforced in code)."""
     usable = [s for s in guide.signs if s.status == "active" and s.label in CHECKABLE]
     known = [s for s in usable if not s.projection]
     projections = [s for s in usable if s.projection][: len(known) // 2]

@@ -1,6 +1,6 @@
 """Fraud foresight pipeline (PR-2.5, PR-2.6): imagine, check, map, then leave drafts for review.
 
-Design: docs/proposals/fraud-foresight.md §4 and §6. Two agents, each with one job:
+Design: docs/architecture.md §4.1. Two agents, each with one job:
   - fraud.dreamer imagines attacks from our own material and maps each to a safeguard. No web access.
   - fraud.researcher checks claims against web pages (Exa search, web_search.py), and researches new
     tactics for a guide.

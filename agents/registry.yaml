@@ -2,7 +2,7 @@
 # it tries, in order. Also the catalogue of every model and tool that exists. Reviewed like code.
 #
 # What each agent MAY DO (its role and autonomy, allowed models and tools, limits and budget
-# pool) is in policies.yaml, reviewed separately. Design: docs/proposals/agent-security.md §2.
+# pool) is in policies.yaml, reviewed separately. Design: docs/architecture.md §8.
 # Both files are checked against a strict schema when the API starts (governance/core.py), and
 # each agent here must have exactly one policy there.
 #

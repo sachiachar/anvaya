@@ -1,6 +1,6 @@
 """Governance layer: the shared core.
 
-One layer governs every agent (docs/proposals/agent-governance.md, architecture §4.1):
+One layer governs every agent (docs/architecture.md §4.1):
 
 - **Registry** (registry.yaml): what each agent is: its identity, purpose and the models it
   tries, in order. **Policies** (policies.yaml): what it may do: its autonomy, allowed models

@@ -15,7 +15,7 @@ The bundle lives in the owner's folder of the private media bucket (`<owner>/kep
 
 Each concept keeps its **graph part** (`type`, `status`, typed links) apart from its content,
 so a fixed-code reader can use the graph without ever reading the text or sources (the gap
-check, PR-7.10, and the anonymous fraud cues in docs/proposals/fraud-foresight.md section 5).
+check, PR-7.10, and the anonymous fraud cues in fraud_cues.py).
 
 Rules enforced here: only owner-confirmed items enter (verified by `human:owner-<id>`); only
 stories, accounts and people (never the vault); long numbers are masked to the last 4 digits.

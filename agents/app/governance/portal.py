@@ -568,7 +568,7 @@ class CueMinimum(BaseModel):
 
 @router.post("/privacy/cue-min-owners")
 def set_cue_min_owners(body: CueMinimum, who: Actor = Depends(need("manage_privacy"))) -> dict:
-    """How many owners must share a gap before it becomes a cue for dreaming (fraud-foresight §5).
+    """How many owners must share a gap before it becomes a cue for dreaming (fraud_cues.py).
     A platform admin's setting, logged; it can be raised freely but never set below the floor."""
     if not fraud_cues.FLOOR <= body.min_owners <= fraud_cues.CEILING:
         raise HTTPException(422, f"Choose between {fraud_cues.FLOOR} and {fraud_cues.CEILING}; below "

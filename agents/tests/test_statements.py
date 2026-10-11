@@ -1,4 +1,4 @@
-"""Statements and wishes (PR-13.1, docs/proposals/listening.md §3): what the owner says comes back as
+"""Statements and wishes (PR-13.1): what the owner says comes back as
 subject, predicate and object from a closed list in code; something they want makes the card a
 wish; nothing is kept without Keep; a kept wish links to the people in it, and its graph part holds
 only closed values, never what was said."""

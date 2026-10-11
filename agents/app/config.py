@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 @dataclass
 class Settings:
     # Which model each agent uses is in registry.yaml, and which it may use is in policies.yaml,
-    # never in environment variables (docs/proposals/agent-security.md, PR-10.11).
+    # never in environment variables (PR-10.11, docs/architecture.md §8).
     # Voice for spoken replies and live calls (the assistant's own voice, never a clone of anyone).
     tts_voice: str = os.getenv("GEMINI_TTS_VOICE", "Sulafat")
     # Web search for the fraud research agent (Exa, exa.ai; web_search.py). Empty: research and

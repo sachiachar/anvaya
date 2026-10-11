@@ -1,6 +1,6 @@
 """The AI-first loops. Each function is one Gemini step inside a loop.
 
-Autonomy levels (see the use-cases document):
+Autonomy levels (docs/architecture.md §4):
   - Act within limits: transcription, extraction, gap detection
   - Propose:           anything entering the archive, legal handoff, claim letters
   - Assist:            death-certificate and legal-authority checks (a person decides)
