@@ -1,6 +1,6 @@
 # Anvaya, for banks and insurers
 
-*Team Saathi · BFSI track · Revision 3, 3 October 2026 · the full picture is in [concept.md](concept.md); the pitch to individuals is in [pitch-individuals.md](pitch-individuals.md); costs and margins are in [business-model.md](business-model.md); how it is built is in [architecture.md](architecture.md)*
+*Team Saathi · BFSI track · Revision 4, 12 October 2026 · the full picture is in [concept.md](concept.md); the pitch to individuals is in [pitch-individuals.md](pitch-individuals.md); costs and margins are in [business-model.md](business-model.md); how it is built is in [architecture.md](architecture.md)*
 
 ---
 
@@ -108,14 +108,25 @@ Fraud doesn't only arrive with a forged certificate at the end. It can enter at 
 | Where fraud can enter | What the guardian does |
 | --- | --- |
 | **Someone else on the customer's phone, or a cloned voice** | A voice alone never authorises anything important. Important actions need confirmation on the customer's own device, and high-risk requests need a spoken random phrase. Suspicious audio and new devices raise the risk level. |
+| **Another voice in the customer's conversation** | Saathi notices when someone else joins, and warmly asks who is there. What was said then is marked before the customer decides to keep it, and our team gets a quiet note. Saathi never tries to identify the person and keeps no voiceprint. |
+| **A secret passed on, or a payment someone else asked for** | Everything new the customer says passes the guardian first, before anything is offered to keep. It is checked against fixed rules and the fraud tactics our risk team approved. A secret passed on, or a payment or change someone else asked for, never becomes a record. |
 | **Pressure on an elderly customer** | Signs that someone is pushing the customer to change their wishes or recipient put the change on hold. The customer is checked with privately, later. This is a duty of care your teams will recognise. |
 | **A sudden change of recipient or nominee** | Changes from a new device, after a long quiet period, or while a case is open get a cooling-off delay and a separate confirmation. They are blocked during an open claim. |
 | **A forged certificate or false claimant** | Checks tuned to each document type and country, and refreshed from research into new forgery tactics; fixed rules (customer active recently, impossible dates, wrong number format, a certificate used before); then two independent reviewers. |
 | **A false report of passing** | The customer is told straight away, with a one-tap cancel link, and a waiting period follows. |
-| **A family member probing for more than they're entitled to** | Questions stay within the recipient's entitlement. Hidden instructions in uploaded documents are caught. Every question is kept for audit. |
+| **A family member probing for more than they're entitled to** | Questions about what the customer kept are answered freely, so the family is not over-restricted. Only a request for a vault secret, or words that try to steer the service, are turned away. A request for a fee or a change of bank details adds a helpful note for the family and a quiet check for our team. Hidden instructions in uploaded documents are caught. Every question is kept for audit. |
 | **An insider** | Cases are assigned to reviewers at random. Reviewers linked to a case are excluded. Unusual reviewer patterns, such as frequent overrides or the same pair appearing repeatedly, trigger a third check. |
 
 **How it responds:** continue; add a check; reduce what the service may do on its own; pause for a reviewer and alert the customer; or block. **People decide.** Every intervention is explained, logged, open to review, can be reversed, and is measured. The service also red-teams itself: it regularly imagines new ways to get around each safeguard, and shows your risk team which safeguard catches each one, and which nothing catches yet.
+
+**A fraud reference that grows every hour.** The checks draw on a fraud reference that the service researches every hour.
+- **Confirmed before it is added.** A new tactic is added on its own only when at least two independent websites confirm it. Pages on one website, blogs and social sites don't count as independent. Anything with one source waits for a risk reviewer.
+- **A person controls the checks.** A new warning sign for the certificate check always waits for a reviewer. The reference only adds; a reviewer can remove anything, and two removals in a week pause additions until someone resumes them.
+- **No duplicates.** The same fraud is never added twice, even when it is worded differently, such as "forged seal" and "fake stamp".
+- **Open and portable.** The reference is stored in an open format (Google Cloud's Open Knowledge Format), one file per warning sign, tactic, scenario and source, each with a history of every change.
+- **Visible as a map.** Your risk team sees it as a connected map of guides, warning signs, tactics, sources and safeguards, with the gaps and items waiting for review marked.
+
+**Auditable end to end.** Our team can follow one conversation from start to finish: what the guardian decided about each thing the customer said, the record it allowed, whether the customer kept it, how the conversation plan changed, and the next step taken. The trace holds only decisions, never what was said.
 
 ## What you get, and how we'll measure it
 
@@ -124,15 +135,15 @@ Fraud doesn't only arrive with a forged certificate at the end. It can enter at 
 | **More complete nominations** | Saathi knows each policy should have a nominee, gently asks about a missing one when the moment is right, and takes the customer straight into your own nominee-update journey | Share of pilot customers with a complete nomination, before and after |
 | **Faster settlement** | Complete, pre-checked files mean the settlement clock (15 days in India) starts sooner and finishes on time | Days from first contact to complete file; share settled within the regulatory deadline |
 | **Fewer rejected or reopened claims** | Documents and authority are checked before the file reaches you | Share of files needing more documents |
-| **Less fraud, at every step** | A guardian watches every step of the journey, not only the claim: forgery checks, two independent reviewers, owner alerts, protection against pressure on elderly customers, cloned voices and insider collusion | Suspect cases caught before reaching you; guardian interventions and false-alarm rate |
+| **Less fraud, at every step** | A guardian watches every step of the journey, not only the claim: a check on everything new before it is kept, forgery checks backed by a fraud reference that grows every hour, two independent reviewers, owner alerts, protection against pressure on elderly customers, cloned voices and insider collusion | Suspect cases caught before reaching you; guardian interventions and false-alarm rate |
 | **Fewer unclaimed balances** | Accounts are discovered and checked at the source, not only remembered; dormant accounts and missing nominees are flagged early; every account lands on the family's checklist | Accounts found that the customer hadn't mentioned; dormant accounts reactivated; accounts claimed that the family didn't know about |
 | **The next generation** | The heir's first real experience of your institution is a kind and helpful one | Heir retention after settlement |
 | **Engaged customers** | A warm, useful reason to open your app, in the customer's own language | Sign-up and repeat use |
-| **Control and transparency** | Governed agents, budgets you can see and approve, and a governance dashboard for your institution | Cost per active customer within budget; approvals handled |
+| **Control and transparency** | Governed agents with visible autonomy, a trace of every conversation, budgets you can see and approve, and a governance dashboard for your institution | Cost per active customer within budget; approvals handled |
 
 ## How it works
 
-1. **While your customer is here.** They tap the microphone in your app and talk, by voice or text, in their own language. They can share a photo of a policy and Saathi reads it. Saathi suggests what to record, and the customer taps **Keep** or **Not now**. It flags gaps, such as "no nominee on this policy", as simple next steps.
+1. **While your customer is here.** They tap the microphone in your app and talk, by voice or text, in their own language. They can share a photo of a policy and Saathi reads it. One conversation plan decides what Saathi talks about next, and in what tone; for wishes, Saathi waits until the customer is ready. Saathi suggests what to record, and the customer taps **Keep** or **Not now**. It flags gaps, such as "no nominee on this policy", as simple next steps.
 2. **Closing the gaps.** Nominee updates go through **your own journey**; Saathi guides the customer there but never changes your records itself. When a step needs a professional, such as a will writer or safekeeping, Saathi shows vetted options with prices. **Your own products appear first**, clearly labelled as yours.
 3. **When the time comes.** A family member uploads the official certificate from the registrar. Automated checks look for forgery, the wrong person or the wrong document, and explain what they found. **Two different reviewers** then decide: one confirms the loss, the other confirms the family member's legal authority. Overriding the checks needs a written reason, and every step is logged. A waiting period follows, during which a mistaken case can be cancelled from the customer's own phone.
 4. **The handover.** The chosen family member unlocks the customer's vault on their own phone, asks Saathi questions and receives a checklist and draft letters. **You receive the claim packet.**
@@ -180,6 +191,8 @@ We expect your risk, security and compliance teams to test every line of this se
 - Automated checks are governed to the standard of the **RBI's August 2025 framework for responsible automated decision-making**:[^rbi-free] a person decides every outcome that affects a claim, overrides need a written reason, every step is logged, and check accuracy is tested and reported.
 
 **Governed automation.** Every part of the service that acts on its own is an **agent with an identity, one role, and only the tools and models it's permitted**. Anything else is refused and recorded.
+- **Autonomy you can see.** Each record offered to keep, each next step and each certificate check shows how much its agent may do on its own: **Assist** prepares the facts for a person to decide, **Propose** suggests and the customer decides, and **Act** acts on its own within set limits. The label comes from the agent's policy. People decide every outcome that matters.
+- **One plan for the conversation.** Gaps and next steps feed a single conversation plan, never Saathi directly. When the guardian turns something aside, the plan moves to the safe route first.
 - **Budgets at every level:** per request, per agent, per customer and per institution. A daily allowance per customer means no one can use up capacity meant for others. **Safety work is never starved:** certificate checks and cancelling a false report draw on reserved capacity.
 - **No cost overruns:** request limits, budget alerts, an automatic switch that pauses optional features first, and a hard ceiling at Google Cloud.
 - **Extra budget needs approval.** **You approve your own customers' requests**; larger increases need two people on our side; every grant is time-limited and logged.
@@ -192,7 +205,9 @@ We expect your risk, security and compliance teams to test every line of this se
 **Guardrails that protect your brand.**
 - No legal or financial advice from Saathi; only licensed partners give it.
 - No selling beyond your own clearly labelled products; no partner can pay for placement.
-- Answers to families come only from what the customer actually recorded, with the source shown. Saathi says so when something was never recorded.
+- Every record says only what the customer said. A record that quotes words they didn't say is left out, and a detail nobody said stays empty.
+- Every kept item records where it came from, when it was kept, and that the customer confirmed it. A change keeps the earlier version.
+- Answers to families come only from what the customer actually recorded, with each source shown by its kind, such as a policy or a story. Saathi says so when something was never recorded.
 - Every typed reply is checked automatically before it is shown, for example for claiming something was saved when it wasn't, and rewritten if it breaks a rule. The same checks will extend to advice and selling before any pilot.
 - No voice cloning, no avatars.
 
@@ -263,7 +278,7 @@ Which law applies, and in what order, stays with licensed lawyers.
 
 | Live now | Coming in the prototype release (18 October 2026) | For the pilot |
 | --- | --- | --- |
-| Voice and typed conversation; reading policy photos; Keep cards; next steps; the vault on the phone; two-reviewer verification with a waiting period; the family's questions with sources; claims checklist and letters | The guardian's core checks (two real reviewers, owner alert with cancel, fraud reference guides, fixed checks and a reviewer trace); **the claim file and your Bank view**; **readiness checked at the source** (a simulated Account Aggregator flow and real statement upload); owner-only access to conversations with numbers hidden; kept knowledge in the open format with gentle gap questions; governed agents with allowances and **your governance dashboard**; published quality measures | Live Account Aggregator connection through your institution; per-bank stores with your own key; your budgets and the audit export; Apigee and Agent Gateway; pressure, cloned-voice and insider-pattern checks; trigger-moment prompts; single sign-on and in-app embedding; India data residency; the full partner catalogue |
+| Voice and typed conversation; reading policy photos; one conversation plan; Keep cards that say only what was said; next steps; the vault on the phone; two-reviewer verification with a waiting period; the family's questions with sources; claims checklist and letters; the guardian's core checks (two real reviewers, owner alert with cancel, a check on everything new before it is kept, another voice noticed, fixed checks); **a fraud reference that grows every hour**, in the open format, shown as a map; **one conversation traceable end to end**; owner-only access to conversations with numbers hidden; kept knowledge in the open format with gentle gap questions; governed agents with allowances, visible autonomy and a governance dashboard; published quality measures | **The claim file and your Bank view**; **readiness checked at the source** (a simulated Account Aggregator flow and real statement upload); your institution's own view of the governance dashboard | Live Account Aggregator connection through your institution; per-bank stores with your own key; your budgets and the audit export; Apigee and Agent Gateway; pressure, cloned-voice and insider-pattern checks; trigger-moment prompts; single sign-on and in-app embedding; India data residency; the full partner catalogue |
 
 See [release-notes.md](release-notes.md).
 
