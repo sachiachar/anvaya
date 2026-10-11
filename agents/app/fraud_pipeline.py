@@ -172,6 +172,70 @@ def _similar(a: str, b: str) -> bool:
     return bool(wa and wb) and len(wa & wb) / len(wa | wb) >= 0.6
 
 
+# ---- Same topic: research and dreaming never add the same fraud twice -------------------
+#
+# The owner's rule: if research and dreaming end up on a topic already in the lists, it isn't
+# added again. One list of what's known for a guide (its tactics and signs, every scenario,
+# ruled-out ones included, and every tactic waiting for review or added on its own) is checked by
+# both. Two items are the same topic when their titles mostly share the same words, after words
+# that name the same thing are folded together ("forged" and "fake", "seal" and "stamp"), or
+# their descriptions do.
+
+_SAME_WORD = {
+    "fake": ("forged", "forge", "forgery", "forgeries", "counterfeit", "fraudulent", "bogus", "false", "fabricated",
+             "doctored", "altered", "tampered", "manipulated", "edited", "falsified"),
+    "seal": ("stamp", "stamps", "seals", "stamped", "sealed"),
+    "impersonate": ("impersonation", "impersonating", "impostor", "imposter", "posing", "pose", "pretend",
+                    "pretending", "masquerading"),
+    "nominee": ("beneficiary", "beneficiaries", "heir", "heirs", "claimant", "claimants"),
+    "official": ("officer", "officers", "clerk", "clerks", "registrar", "staff", "employee", "insider", "insiders"),
+    "certificate": ("certificates", "cert", "document", "documents"),
+    "death": ("deceased", "dead", "demise"),
+}
+_FOLD = {w: key for key, words in _SAME_WORD.items() for w in words}
+# Labels and filler, never a topic on their own ("Attack ...", "Tactic ...", "a new variant ...").
+_GENERIC = {"fraud", "scam", "scheme", "using", "use", "used", "via", "new", "variant", "method", "way", "ways",
+            "attack", "attacks", "tactic", "tactics", "scenario", "scenarios"}
+
+
+def _stem(word: str) -> str:
+    for end, keep in (("ing", 5), ("ed", 4), ("es", 4), ("s", 3)):
+        if word.endswith(end) and len(word) > keep:
+            return word[: -len(end)]
+    return word
+
+
+def _topic(text: str) -> set[str]:
+    return {_stem(_FOLD.get(w, w)) for w in _words(text or "") if w not in _GENERIC}
+
+
+def same_topic(a: dict, b: dict) -> bool:
+    """Whether two items ({"title", "text"}) are about the same fraud."""
+    ta, tb = _topic(a.get("title", "")), _topic(b.get("title", ""))
+    shared = len(ta & tb)
+    if ta and tb and (shared / len(ta | tb) >= 0.5 or (min(len(ta), len(tb)) >= 2 and shared / min(len(ta), len(tb)) >= 0.75)):
+        return True
+    # Descriptions count only when the titles share something: two different frauds can be
+    # described in similar words, but a reworded repeat keeps at least one word of its title.
+    ca, cb = _topic(a.get("text", "")), _topic(b.get("text", ""))
+    return shared > 0 and bool(ca and cb) and len(ca & cb) / len(ca | cb) >= 0.45
+
+
+def known_topics(guide: Guide) -> list[dict]:
+    """Everything already known for a guide, for research and dreaming alike."""
+    known = [{"title": t.name, "text": " ".join(s.text for s in t.steps)} for t in guide.tactics]
+    known += [{"title": s.look_for, "text": ""} for s in guide.signs]
+    known += [{"title": s.get("scenario", ""), "text": s.get("claim", "")}
+              for s in store.list("fraud_scenarios", guide_key=guide.key)]
+    known += [{"title": d.get("tactic", ""), "text": d.get("claim", "")}
+              for d in store.list("fraud_drafts", guide_key=guide.key) if d.get("kind", "tactic") == "tactic"]
+    return [k for k in known if k["title"] or k["text"]]
+
+
+def already_known(item: dict, known: list[dict]) -> dict | None:
+    return next((k for k in known if same_topic(item, k)), None)
+
+
 # Guide text goes into the certificate check's instructions once a reviewer approves it, so
 # text from the web must read as a description of a document, never as instructions.
 MAX_SIGN_CHARS = 300
@@ -403,8 +467,9 @@ def _ruled_out(guide_key: str, n: int = 20) -> list[str]:
     return [s["scenario"] for s in sorted(rejected, key=lambda s: -s["at"])[:n]]
 
 
-def _pick(scenarios: list[ImaginedScenario], existing: list[str]) -> list[ImaginedScenario]:
-    """At most 2 close variants and 1 far-fetched one, aimed at a real safeguard, and new."""
+def _pick(scenarios: list[ImaginedScenario], existing: list[dict]) -> list[ImaginedScenario]:
+    """At most 2 close variants and 1 far-fetched one, aimed at a real safeguard, and on a topic not
+    already known (known_topics: tactics, drafts and scenarios alike)."""
     cap = int(governance.limit(DREAMER, "max_scenarios_per_sequence", 3))
     picked: list[ImaginedScenario] = []
     for variant, most in (("close", cap - 1), ("far", 1)):
@@ -416,7 +481,8 @@ def _pick(scenarios: list[ImaginedScenario], existing: list[str]) -> list[Imagin
                 continue
             if s.document_sign and not _safe_sign(s.document_sign):
                 s.document_sign = None  # the scenario stays; the mark on the document is dropped
-            if any(_similar(s.title, t) for t in [*existing, *(p.title for p in picked)]):
+            item = {"title": s.title, "text": s.claim}
+            if already_known(item, [*existing, *({"title": p.title, "text": p.claim} for p in picked)]):
                 continue
             picked.append(s)
     return picked
@@ -490,7 +556,7 @@ async def dream(run: dict) -> dict:
         await asyncio.to_thread(fraud_cues.ensure_synthetic_owners)
         cues = await asyncio.to_thread(fraud_cues.cues)
         by_pattern = {c["pattern"]: c for c in cues}
-        existing = [s["scenario"] for s in store.list("fraud_scenarios", guide_key=guide.key)]
+        existing = known_topics(guide)  # what research found counts too: the same topic is never added twice
         guard = Guard(run)
         guard.say("imagine", f"Starting points from kept knowledge: {len(cues)} common gap(s) across owners "
                           "(counted, never read)" + "".join(f"; {c['owners']} owners: {c['means']}" for c in cues[:3]))
@@ -522,8 +588,9 @@ async def dream(run: dict) -> dict:
             counts["imagined"] += len(imagined)
             guard.progress(counts)
             picked = _pick(imagined, existing)
+            counts["already_known"] = counts.get("already_known", 0) + len(imagined) - len(picked)
             guard.say("imagine", f"Imagined {len(imagined)}; keeping {len(picked)} new ones "
-                                 "(2 close variants, 1 far-fetched)")
+                                 "(2 close variants, 1 far-fetched; topics already known aren't kept)")
             for scenario in picked:
                 guard.call(RESEARCHER)
                 guard.say("check", f"Searching the web for evidence: “{scenario.claim}”", title=scenario.title)
@@ -554,7 +621,7 @@ async def dream(run: dict) -> dict:
                     # Only a pattern from the closed list, and only one this run's cues had (no free text).
                     "cue": by_pattern[scenario.cue] if scenario.cue in by_pattern else None,
                 })
-                existing.append(scenario.title)
+                existing.append({"title": scenario.title, "text": scenario.claim})
                 counts["kept"] += 1
                 counts["confirmed" if evidence.confirmed else "unconfirmed"] += 1
                 added = can_add(guide.key, evidence)
@@ -618,9 +685,11 @@ def _slug(text: str) -> str:
 
 def subjects(guide: Guide) -> list[dict]:
     """Every research subject for a guide, in priority order: gaps, signs, safeguards, open subjects, tactics."""
+    tactics = [{"title": t.name, "text": " ".join(x.text for x in t.steps)} for t in guide.tactics]
     gaps = [s for s in store.list("fraud_scenarios", guide_key=guide.key)
             if s.get("coverage") == "gap" and s.get("label") != "invalidated"
-            and s.get("review") not in ("faded", "discarded", "removed")]
+            and s.get("review") not in ("faded", "discarded", "removed")
+            and not already_known({"title": s.get("scenario", ""), "text": s.get("claim", "")}, tactics)]
     return [
         *({"id": f"gap:{s['id']}", "kind": "gap", "about": s["claim"]} for s in sorted(gaps, key=lambda s: s["at"])),
         *({"id": f"sign:{s.id}", "kind": "sign", "about": f"how forgers fake or get around this: {s.look_for}"}
@@ -761,7 +830,7 @@ async def research(run: dict) -> dict:
         guide = fraud_guides.current(run["guide_key"])
         if guide is None:
             return _finish(run, counts, "guide not found")
-        known = [t.name for t in guide.tactics] + [s.look_for for s in guide.signs]
+        known = known_topics(guide)  # what dreaming found counts too: the same topic is never added twice
         guard = Guard(run)
         cap = int(governance.limit(RESEARCHER, "max_new_patterns_per_run", 2))
         failed: list[str] = []
@@ -778,7 +847,7 @@ async def research(run: dict) -> dict:
                     system=("You research document fraud for a fraud-prevention team. Report only what the pages "
                             "describe. Never give operational detail such as tools, templates or where to buy them."),
                     question=(f"Document: {guide.document}, {guide.country}.\nSubject: {subject['about']}\n"
-                              f"We already know: {known}\n\n"
+                              f"We already know: {[k['title'] for k in known][:80]}\n\n"
                               "Which forgery, impersonation or claim-fraud tactics about this subject do the pages report "
                               "that aren't in that list? Prefer recent reports. Put a short title as the first line. "
                               "Describe at most two, each in a short paragraph: its name, how it works step by step, and "
@@ -805,11 +874,12 @@ async def research(run: dict) -> dict:
             for tactic in (structured.tactics if structured else []):
                 if counts["found"] >= cap:
                     break
-                if any(_similar(tactic.name, k) for k in known):
-                    guard.say("skip", f"Already in the guide: “{tactic.name}”")
+                if already_known({"title": tactic.name, "text": tactic.claim}, known):
+                    counts["already_known"] = counts.get("already_known", 0) + 1
+                    guard.say("skip", f"Already known, not added again: “{tactic.name}”")
                     continue
                 counts["found"] += 1
-                known.append(tactic.name)  # checked once per run, even if another subject brings it up again
+                known.append({"title": tactic.name, "text": tactic.claim})  # once per run, whatever subject brings it up
                 guard.call(RESEARCHER)
                 guard.say("check", f"Checking “{tactic.name}” against cited sources", title=tactic.name)
                 try:
