@@ -1,5 +1,5 @@
 # The initial conversation plan (PR-2.12.2): where every new owner starts. Reviewed like code.
-# Design: docs/proposals/guardian-led-conversations.md. The planner (agents/app/planner.py) starts
+# Design: docs/architecture.md §4.1. The planner (agents/app/planner.py) starts
 # from these steps, in this order, and adds gaps, readiness suggestions and safe-route steps.
 #
 # Each step:

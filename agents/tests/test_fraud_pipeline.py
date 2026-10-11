@@ -1,5 +1,5 @@
 """Fraud foresight pipeline (PR-2.5, PR-2.6): imagine, check, map, drafts. Gemini and the web
-search (Exa) are stubbed; the rules are checked in code (docs/proposals/fraud-foresight.md §4)."""
+search (Exa) are stubbed; the rules are checked in code (fraud_pipeline.py)."""
 
 import asyncio
 import time

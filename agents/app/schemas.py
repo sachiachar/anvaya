@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, model_validator
 
 # ---- Capture loop ---------------------------------------------------------
 
-# Statements (PR-13.1, docs/proposals/listening.md §3): what the owner said, as subject, predicate
+# Statements (PR-13.1): what the owner said, as subject, predicate
 # and object. The predicate list is closed and lives here, in code. Anything else is kept as
 # "other" with the words, and is never acted on. A wish predicate makes the card a wish.
 FACT_PREDICATES = ("owns", "holds_at", "nominee_is", "papers_at", "related_to", "knows_about", "owes", "is_owed")

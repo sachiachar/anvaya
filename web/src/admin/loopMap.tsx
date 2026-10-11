@@ -4,7 +4,7 @@ import { usePoll } from "./usePoll";
 
 // ---- The loop map --------------------------------------------------------------------
 //
-// Guardian-led conversations (PR-2.12, docs/proposals/guardian-led-conversations.md). The guardian
+// Guardian-led conversations (PR-2.12). The guardian
 // is a bar across the middle: the fraud work feeds it from above, and every conversation hangs
 // below it on short straight lines. The owner's side is one row (planner → Saathi → cards → kept),
 // the family's side another. Parts not built yet are drawn as "coming", with the requirement that

@@ -1,4 +1,4 @@
-"""Never pursue a next step that could be part of a fraud (PR-13.3, docs/proposals/listening.md §6).
+"""Never pursue a next step that could be part of a fraud (PR-13.3).
 
 Every next step is typed from closed lists in code (step_types.py): what it does, the channel it
 goes through, and flags. Flags are worked out in code from the step's words as well as taken from
@@ -63,7 +63,7 @@ _SOMEONE_ELSE = re.compile(r"\b(agent|officer|executive|caller|someone|anyone|li
                            r"provide|enter|read out|hand over|show|(by|via|over|on) (e-?mail|whatsapp|sms|phone)|"
                            r"(e-?mail|whatsapp|sms) (it|them|this|that)|ready for|when asked|batao|"
                            r"bata do|de do)\b|बताएं|बताओ|बता दें|भेजें|दे दें|दीजिए|शेयर", re.IGNORECASE)
-# Rules that hold without any tagged tactic (listening.md §6): paying because someone else asked,
+# Rules that hold without any tagged tactic (PR-13.3): paying because someone else asked,
 # changing anything with an institution because someone called, and being rushed by someone else.
 _FIXED_RULES = (("rule:pay_on_request", lambda t, f: {"payment", "started_by_other"} <= f),
                 ("rule:change_on_request", lambda t, f: t == "record_with_institution" and "started_by_other" in f),

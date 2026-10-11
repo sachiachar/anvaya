@@ -26,7 +26,7 @@ export const Chevron = () => <Icon><path d="M9 6l6 6-6 6" /></Icon>;
 export const Send = () => <Icon><path d="M4 12l16-8-6 16-2.5-6.5z" /></Icon>;
 export const Shield = () => <Icon><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" /><path d="M9 12l2 2 4-4" /></Icon>;
 
-/** The unbroken thread (docs/brand.md): a heartbeat that rises into the "A" and loops on. */
+/** The unbroken thread, the brand mark: a heartbeat that rises into the "A" and loops on. */
 export function ThreadMark({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 120 80" fill="none" stroke="#D4AF37" strokeWidth={4.2}

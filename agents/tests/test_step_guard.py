@@ -1,4 +1,4 @@
-"""Never pursue a next step that could be part of a fraud (PR-13.3, docs/proposals/listening.md §6).
+"""Never pursue a next step that could be part of a fraud (PR-13.3).
 Checked in code: unknown means no; never a secret (except into the owner's own vault); an approved
 tactic's tags block matching steps; flags come from the step's words too; if the guides can't be
 read nothing is pursued; a dropped step leaves a count with no words or names."""

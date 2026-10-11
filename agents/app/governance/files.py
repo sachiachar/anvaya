@@ -1,7 +1,7 @@
 """The agent registry and agent policies files: strict schemas and the checks between them.
 
 registry.yaml says what each agent is; policies.yaml says what it may do
-(docs/proposals/agent-security.md §2). Both are read through these schemas, so a typo or an
+(docs/architecture.md §8). Both are read through these schemas, so a typo or an
 unknown field fails at start-up instead of loosening a rule quietly.
 """
 

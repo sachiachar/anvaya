@@ -18,14 +18,9 @@ Built for the **AI Builder Cup 2026** · Track: **BFSI** · Google Gemini + Goog
 | [Pitch: individuals](docs/pitch-individuals.md) | Why a person and their family would use Anvaya |
 | [Pitch: banks and insurers](docs/pitch-institutions.md) | Why an institution would offer Anvaya to its customers |
 | [Business model](docs/business-model.md) | Revenue, costs, margins and the assumptions behind them |
-| [Architecture](docs/architecture.md) | How it's built, security, design decisions |
-| [Use cases](docs/use-cases.md) | Who uses it, what they do, what the AI does |
-| [Release notes](docs/release-notes.md) | What's in each version and known limitations |
-| [Demo script](docs/demo-script.md) | A timed 3-minute demo with the lines to say to Saathi |
+| [Architecture](docs/architecture.md) | How it's built: the loops, the guardian, data, security and design decisions |
+| [Release notes](docs/release-notes.md) | What's built, and the known limitations |
 | [Libraries and services](docs/dependencies.md) | Every library, version and licence, and the Google services used, with the purpose of each |
-| [Brand](docs/brand.md) | The name, taglines by country and language, and the companion's name in each language |
-| [Proposal: agent governance](docs/proposals/agent-governance.md) | Agent identity, permissions, budgets and the admin portal (agreed, mostly built) |
-| [Proposal: fraud foresight](docs/proposals/fraud-foresight.md) | Imagining and checking fraud before it happens, and learning from kept knowledge without reading it (agreed, partly built) |
 
 ## The problem
 
@@ -143,7 +138,7 @@ The [Prototype release milestone](https://github.com/sachiachar/anvaya/milestone
 | PR-9 | Inside the agents: a live panel for judges | High-value | [#23](https://github.com/sachiachar/anvaya/issues/23) |
 | PR-12 | **Built:** platform admin portal: governance dashboard, approvals, guardian and fraud operations, demo management; judges approve their own copy's requests | High-value | [#42](https://github.com/sachiachar/anvaya/issues/42) |
 | PR-11 | Connect to financial institutions (Account Aggregator, statements) and check each account's readiness for handover | High-value | [#41](https://github.com/sachiachar/anvaya/issues/41) |
-| PR-10 | **Mostly built:** agent governance: gateway, registry, limits, allowances, costs from billing ([proposal](docs/proposals/agent-governance.md)). Still to come: backstops, Model Armor | High-value | [#24](https://github.com/sachiachar/anvaya/issues/24) |
+| PR-10 | **Mostly built:** agent governance: gateway, registry, limits, allowances, costs from billing ([architecture](docs/architecture.md)). Still to come: backstops, Model Armor | High-value | [#24](https://github.com/sachiachar/anvaya/issues/24) |
 
 We moved these to the [Grand finale milestone](https://github.com/sachiachar/anvaya/milestone/2) (4 December):
 - real recordings (#11);

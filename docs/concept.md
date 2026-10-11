@@ -4,7 +4,7 @@
 
 *The full picture. The focused pitches are [pitch-individuals.md](pitch-individuals.md) and [pitch-institutions.md](pitch-institutions.md); costs and margins are in [business-model.md](business-model.md); how it is built is in [architecture.md](architecture.md); what is available in each version is in [release-notes.md](release-notes.md).*
 
-*Anvaya (अन्वय) is Sanskrit for lineage and succession: the thread that connects one generation to the next. Its companion, Saathi, takes the everyday word for "companion" in each language; see [brand.md](brand.md).*
+*Anvaya (अन्वय) is Sanskrit for lineage and succession: the thread that connects one generation to the next. Its companion, Saathi, takes the everyday word for "companion" in each language.*
 
 ---
 

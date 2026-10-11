@@ -1,6 +1,6 @@
 """The conversation planner (PR-2.12.2): the only source of what Saathi talks about with the owner.
 
-Design: docs/proposals/guardian-led-conversations.md. One stored plan per owner, built in code:
+Design: docs/architecture.md §4.1. One stored plan per owner, built in code:
 
   1. safe-route steps, after the guardian deflected something the owner said (this conversation);
   2. the initial plan's steps not done yet (agents/conversation_plan.yaml, reviewed like code);

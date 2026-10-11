@@ -1,5 +1,5 @@
-"""Cues for the fraud pipeline from kept knowledge, without private information (fraud-foresight
-§5): fixed code over the graph part only, a closed list of patterns, counts of 5 owners or more,
+"""Cues for the fraud pipeline from kept knowledge, without private information:
+fixed code over the graph part only, a closed list of patterns, counts of 5 owners or more,
 and the fraud steps never read a bundle."""
 
 import asyncio

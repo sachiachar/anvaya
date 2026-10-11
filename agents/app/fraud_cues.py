@@ -1,5 +1,5 @@
 """Cues for the fraud pipeline from the kept-knowledge graph, without private information
-(docs/proposals/fraud-foresight.md section 5).
+(docs/architecture.md §5).
 
 Gaps in what owners keep, such as a policy with no nominee, are where a fraudster would push, so
 they make good starting points for dreaming. This module turns them into anonymous counts:

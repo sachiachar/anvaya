@@ -1,6 +1,6 @@
 # Agent policies: what each agent MAY DO. The role it takes, the models and tools it may use,
 # how much it may consume, and from which budget pool. Reviewed like code, separately from the
-# registry (registry.yaml says what each agent is). Design: docs/proposals/agent-security.md §2.
+# registry (registry.yaml says what each agent is). Design: docs/architecture.md §8.
 #
 # Deny by default: an agent with no policy here, or a model or tool its policy doesn't list,
 # is refused and recorded. Each registered agent has exactly one policy, and every model the
