@@ -38,6 +38,7 @@ def clean():
     for collection in COLLECTIONS:
         for doc in store.list(collection):
             store.delete(collection, doc["id"])
+    fraud_guides.clear_saved()
 
 
 def grounded(text=BACKED, supported=True):
@@ -322,8 +323,8 @@ def test_two_approvals_at_once_both_reach_the_guide(stub):
     real_latest = fraud_guides._latest_stored
     raced = []
 
-    def stale_once(key):  # the first save reads the guide just before the other reviewer's save lands
-        latest = real_latest(key)
+    def stale_once(key, **kw):  # the first save reads the guide just before the other reviewer's save lands
+        latest = real_latest(key, **kw)
         if not raced:
             raced.append(1)
             fraud_pipeline.approve_draft(second)

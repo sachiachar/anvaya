@@ -5,7 +5,7 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
-from app import fraud_guides, loops, main, release
+from app import fraud_bundle, fraud_guides, loops, main, media, release
 from app.fraud_guides import BUILT_IN, Guide, Sign
 from app.loops import review_summary
 from app.schemas import DocumentCheck, SignResult
@@ -22,6 +22,7 @@ def no_saved_guides():
     for collection in ("fraud_guides", "fraud_guide_versions"):
         for doc in store.list(collection):
             store.delete(collection, doc["id"])
+    fraud_guides.clear_saved()
 
 
 def sign(id, label="derived", trust="machine-confirmed", **kw):
@@ -86,7 +87,8 @@ def test_every_version_is_kept():
     first = fraud_guides.save_version(INDIA)
     second = fraud_guides.save_version(INDIA.model_copy(update={"signs": INDIA.signs[:3]}))
     assert (first.version, second.version) == (1, 2)
-    assert len(store.list("fraud_guide_versions", key=INDIA.key)) == 2
+    removed = [e for e in fraud_guides.history(INDIA.key) if e["action"] == "Deletion"]
+    assert len(removed) == len(INDIA.signs) - 3 and {e["version"] for e in removed} == {2}  # version 1 is in the history
     assert fraud_guides.current(INDIA.key).version == 2
     row = store.get("fraud_guides", INDIA.key)
     assert row["version"] == 2 and row["signals"] == 3
@@ -108,9 +110,10 @@ def test_when_the_store_is_down_the_built_in_copy_is_used(monkeypatch):
     fraud_guides.save_version(INDIA.model_copy(update={"signs": INDIA.signs[:2]}))
 
     def down(*a, **k):
-        raise RuntimeError("Firestore unavailable")
+        raise RuntimeError("storage unavailable")
 
-    monkeypatch.setattr(store, "list", down)
+    monkeypatch.setattr(media, "load_versioned", down)
+    fraud_bundle.forget_cache()
     assert fraud_guides.current(INDIA.key) == INDIA
 
 
@@ -190,5 +193,5 @@ def test_without_a_guide_the_summary_has_no_signs():
 
 def test_guide_round_trips_through_the_store():
     saved = fraud_guides.save_version(INDIA)
-    stored = store.get("fraud_guide_versions", f"{INDIA.key}.v1")
-    assert Guide.model_validate({k: v for k, v in stored.items() if k != "id"}) == saved
+    fraud_bundle.forget_cache()
+    assert Guide.model_validate(fraud_bundle.load_guide(INDIA.key)) == saved

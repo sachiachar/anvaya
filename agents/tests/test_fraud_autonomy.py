@@ -29,6 +29,7 @@ def clean():
     for collection in (*COLLECTIONS, *EXTRA):
         for doc in store.list(collection):
             store.delete(collection, doc["id"])
+    fraud_guides.clear_saved()
     fraud_guides.ensure_saved(KEY)
 
 
