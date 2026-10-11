@@ -1,12 +1,13 @@
-// Kept (v2): everything the owner has kept, as a book their family will one day receive. Chapters
-// instead of a score: gaps are "pages still to write", each with a way to write it.
-import { useContext, useEffect, useState } from "react";
+// Kept (v2): everything the owner has kept, as a book their family will one day receive. Gaps are
+// "pages still to write", each with a way to write it; the readiness score, once Saathi has worked
+// it out, sits under the cover (PR-14.10).
+import { useEffect, useState } from "react";
 import { api, type Gap, type KeptItem, type Task } from "../../api";
 import { useAction } from "../../ui";
 import { friendlyError } from "../copy";
 import AutonomyTag from "../Autonomy";
-import { ShowHow } from "../demo";
 import { Chevron, Close } from "../icons";
+import { KNOWLEDGE_MAP_URL } from "../nav";
 
 /** When a page was kept, in the reader's own time zone: "10 Oct 2026, 12:14". */
 const keptOn = (iso: string) => new Date(iso).toLocaleString(undefined, {
@@ -29,7 +30,6 @@ const LEGAL_PARTNER = "Demo Legal Partner";
 const LEGAL_SENT = `Sent to ${LEGAL_PARTNER}. They reply within 2 working days (demo).`;
 
 export default function Book({ onTalkAbout, onReview }: { onTalkAbout: (question: string) => void; onReview: () => void }) {
-  const showHow = useContext(ShowHow);
   const [items, setItems] = useState<KeptItem[] | null>(null);
   const [owner, setOwner] = useState<{ name: string; family: string[] } | null>(null);
   const [tasks, setTasks] = useState<Task[] | null>(null);
@@ -39,6 +39,7 @@ export default function Book({ onTalkAbout, onReview }: { onTalkAbout: (question
   const [open, setOpen] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<KeptItem | null>(null);
   const [missingFailed, setMissingFailed] = useState(false); // next steps or gaps couldn't be loaded
+  const [gapsLoaded, setGapsLoaded] = useState(false); // until then, "nothing missing" would be a guess
   // Separate busy flags: opening the book, changing a page, and Saathi looking for gaps.
   const load = useAction();
   const { busy, error, run } = useAction();
@@ -48,7 +49,7 @@ export default function Book({ onTalkAbout, onReview }: { onTalkAbout: (question
     load.run(async () => setItems((await api.kept()).items));
     api.owner().then((o) => setOwner({ name: String(o.name ?? ""), family: o.family ?? [] })).catch(() => {});
     api.tasks().then((r) => { setScore(r.score); setTasks(r.tasks); }).catch(() => { setTasks([]); setMissingFailed(true); });
-    api.gaps().then((r) => setGaps(r.gaps)).catch(() => setMissingFailed(true));
+    api.gaps().then((r) => setGaps(r.gaps)).catch(() => setMissingFailed(true)).finally(() => setGapsLoaded(true));
     api.review().then((r) => setWaiting(r.moments.length + r.inventory.length)).catch(() => {});
   }, []);
 
@@ -87,7 +88,8 @@ export default function Book({ onTalkAbout, onReview }: { onTalkAbout: (question
           {toWrite > 0 && ` · ${toWrite === 1 ? "1 page" : `${toWrite} pages`} still to write`}
         </p>
         <div className="v2-cover-bar" aria-hidden="true"><i style={{ width: `${share}%` }} /></div>
-        {showHow && score !== null && <p className="v2-cover-how">Readiness score: {score}/100 (shown only in “Show how Saathi works”)</p>}
+        {score !== null && <p className="v2-cover-how">Readiness score: {score} out of 100</p>}
+        <a className="v2-cover-map" href={KNOWLEDGE_MAP_URL} target="_blank" rel="noopener">Open the knowledge map</a>
       </section>
 
       {waiting > 0 && (
@@ -144,8 +146,11 @@ export default function Book({ onTalkAbout, onReview }: { onTalkAbout: (question
       <section className="v2-towrite" aria-labelledby="towrite-title">
         <h2 id="towrite-title">Pages still to write</h2>
         <p className="v2-muted">These would help your family most. Talk about any of them, or skip the ones you'd rather not.</p>
-        {tasks && tasks.length === 0 && gaps.length === 0 && (
-          <p className="v2-muted v2-small">{missingFailed ? "What's still missing couldn't be loaded just now." : score === null ? "Saathi hasn't looked for gaps yet." : "Nothing missing right now."}</p>
+        {/* Only once both lists are in: before that, "nothing missing" would contradict what comes next.
+            Gaps are found without Saathi, so an empty list never means nothing was checked. */}
+        {missingFailed && <p className="v2-muted v2-small">Some of what's still missing couldn't be loaded just now.</p>}
+        {!missingFailed && tasks && gapsLoaded && tasks.length === 0 && gaps.length === 0 && (
+          <p className="v2-muted v2-small">{score === null ? "Nothing listed right now. Saathi can look more closely." : "Nothing missing right now."}</p>
         )}
         <ul className="v2-steps">
           {gaps.map((g) => (

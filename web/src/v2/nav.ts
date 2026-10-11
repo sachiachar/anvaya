@@ -21,6 +21,9 @@ export const Nav = createContext<{
 export const samePerson = (a: string | null | undefined, b: string | null | undefined) =>
   (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
 
+/** The demo's knowledge map, in its own window (App.tsx), from the Demo menu and from Kept. */
+export const KNOWLEDGE_MAP_URL = "/#knowledge-map";
+
 /** How a person is named in the demo's lists, and what they do there. */
 export const personLabel = (p: DemoPerson) => (p.role === "platform_admin" ? "Platform admin" : p.name);
 export const personRole = (p: DemoPerson) => (p.role === "platform_admin" ? "Opens the admin portal" : ROLE_TEXT[p.role]);

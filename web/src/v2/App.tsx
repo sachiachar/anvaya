@@ -4,7 +4,7 @@ import { authEnabled, signInWithGoogle, signOutUser, watchUser } from "../auth";
 import { useAction } from "../ui";
 import { ROLE_TEXT, friendlyError } from "./copy";
 import { ShowHow } from "./demo";
-import { ADMIN_URL, Nav, type OwnerTab, personLabel, personRole } from "./nav";
+import { ADMIN_URL, KNOWLEDGE_MAP_URL, Nav, type OwnerTab, personLabel, personRole } from "./nav";
 import Tour, { forgetTour, reopenTour, tourWanted } from "./Tour";
 import { Book as BookIcon, Check, Chevron, Close, Lock, Mic, People, ThreadMark } from "./icons";
 import KnowledgeMap from "./KnowledgeMap";
@@ -345,11 +345,11 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
             <label className="v2-row-btn v2-toggle-row">
               <span className="v2-row-text">
                 <b>Show how Saathi works</b>
-                <span>The readiness score, and how much each helper may do on its own</span>
+                <span>How much each helper may do on its own</span>
               </span>
               <input type="checkbox" role="switch" aria-checked={showHow} className="v2-toggle" checked={showHow} onChange={onToggleShowHow} />
             </label>
-            <a className="v2-row-btn" href="/#knowledge-map" target="_blank" rel="noopener">
+            <a className="v2-row-btn" href={KNOWLEDGE_MAP_URL} target="_blank" rel="noopener">
               <span className="v2-row-text">
                 <b>Open the knowledge map</b>
                 <span>In a new window, filling in as things are kept</span>
