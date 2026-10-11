@@ -347,8 +347,9 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
     setCaption({ heard: "", said: "" });
     saathiSpeaking.current = false;
     if (!base) { setPhase("talk"); return; }
-    // After the page came back, the call's length isn't known: the review says "Your call".
-    setCallMinutes(resumed ? null : Math.max(1, Math.round((Date.now() - callStarted.current) / 60000)));
+    // After the page came back, the call's length isn't known (no start time in this page, also on
+    // "Review the call"): the review says "Your call".
+    setCallMinutes(resumed || !callStarted.current ? null : Math.max(1, Math.round((Date.now() - callStarted.current) / 60000)));
     setPhase("gathering");
     // Never more than about 12 seconds, and "Review now" after 4: the owner is never stuck here.
     reviewNow.current = false;
