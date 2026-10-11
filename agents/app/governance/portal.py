@@ -202,6 +202,14 @@ def get_agents(who: Actor = Depends(actor)) -> dict:
     return {"agents": agents_view(), "blocked": sorted(blocked, key=lambda b: -b["at"])}
 
 
+@router.get("/agents/steps")
+def get_agent_steps(who: Actor = Depends(actor)) -> dict:
+    """Recent AI steps of the signed-in person's own demo copy (PR-14.5), newest first: agent,
+    model, tokens, autonomy and result. Every role sees only its own copy, never anyone else's;
+    the registry table shows the service's totals. No text, only fixed words."""
+    return core.agent_steps(who.key)
+
+
 @router.get("/agents/live")
 def get_agents_live(who: Actor = Depends(actor)) -> dict:
     """The agents map's live status; the page asks for it every 15 seconds."""

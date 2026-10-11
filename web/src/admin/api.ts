@@ -78,6 +78,11 @@ export type Agent = {
     error_rate: number; blocked: number };
 };
 
+/** One AI step of the signed-in person's own demo copy (PR-14.5): fixed words and numbers, no text. */
+export type AgentStep = { id: string; at: number; agent: string; purpose: string | null; model: string | null; tokens: number;
+  minutes: number; autonomy: Agent["autonomy"]; result: "done" | "failed" | "stopped"; reason: string | null;
+  key: "ours" | "yours" | null };
+
 /** The agents map's live status (polled every 15 seconds). Counts only: no user and no text. */
 export type AgentState = "working" | "active" | "idle" | "paused" | "planned";
 export type FraudRunSummary = { id: string; kind: "dream" | "research"; status: Run["status"]; stage?: string | null;
@@ -189,6 +194,7 @@ export const platform = {
   overview: (fresh = false) => request<Overview>(p(fresh ? "/overview?fresh=true" : "/overview")),
   agents: () => request<{ agents: Agent[]; blocked: Blocked[] }>(p("/agents")),
   agentsLive: () => request<AgentsLive>(p("/agents/live")),
+  agentSteps: () => request<{ steps: AgentStep[]; steps_not_pursued_30d: number }>(p("/agents/steps")),
   approvals: () => request<{ pending: BudgetRequest[]; active: BudgetRequest[]; history: BudgetRequest[] }>(p("/approvals")),
   decideApproval: (id: string, decision: "approve" | "reject", reason: string, hours?: number) =>
     request<BudgetRequest>(p(`/approvals/${id}/decision`), json({ decision, reason, hours })),
