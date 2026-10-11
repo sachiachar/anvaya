@@ -354,6 +354,13 @@ a { color: inherit; text-decoration-color: var(--gold); text-underline-offset: 3
 .v2-pill.end { background: var(--danger); border-color: var(--danger); color: #ffffff; }
 
 .v2-notice-card { padding: 12px 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); color: var(--ink-2); text-align: center; }
+/* The call couldn't start (PR-14.11): what to do about the microphone, and typing as the way on. */
+.v2-mic-help {
+  display: grid; gap: 10px; padding: 16px 18px; border-radius: var(--radius); background: var(--step-soft);
+  border: 1px solid color-mix(in srgb, var(--step) 35%, var(--line)); color: var(--ink);
+}
+.v2-mic-help h2 { font-size: var(--step-1); }
+.v2-mic-help ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--ink-2); font-size: var(--step--1); }
 .v2-alts { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 10px; }
 .v2-alt {
   min-height: 56px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px; text-align: center;

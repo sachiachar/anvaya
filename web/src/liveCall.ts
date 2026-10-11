@@ -16,6 +16,16 @@ export type CallEvent =
 // Cloud Run URL (e.g. wss://life-after-agents-xxxx.a.run.app).
 const BASE = import.meta.env.VITE_LIVE_URL ?? `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`;
 
+/** The microphone couldn't be opened (PR-14.11): `reason` is the browser's error name, or
+ *  "unsupported" where this page has no microphone at all (an insecure page, an old web view).
+ *  Anything else that stops a call from starting is thrown as it is. */
+export class MicError extends Error {
+  constructor(readonly reason: string, message = "This page can't use a microphone here.") {
+    super(message); // the browser's own words, as before (the v3 trial page shows them)
+    this.name = "MicError";
+  }
+}
+
 export class LiveCall {
   private ws: WebSocket | null = null;
   private micCtx: AudioContext | null = null;
@@ -38,9 +48,14 @@ export class LiveCall {
   constructor(private onEvent: (e: CallEvent) => void, private onLevel?: (who: "you" | "saathi", level: number) => void) {}
 
   async start() {
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    });
+    if (!navigator.mediaDevices?.getUserMedia) throw new MicError("unsupported");
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+    } catch (e) {
+      throw e instanceof DOMException || e instanceof Error ? new MicError(e.name, e.message) : new MicError("unknown", String(e));
+    }
     this.micCtx = new AudioContext({ sampleRate: 16000 });
     this.speakerCtx = new AudioContext({ sampleRate: 24000 });
     this.speakerOut = this.speakerCtx.createGain();

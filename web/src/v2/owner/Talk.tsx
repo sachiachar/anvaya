@@ -5,8 +5,8 @@
 // whole conversation. Typing and photos use the same screen and the same review.
 import { useEffect, useRef, useState } from "react";
 import { MORE, requestText, useAskForMore } from "../../allowance";
-import { type Allowance, api, type MoreKind, type Turn } from "../../api";
-import { LiveCall, type CallEvent } from "../../liveCall";
+import { type Allowance, api, currentOwnerId, type MoreKind, type Turn } from "../../api";
+import { LiveCall, MicError, type CallEvent } from "../../liveCall";
 import { friendlyError } from "../copy";
 import { Camera, Check, Doc, Mic, Send, Speaker, SpeakerOff } from "../icons";
 import Review, { type ReviewChoice } from "./Review";
@@ -22,6 +22,59 @@ const GATHER_MS = 12000;
 const withTimeout = <T,>(p: Promise<T>, ms: number) =>
   Promise.race([p, new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timed out")), ms))]);
 const pending = (turns: Turn[]) => turns.flatMap((t) => t.proposals ?? []).filter((p) => p.status === "pending");
+
+/** Why the microphone couldn't be opened, from the browser's error: each gets its own help
+ *  (PR-14.11). Only a MicError counts: other failures keep their own message. */
+type MicTrouble = "blocked" | "missing" | "busy" | "unsupported" | "other";
+function micTrouble(e: MicError): MicTrouble {
+  switch (e.reason) {
+    case "NotAllowedError": return "blocked";
+    case "NotFoundError": case "OverconstrainedError": return "missing";
+    case "NotReadableError": case "AbortError": return "busy";
+    // Not something the person can allow: the page itself may not use a microphone here.
+    case "SecurityError": case "unsupported": return "unsupported";
+    default: return "other";
+  }
+}
+
+// A call in progress, remembered in this tab (PR-14.11): where the conversation stood when it
+// started. A phone may throw a hidden tab away and reload it; the call's turns would then look like
+// earlier conversation. With this, the page opens the call's own review (summary, Keep, Discard)
+// instead. Cleared once the owner keeps, discards or leaves it for later. A convenience only.
+const CALL_KEY = () => `anvaya.v2.call.${currentOwnerId()}`;
+const CALL_KEPT_MS = 6 * 3600 * 1000; // an older mark is ignored
+type CallMark = { baseline: string[]; at: number };
+function readCallMark(): CallMark | null {
+  try {
+    const m = JSON.parse(sessionStorage.getItem(CALL_KEY()) ?? "null") as CallMark | null;
+    if (m && Array.isArray(m.baseline) && Date.now() - m.at < CALL_KEPT_MS) return m;
+    if (m) clearCallMark(); // too old, or not one of ours
+    return null;
+  } catch { return null; }
+}
+function markCall(baseline: ReadonlySet<string>) {
+  try { sessionStorage.setItem(CALL_KEY(), JSON.stringify({ baseline: [...baseline], at: Date.now() })); } catch { /* not remembered */ }
+}
+function clearCallMark() {
+  try { sessionStorage.removeItem(CALL_KEY()); } catch { /* nothing to clear */ }
+}
+const fromLiveCall = (t: Turn) => t.attachment?.name === "live call";
+
+/** Where the conversation stood when this tab's call started, if the page came back with that call
+ *  still to review: every new turn of the owner's is from a live call, and something still waits.
+ *  Otherwise (reviewed already, or other conversation since, in another tab) the mark is cleared,
+ *  so Discard can never reach conversation finished elsewhere. */
+function unreviewedCall(turns: Turn[]): ReadonlySet<string> | null {
+  const mark = readCallMark();
+  if (!mark) return null;
+  const known = new Set(mark.baseline);
+  const added = turns.filter((t) => !known.has(t.id));
+  const owners = added.filter((t) => t.role === "owner");
+  const waiting = pending(added).length > 0 || added.some((t) => t.saving);
+  if (owners.length > 0 && owners.every(fromLiveCall) && waiting) return known;
+  clearCallMark();
+  return null;
+}
 
 /** topic: a page still to write that the owner chose in the book ("Talk about this"). */
 export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: string | null; onTopicUsed?: () => void }) {
@@ -70,6 +123,8 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
   const [canReviewNow, setCanReviewNow] = useState(false);
   const [stillSaving, setStillSaving] = useState(false); // part of the call is still being finished
   const [callTurns, setCallTurns] = useState<string[]>([]); // every turn of the call just ended
+  const [micHelp, setMicHelp] = useState<MicTrouble | null>(null); // the microphone couldn't open, and why
+  const resumed = useRef(false); // a call's review reopened once after the page came back
 
   function refreshAllowance() {
     api.allowance().then((a) => {
@@ -88,7 +143,18 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
   function loadConversation() {
     setError(null);
     api.conversation()
-      .then((r) => { setTurns(r.turns); setBaseline(new Set(r.turns.map((t) => t.id))); })
+      .then((r) => {
+        setTurns(r.turns);
+        // A call this tab was in when the page went away: its turns are this conversation, not
+        // earlier, and it opens its review as after any call (once, even if this loads twice).
+        const known = unreviewedCall(r.turns);
+        if (known) {
+          setBaseline(known);
+          if (!resumed.current) { resumed.current = true; void afterCall(true, known); }
+          return;
+        }
+        setBaseline(new Set(r.turns.map((t) => t.id)));
+      })
       .catch((e) => setError(`${friendlyError(e)} Your conversation hasn't loaded yet.`));
   }
 
@@ -180,6 +246,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
   async function send(message: string | null, file?: Blob, fileName?: string) {
     if (!baseline) return;
     setError(null);
+    setMicHelp(null);
     setNotice(null);
     setThinking(true);
     try {
@@ -228,6 +295,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
     if (call.current || !baseline) return; // one call at a time, and only once the conversation has loaded
     setError(null);
     setNotice(null);
+    setMicHelp(null);
     stopSpeaking();
     setMuted(false);
     mutedRef.current = false;
@@ -244,10 +312,12 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
       await c.start();
       if (call.current !== c) { c.end(); return; } // ended while connecting: close what just opened
       c.setMuted(mutedRef.current);
-    } catch {
+      markCall(baseline);
+    } catch (e) {
       c.end();
       if (call.current !== c) return;
-      setError("Saathi couldn't start the call. Please allow the microphone for this site, then try again.");
+      if (e instanceof MicError) setMicHelp(micTrouble(e));
+      else setError(`Saathi couldn't start the call. ${friendlyError(e)}`);
       call.current = null;
       setCallState("off");
     }
@@ -271,11 +341,14 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
   /** After a call, Saathi may still be reading the last exchange: the server stores each exchange
    *  straight away, marked "saving" until its cards are ready. Wait until nothing from this
    *  conversation is still saving (at most about 30 seconds), then review all of it. */
-  async function afterCall() {
+  /** base: where the conversation stood before the call; after the page came back, from the call
+   *  mark (the state isn't set yet in this render). */
+  async function afterCall(resumed = false, base: ReadonlySet<string> | null = baseline) {
     setCaption({ heard: "", said: "" });
     saathiSpeaking.current = false;
-    if (!baseline) { setPhase("talk"); return; }
-    setCallMinutes(Math.max(1, Math.round((Date.now() - callStarted.current) / 60000)));
+    if (!base) { setPhase("talk"); return; }
+    // After the page came back, the call's length isn't known: the review says "Your call".
+    setCallMinutes(resumed ? null : Math.max(1, Math.round((Date.now() - callStarted.current) / 60000)));
     setPhase("gathering");
     // Never more than about 12 seconds, and "Review now" after 4: the owner is never stuck here.
     reviewNow.current = false;
@@ -292,7 +365,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
       if ((left() <= 0 || reviewNow.current) && latest) break;
       try {
         latest = (await withTimeout(api.conversation(), Math.max(1500, Math.min(5000, left())))).turns;
-        if (!latest.some((t) => !baseline.has(t.id) && t.saving)) break;
+        if (!latest.some((t) => !base.has(t.id) && t.saving)) break;
       } catch { /* try again */ }
     }
     clearTimeout(offer);
@@ -308,10 +381,11 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
     setRetryReview(false);
     setTurns(latest);
     // Review what's ready; an exchange Saathi is still finishing waits for the owner as "from earlier".
-    const fromCall = latest.filter((t) => !baseline.has(t.id));
+    const fromCall = latest.filter((t) => !base.has(t.id));
     setStillSaving(fromCall.some((t) => t.saving));
     setCallTurns(fromCall.map((t) => t.id)); // Discard covers the whole call, even what's still saving
     if (!fromCall.length) {
+      clearCallMark();
       setPhase("talk");
       setNotice("Saathi didn't catch anything in that call. Try again whenever you're ready.");
       return;
@@ -339,6 +413,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
 
   /** A fresh start: everything so far counts as earlier conversation. */
   async function closeConversation() {
+    clearCallMark(); // kept, discarded or left for later: the call is reviewed
     try {
       const r = await api.conversation();
       setTurns(r.turns);
@@ -438,7 +513,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
     : topic ? "Shall we talk about this today?" : "Whenever you're ready, just talk. Saathi is listening.";
 
   if (phase === "review") {
-    const meta = reviewEarlier ? "From earlier" : callMinutes ? `Your call · ${callMinutes} min` : "Your conversation";
+    const meta = reviewEarlier ? "From earlier" : callMinutes ? `Your call · ${callMinutes} min` : callTurns.length ? "Your call" : "Your conversation";
     return (
       <div className="v2-talk">
         <Review items={reviewItems} summary={summary} summaryState={summaryState} meta={meta}
@@ -508,6 +583,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
       </div>
 
       {notice && !live && <p className="v2-notice-card" role="status">{notice}</p>}
+      {micHelp && !live && <MicHelp trouble={micHelp} onType={() => { setMicHelp(null); input.current?.focus(); }} onRetry={startCall} />}
       {error && <p className="v2-error" role="alert">{error}</p>}
       {!baseline && error && <button className="v2-btn quiet" onClick={loadConversation}>Try again</button>}
       {retryReview && !live && <button className="v2-btn quiet" onClick={() => { setError(null); void afterCall(); }}>Review the call</button>}
@@ -573,6 +649,45 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
         </div>
       )}
     </div>
+  );
+}
+
+/** The call couldn't start (PR-14.11): what went wrong with the microphone, how to fix it, and
+ *  typing as the way on. Browsers don't let a page turn a blocked microphone back on itself. */
+function MicHelp({ trouble, onType, onRetry }: { trouble: MicTrouble; onType: () => void; onRetry: () => void }) {
+  // It appears under the microphone, often below the fold on a phone: bring it into view.
+  const box = useRef<HTMLElement | null>(null);
+  useEffect(() => { box.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }, []);
+  return (
+    <section ref={box} className="v2-mic-help" role="alert" aria-labelledby="mic-help-title">
+      <h2 id="mic-help-title">
+        {trouble === "blocked" ? "Saathi can't hear you: the microphone is blocked"
+          : trouble === "missing" ? "No microphone was found"
+          : trouble === "busy" ? "Another app is using the microphone"
+          : trouble === "unsupported" ? "This page can't use a microphone here"
+          : "The microphone couldn't be opened"}
+      </h2>
+      {trouble === "blocked" ? (
+        <>
+          <p>Allow the microphone for this site, then try again:</p>
+          <ul>
+            <li><b>Chrome on a phone:</b> tap the icon to the left of the address, then Permissions, and allow Microphone.</li>
+            <li><b>Safari on an iPhone:</b> tap “aA” in the address bar, then Website Settings, and allow Microphone.</li>
+            <li><b>On a computer:</b> click the icon to the left of the address, and allow the microphone. Reload the page if asked.</li>
+          </ul>
+        </>
+      ) : (
+        <p>{trouble === "missing" ? "Connect a microphone or headset, then try again."
+          : trouble === "busy" ? "Close the other call or recording app, then try again."
+          : trouble === "unsupported" ? "Open Anvaya directly in Chrome or Safari, not inside another app, to talk with your voice."
+          : "Please try again in a minute."}</p>
+      )}
+      <p className="v2-muted v2-small">Or type to Saathi instead: it works the same way, with the same review at the end.</p>
+      <div className="v2-row">
+        <button className="v2-btn" onClick={onType}>Type instead</button>
+        <button className="v2-btn quiet" onClick={onRetry}>Try again</button>
+      </div>
+    </section>
   );
 }
 
