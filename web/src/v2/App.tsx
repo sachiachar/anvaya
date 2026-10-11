@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AuthError, api, setActingAs, type Case, type DemoPerson, type GuardianHeld, type PersonId } from "../api";
 import { authEnabled, signInWithGoogle, signOutUser, watchUser } from "../auth";
 import { useAction } from "../ui";
 import { ROLE_TEXT, friendlyError } from "./copy";
 import { ShowHow } from "./demo";
+import { Nav, type OwnerTab, personLabel, personRole } from "./nav";
 import { Book as BookIcon, Check, Chevron, Close, Lock, Mic, People, ThreadMark } from "./icons";
 import KnowledgeMap from "./KnowledgeMap";
 import { ModelKey } from "./ModelKey";
@@ -19,7 +20,6 @@ import { forgetRecipientKeyOnThisDevice, hasRecipientKeys } from "../vaultCrypto
 const ADMIN_URL = import.meta.env.VITE_ADMIN_URL ?? (import.meta.env.DEV ? "/admin.html" : "https://anvaya-admin.web.app");
 const SHOW_HOW_KEY = "anvaya.v2.showHow";
 
-type OwnerTab = "talk" | "kept" | "family" | "vault";
 const OWNER_TABS: { id: OwnerTab; label: string; icon: () => ReactNode }[] = [
   { id: "talk", label: "Talk", icon: Mic },
   { id: "kept", label: "Kept", icon: BookIcon },
@@ -50,7 +50,12 @@ export default function App() {
     try { localStorage.setItem(SHOW_HOW_KEY, v ? "0" : "1"); } catch { /* not saved */ }
     return !v;
   });
-  const switchTo = (id: PersonId) => { setActingAs(id); setActing(id); setDrawer(false); setTalkTopic(null); };
+  const switchTo = useCallback((id: PersonId, ownerTab?: OwnerTab) => {
+    setActingAs(id); setActing(id); setDrawer(false); setTalkTopic(null);
+    if (ownerTab) setTab(ownerTab);
+    window.scrollTo({ top: 0 });
+  }, []);
+  const nav = useMemo(() => ({ people, acting, switchTo }), [people, acting, switchTo]);
 
   // Sign-in: "checking" until Firebase answers, then "signed-out", "denied" or "in".
   const [session, setSession] = useState<"checking" | "signed-out" | "denied" | "in">(authEnabled ? "checking" : "in");
@@ -92,6 +97,7 @@ export default function App() {
 
   return (
     <ShowHow.Provider value={showHow}>
+    <Nav.Provider value={nav}>
       <div className="v2-app">
         <header className="v2-top">
           <a className="v2-brand" href="/" aria-label="Anvaya, home">
@@ -100,8 +106,9 @@ export default function App() {
           </a>
           <button className="v2-demo-pill" onClick={() => setDrawer(true)} aria-haspopup="dialog">
             <i aria-hidden="true" />
-            {person ? <>Demo · {person.name}</> : "Demo"}
+            Demo
           </button>
+          {ready && people.length > 0 && <PeopleRow people={people} acting={acting} onSwitch={switchTo} />}
         </header>
 
         <main className="v2-main">
@@ -129,6 +136,7 @@ export default function App() {
             onNicknameDone={() => setAskNickname(false)} email={email} />
         )}
       </div>
+    </Nav.Provider>
     </ShowHow.Provider>
   );
 }
@@ -217,6 +225,23 @@ function GuardianNotice() {
   );
 }
 
+/** Everyone in the demo copy, always in view (PR-14.2): the judge switches person here, without the
+ *  Demo menu. Hidden during a live call, which a switch would end (CSS). */
+function PeopleRow({ people, acting, onSwitch }: { people: DemoPerson[]; acting: PersonId; onSwitch: (id: PersonId) => void }) {
+  return (
+    <nav className="v2-people" aria-label="Show the app as">
+      <span className="v2-people-label" aria-hidden="true">Show as</span>
+      {people.map((p) => (
+        <button key={p.id} className="v2-person" aria-pressed={p.id === acting} onClick={() => onSwitch(p.id)}
+          title={personRole(p)}>
+          {p.id === "admin" ? "Admin" : p.name}
+          <span className="v2-visually-hidden"> ({ROLE_TEXT[p.role]})</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 function SignIn({ denied, error, onError }: { denied: string | null; error: string | null; onError: (e: string) => void }) {
   return (
     <main className="v2-signin">
@@ -291,8 +316,8 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
                   <button className="v2-row-btn" aria-pressed={on} onClick={() => onSwitch(p.id)}>
                     <span className={`v2-avatar${on ? " is-on" : ""}`} aria-hidden="true">{(p.id === "admin" ? "A" : p.name[0]).toUpperCase()}</span>
                     <span className="v2-row-text">
-                      <b>{p.id === "admin" ? "Platform admin" : p.name}</b>
-                      <span>{p.role === "platform_admin" ? "Opens the admin portal" : ROLE_TEXT[p.role]}</span>
+                      <b>{personLabel(p)}</b>
+                      <span>{personRole(p)}</span>
                     </span>
                     {on && <span className="v2-row-tick"><Check /></span>}
                   </button>

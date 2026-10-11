@@ -1,12 +1,14 @@
 // Family (v2): who receives the vault, and who may see the stories. Choosing the recipient is a
 // three-step handshake: invite, they accept on their own phone, the owner approves only if both
 // phones show the same code, then seals the vault for them. All cryptography stays in vaultCrypto.ts.
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { type AccessRequest, api } from "../../api";
 import { useAction } from "../../ui";
 import { keyFingerprint, ownerDataKey, wrapForRecipient } from "../../vaultCrypto";
 import { friendlyError } from "../copy";
 import { Check, Lock } from "../icons";
+import { Nav } from "../nav";
+import SwitchTo from "../SwitchTo";
 
 type Recipient = Awaited<ReturnType<typeof api.getRecipient>>;
 
@@ -37,6 +39,9 @@ function VaultRecipient({ onVault }: { onVault: () => void }) {
   const [code, setCode] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const { busy, error, run } = useAction();
+  const nav = useContext(Nav);
+  // The demo's family member who can accept, when the invite is for them (PR-14.2).
+  const invitee = nav.people.find((p) => p.role === "family" && invite?.name.trim().toLowerCase().startsWith(p.name.toLowerCase()));
 
   const [loadError, setLoadError] = useState<string | null>(null);
   const [heldNote, setHeldNote] = useState<string | null>(null);  // a change the guardian holds for our team
@@ -118,7 +123,10 @@ function VaultRecipient({ onVault }: { onVault: () => void }) {
               </div>
             </div>
           ) : invite ? (
-            <p>You chose <strong>{invite.name}</strong> ({invite.relationship}). Waiting for them to accept in their own app.</p>
+            <div className="v2-stack">
+              <p>You chose <strong>{invite.name}</strong> ({invite.relationship}). Waiting for them to accept in their own app.</p>
+              {invitee && <SwitchTo to={invitee.id}>Switch to {invitee.name} to accept</SwitchTo>}
+            </div>
           ) : (
             <p className="v2-muted">Usually a son, daughter or spouse. They accept on their own phone, and you confirm a matching code.</p>
           )}

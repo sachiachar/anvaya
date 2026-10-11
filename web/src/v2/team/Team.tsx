@@ -2,10 +2,12 @@
 // our team decides, and two different people must confirm the loss and the legal authority (the
 // server enforces it). Going against a "not valid" check needs a written reason, kept in the audit
 // log.
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { type AccessRequest, api, type Case, type DocumentCheck } from "../../api";
 import { useAction } from "../../ui";
 import { friendlyError } from "../copy";
+import { Nav, samePerson } from "../nav";
+import SwitchTo from "../SwitchTo";
 
 const STATE_TEXT: Record<Case["state"], { title: string; tone: "act" | "wait" | "done" }> = {
   reported: { title: "Passing reported: needs a first review", tone: "act" },
@@ -30,7 +32,7 @@ export default function Team({ reviewer }: { reviewer: string }) {
         <h1>Review cases</h1>
         <p>Every document is checked first; only a person on our team confirms. Two different people must confirm the loss and the legal authority.</p>
       </header>
-      <p className="v2-notice-card">You're reviewing as <strong>{reviewer}</strong>. To confirm the second step, switch to the other reviewer in the Demo menu.</p>
+      <p className="v2-notice-card">You're reviewing as <strong>{reviewer}</strong>. A different person on our team confirms the second step.</p>
       <Cases reviewer={reviewer} />
       <AccessRequests />
     </div>
@@ -54,6 +56,8 @@ function Cases({ reviewer }: { reviewer: string }) {
   return (
     <section className="v2-stack" aria-label="Cases">
       {cases.length === 0 && <p className="v2-muted">No open cases.</p>}
+      {/* Nothing open (none yet, or only cancelled ones): the family starts a handover. */}
+      {!cases.some((c) => c.state !== "cancelled") && <StartHandover />}
       {cases.map((c) => (
         <article key={c.id} className={`v2-panel v2-case is-${STATE_TEXT[c.state].tone}`}>
           <p className="v2-eyebrow">Case</p>
@@ -64,10 +68,12 @@ function Cases({ reviewer }: { reviewer: string }) {
               onConfirm={(reason) => run(async () => { await api.confirmDeath(c.id, reviewer.trim(), reason); await refresh(); })} />
           )}
           {c.authority_check && <CheckView title="Proof of legal authority: the check" check={c.authority_check} />}
-          {c.state === "death_confirmed" && c.authority_check && (
+          {/* The reviewer who confirmed the loss can't confirm this too (two-person rule); NextPerson offers the other. */}
+          {c.state === "death_confirmed" && c.authority_check && !samePerson(c.death_confirmed_by, reviewer) && (
             <Confirm label="Confirm the legal authority" check={c.authority_check} busy={busy}
               onConfirm={(reason) => run(async () => { await api.confirmAuthority(c.id, reviewer.trim(), reason); await refresh(); })} />
           )}
+          <NextPerson c={c} reviewer={reviewer} />
           <details className="v2-more">
             <summary>Audit log</summary>
             <ol className="v2-log">
@@ -79,6 +85,30 @@ function Cases({ reviewer }: { reviewer: string }) {
       {(error || loadError) && <p className="v2-error" role="alert">{error ? friendlyError(new Error(error)) : loadError}</p>}
     </section>
   );
+}
+
+/** Nothing to review yet: the family starts a handover. */
+function StartHandover() {
+  const family = useContext(Nav).people.find((p) => p.role === "family");
+  return family ? <SwitchTo to={family.id}>Switch to {family.name} to start a handover</SwitchTo> : null;
+}
+
+/** Whose turn it is when it isn't this reviewer's (PR-14.2): the other reviewer, or the family. */
+function NextPerson({ c, reviewer }: { c: Case; reviewer: string }) {
+  const nav = useContext(Nav);
+  const family = nav.people.find((p) => p.role === "family");
+  const other = nav.people.find((p) => p.role === "reviewer" && !samePerson(p.name, reviewer));
+  const confirmedLoss = samePerson(c.death_confirmed_by, reviewer);
+  if (c.state === "death_confirmed" && !c.authority_check && family) {
+    return <SwitchTo to={family.id}>Switch to {family.name} to send proof of legal authority</SwitchTo>;
+  }
+  if (c.state === "death_confirmed" && c.authority_check && confirmedLoss && other) {
+    return <SwitchTo to={other.id}>Switch to {other.name} to confirm the legal authority</SwitchTo>;
+  }
+  if ((c.state === "waiting" || c.state === "released") && family) {
+    return <SwitchTo to={family.id}>Switch to {family.name} to follow the handover</SwitchTo>;
+  }
+  return null;
 }
 
 function CheckView({ title, check }: { title: string; check: DocumentCheck }) {

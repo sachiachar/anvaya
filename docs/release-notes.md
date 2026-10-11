@@ -26,6 +26,10 @@
 - **Our team, in the new design:** each check sign by sign, Confirm for the loss and for the legal authority by two different reviewers, and a written reason, typed in the page, to go against a "not valid" check. The audit log is under each case.
 - **The knowledge map, in the new design:** "Open the knowledge map" in the Demo menu opens it in its own window, in the brand's navy and gold. Items appear the moment they're kept, and removing one asks first, in the page.
 - Everything that's only for the demo now sits in one Demo drawer: whose screen to show, "Show how Saathi works", the optional nickname, the knowledge map and "Reset my demo", which now asks before it clears anything.
+- **Switching people without the Demo menu:** a row of names under the header (Vikram, Priya, Anjali, Rahul, Admin) shows who is acting, and one tap switches. All five fit on a phone. The row hides during a live call, because switching would end it.
+- **No dead ends:** where the next step belongs to someone else, the screen says so and offers "Switch to …". Vikram, waiting for Priya to accept, can switch to Priya. Priya, waiting for Vikram to approve or to seal the vault, can switch to Vikram, on his Family tab. On the handover tracker, Priya can switch to a reviewer, and to Vikram during the waiting period. Reviewers can switch to the other reviewer, or to Priya when it's her turn. The server still checks who acts at every step.
+- Priya now sees when Vikram has approved her phone but hasn't sealed the vault yet, with a way to switch to him. Before, she saw only "You're set up".
+- The reviewer who confirmed the loss no longer sees "Confirm the legal authority", which the server would refuse. The screen offers the other reviewer instead.
 - If someone reports that the owner has passed away, the alert with "I'm well, cancel this" shows in the new design too.
 - The fonts are served from Anvaya's own site, so no visitor's address goes to a font service. Hindi and other Devanagari text has its own matching typeface.
 
