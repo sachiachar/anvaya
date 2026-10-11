@@ -554,7 +554,11 @@ a { color: inherit; text-decoration-color: var(--gold); text-underline-offset: 3
 .v2-cover-count { color: #e2c98f; font-size: var(--step--1); }
 .v2-cover-bar { height: 3px; border-radius: 2px; background: rgba(241, 223, 180, 0.18); }
 .v2-cover-bar i { display: block; height: 100%; border-radius: 2px; background: var(--gold); }
-.v2-cover-how { font-size: 0.8rem; color: var(--night-muted); }
+.v2-cover-how { font-size: var(--step--1); color: #e2c98f; }
+.v2-cover-map {
+  position: relative; z-index: 1; justify-self: start; padding: 4px 0; font: 600 var(--step--1) var(--sans);
+  color: var(--night-ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px;
+}
 .v2-chapters { display: grid; border-top: 1px solid var(--line); }
 .v2-chapter { border-bottom: 1px solid var(--line); }
 .v2-chapter-head {
