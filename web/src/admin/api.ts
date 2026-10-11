@@ -79,7 +79,7 @@ export type Agent = {
 };
 
 /** One AI step of the signed-in person's own demo copy (PR-14.5): fixed words and numbers, no text. */
-export type AgentStep = { at: number; agent: string; purpose: string | null; model: string | null; tokens: number;
+export type AgentStep = { id: string; at: number; agent: string; purpose: string | null; model: string | null; tokens: number;
   minutes: number; autonomy: Agent["autonomy"]; result: "done" | "failed" | "stopped"; reason: string | null;
   key: "ours" | "yours" | null };
 

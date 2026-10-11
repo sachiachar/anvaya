@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fmt, platform, type Agent, type AgentLive, type AgentState, type AgentsLive } from "./api";
+import { usePoll } from "./usePoll";
 
 // ---- The loop map --------------------------------------------------------------------
 //
@@ -205,29 +206,14 @@ function around(id: string): [string[], string[]] {
 const place = (x: number, y: number, w: number, h: number) =>
   ({ left: `${(x / W) * 100}%`, top: `${(y / H) * 100}%`, width: `${(w / W) * 100}%`, height: `${(h / H) * 100}%` });
 
-const POLL_MS = 15000;
 type Mode = "live" | "story";
 
 export function LoopMap({ agents }: { agents: Agent[] }) {
-  const [live, setLive] = useState<AgentsLive | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data: live, error } = usePoll(platform.agentsLive);
   const [selected, setSelected] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("live");
   const [step, setStep] = useState(0);
-
-  useEffect(() => {
-    let stopped = false;
-    const load = () => {
-      if (document.hidden) return; // no polling in a background tab
-      platform.agentsLive().then((d) => { if (!stopped) { setLive(d); setError(null); } })
-        .catch((e) => { if (!stopped) setError(String(e.message ?? e)); });
-    };
-    load();
-    const timer = window.setInterval(load, POLL_MS);
-    document.addEventListener("visibilitychange", load);
-    return () => { stopped = true; window.clearInterval(timer); document.removeEventListener("visibilitychange", load); };
-  }, []);
 
   useEffect(() => {
     if (mode !== "story") return;

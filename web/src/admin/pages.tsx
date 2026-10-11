@@ -7,6 +7,7 @@ import {
 } from "./api";
 import type { KeyFeature, KeyKind } from "../api";
 import { LoopMap } from "./loopMap";
+import { POLL_MS, usePoll } from "./usePoll";
 
 // The charts library loads only when the dashboard opens.
 const UsageCharts = lazy(() => import("./usageCharts"));
@@ -384,36 +385,30 @@ export function AgentsPage() {
   );
 }
 
-const STEPS_POLL_MS = 15000;
-
 /** "Inside the agents" (PR-14.5): the last AI steps of your own demo copy, newest first, as they
  *  happen. Every role sees only its own copy; the table below has the service's totals. */
 function RecentSteps() {
-  const load = useCallback(() => platform.agentSteps(), []);
-  const { data, error, reload } = useLoad(load);
-  useEffect(() => {
-    const timer = window.setInterval(() => { if (!document.hidden) reload(); }, STEPS_POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [reload]);
+  const { data, error, refresh } = usePoll(platform.agentSteps);
   return (
     <Section title="Your demo's recent steps"
-      aside={<button type="button" className="pa-link" onClick={reload}>Refresh</button>}>
-      <p className="pa-muted">Each AI step in your own demo copy over the last 24 hours, newest first. It updates every 15 seconds.
+      aside={<button type="button" className="pa-link" onClick={refresh}>Refresh</button>}>
+      <p className="pa-muted">Each AI step in your own demo copy over the last 24 hours, newest first. It updates every {POLL_MS / 1000} seconds.
         Talk to Saathi as Vikram, then look here. Ids and numbers only: what was said stays in your copy.</p>
+      {data && error && <p className="pa-error" role="alert">Couldn't update just now: {error}</p>}
       {!data ? <Loading error={error} /> : data.steps.length === 0 ? (
         <Empty>No steps yet. Each AI step in your demo appears here.</Empty>
       ) : (
         <div className="pa-scroll">
           <table>
             <thead><tr><th>When</th><th>Agent</th><th>Autonomy</th><th>Model</th><th className="num">Tokens</th><th>Result</th></tr></thead>
-            <tbody>{data.steps.map((s, i) => (
-              <tr key={`${s.at}-${s.agent}-${i}`}>
+            <tbody>{data.steps.map((s) => (
+              <tr key={s.id}>
                 <td>{fmt.when(s.at)}</td>
                 <td><span className="pa-mono">{s.agent}</span>{s.purpose && <div className="pa-sub">{s.purpose}</div>}</td>
                 <td>{fmt.label(s.autonomy)}</td>
                 <td className="pa-mono">{s.model ?? <span className="pa-muted">none</span>}
                   {s.key === "yours" && <div className="pa-sub">your key</div>}</td>
-                <td className="num">{fmt.num(s.tokens)}{s.minutes > 0 && <div className="pa-sub">{fmt.num(s.minutes)} min</div>}</td>
+                <td className="num">{fmt.num(s.tokens)}{s.minutes > 0 && <div className="pa-sub">{s.minutes < 10 ? s.minutes.toFixed(1) : fmt.num(s.minutes)} min</div>}</td>
                 <td><Status value={s.result} />{s.reason && <div className="pa-sub">{s.reason}</div>}</td>
               </tr>
             ))}</tbody>

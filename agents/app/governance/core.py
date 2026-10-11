@@ -669,7 +669,7 @@ def agent_steps(user: str) -> dict:
                     if b["at"] >= since and b.get("kind") not in NOT_STOPPED]
     steps = sorted(ran + stopped, key=lambda s: -s["at"])[:STEPS_SHOWN]
     return {
-        "steps": [{"at": s["at"], "agent": s["agent"], "purpose": (agent_entry(s["agent"]) or {}).get("purpose"),
+        "steps": [{"id": s["id"], "at": s["at"], "agent": s["agent"], "purpose": (agent_entry(s["agent"]) or {}).get("purpose"),
                    "model": s["model"], "tokens": s["tokens"], "minutes": s["minutes"],
                    "autonomy": autonomy(s["agent"]), "result": s["result"], "reason": s.get("reason"),
                    "key": None if s["key_source"] is None else "ours" if s["key_source"] == "platform" else "yours"}

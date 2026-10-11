@@ -18,7 +18,7 @@ from app.store import store
 
 ME = core.user_key(demo.LOCAL)  # the caller's copy when sign-in is off
 OTHER = "u_someoneelse"
-STEP_FIELDS = {"at", "agent", "purpose", "model", "tokens", "minutes", "autonomy", "result", "reason", "key"}
+STEP_FIELDS = {"id", "at", "agent", "purpose", "model", "tokens", "minutes", "autonomy", "result", "reason", "key"}
 
 
 @pytest.fixture(autouse=True)
