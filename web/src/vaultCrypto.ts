@@ -75,6 +75,12 @@ export async function ownerDataKey(): Promise<CryptoKey> {
   return key;
 }
 
+/** Whether this browser holds the owner's data key, without making one (ownerDataKey would). The
+ *  owner's own "Show" (PR-14.9) checks this first: a key made then would lock nothing he kept. */
+export function hasOwnerDataKey(): boolean {
+  return load(DATA_KEY) !== null;
+}
+
 export async function encryptSecret(key: CryptoKey, payload: object) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const data = new TextEncoder().encode(JSON.stringify(payload));

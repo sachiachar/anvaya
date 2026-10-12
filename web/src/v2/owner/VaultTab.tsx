@@ -1,10 +1,11 @@
 // Vault (v2): passwords, PINs and account details, locked on this phone before they leave it. The
 // server only ever holds the locked form; the screen shows what each secret is, never its locked
-// text. All encryption lives in vaultCrypto.ts.
+// text. The owner can show one of his own secrets on this phone, opened with his key here (PR-14.9).
+// All encryption lives in vaultCrypto.ts.
 import { useEffect, useState } from "react";
 import { api, type VaultItem } from "../../api";
 import { useAction } from "../../ui";
-import { encryptSecret, ownerDataKey } from "../../vaultCrypto";
+import { decryptSecret, encryptSecret, hasOwnerDataKey, ownerDataKey } from "../../vaultCrypto";
 import { friendlyError } from "../copy";
 import { Lock, Shield } from "../icons";
 
@@ -89,18 +90,13 @@ export default function VaultTab({ onFamily }: { onFamily: () => void }) {
         <h2 id="vault-items">{items?.length ? `${items.length === 1 ? "1 secret" : `${items.length} secrets`} locked` : "Nothing locked yet"}</h2>
         {items?.length ? (
           <ul className="v2-secrets">
-            {items.map((v) => (
-              <li key={v.id}>
-                <Lock />
-                <span className="v2-secret-name">{v.ai_label ?? "A secret with a private label"}</span>
-                <span className="v2-secret-kind">{CATEGORY_LABEL[v.category] ?? v.category}</span>
-              </li>
-            ))}
+            {items.map((v) => <SecretRow key={v.id} item={v} />)}
           </ul>
         ) : null}
         {items?.some((v) => !v.ai_label) && (
-          <p className="v2-muted v2-small">A private label is locked along with its secret, so it shows here only as “a secret with a private label”. {recipient?.name ?? "Your recipient"} sees it when the vault is opened.</p>
+          <p className="v2-muted v2-small">A private label is locked along with its secret, so it shows here only as “a secret with a private label”, until you show it. {recipient?.name ?? "Your recipient"} sees it when the vault is opened.</p>
         )}
+        {items.length > 0 && <KeyNote sealedFor={sealed ? recipient?.name ?? null : null} />}
       </section>
       )}
 
@@ -137,5 +133,64 @@ export default function VaultTab({ onFamily }: { onFamily: () => void }) {
         {error && <p className="v2-error" role="alert">{friendlyError(new Error(error))}</p>}
       </section>
     </div>
+  );
+}
+
+const SHOWN_FOR_MS = 30_000; // a shown secret hides itself, so it isn't left open on the screen
+
+/** One locked secret. "Show" opens it on this phone with the owner's own key (PR-14.9): the plain
+ *  text stays in this row's memory only, is never sent, logged or stored, and hides itself after 30
+ *  seconds, on Hide, or when the tab closes. Without the key here, nothing is made: a new key would
+ *  open nothing he kept. */
+function SecretRow({ item }: { item: VaultItem }) {
+  const [shown, setShown] = useState<{ label: string; secret: string } | null>(null);
+  const [cantShow, setCantShow] = useState(false);
+  const [opening, setOpening] = useState(false);
+  useEffect(() => {
+    if (!shown) return;
+    const t = setTimeout(() => setShown(null), SHOWN_FOR_MS);
+    return () => clearTimeout(t);
+  }, [shown]);
+
+  const show = async () => {
+    setCantShow(false);
+    if (!hasOwnerDataKey()) { setCantShow(true); return; }
+    setOpening(true);
+    try {
+      setShown(await decryptSecret<{ label: string; secret: string }>(await ownerDataKey(), item.iv, item.ciphertext));
+    } catch {
+      setCantShow(true); // locked with another browser's key
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  const name = shown?.label ?? item.ai_label ?? "A secret with a private label";
+  return (
+    <li className={shown ? "is-shown" : undefined}>
+      <Lock />
+      <span className="v2-secret-text">
+        <span className="v2-secret-name">{name}</span>
+        <span className="v2-secret-kind">{CATEGORY_LABEL[item.category] ?? item.category}</span>
+        {shown && <code className="v2-secret-value" aria-live="polite">{shown.secret}</code>}
+        {cantShow && <span className="v2-secret-cant" role="status">This secret was locked in another browser, so it can't be shown here.</span>}
+      </span>
+      <button className="v2-link" disabled={opening} onClick={() => (shown ? setShown(null) : void show())}
+        aria-label={shown ? `Hide “${name}”` : `Show “${name}”`}>
+        {shown ? "Hide" : opening ? "Opening…" : "Show"}
+      </button>
+    </li>
+  );
+}
+
+/** Where the key that opens these secrets lives, and what losing it means (PR-14.9). */
+function KeyNote({ sealedFor }: { sealedFor: string | null }) {
+  return (
+    <p className="v2-key-note">
+      <b>Your key is kept only in this browser.</b>{" "}
+      {sealedFor
+        ? `If you clear this browser's data or change phone, you can't show your secrets here any more. ${sealedFor} can still open the vault when the time comes.`
+        : "If you clear this browser's data or change phone before you seal the vault for someone, these secrets are lost for good."}
+    </p>
   );
 }
