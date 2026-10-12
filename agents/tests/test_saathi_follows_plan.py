@@ -87,7 +87,7 @@ def chat(client, monkeypatch, text: str, reading: ConversationTurn) -> dict:  # 
     async def understand(*args):
         return reading
 
-    async def respond(owner, step, last_said, said, known):
+    async def respond(owner, step, last_said, said, known, earlier=None):
         given["step"] = step
         return PlanReply(reply="Thank you, Vikram ji.", reply_language="en-IN")
 

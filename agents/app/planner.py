@@ -183,8 +183,10 @@ def _candidates(owner_id: str, plan: dict, now: float) -> list[dict]:
              and s["id"] not in plan.get("finished", [])]
     finished = set(plan.get("finished", []))
     kept = _kept_kinds(owner_id)
+    asked = plan.get("asked", {})
     for s in initial_plan().steps:
-        if s.done_when not in kept and f"initial:{s.id}" not in finished:
+        recently_asked = now - asked.get(f"initial:{s.id}", 0) < SAFE_STEP_SECONDS  # this conversation
+        if s.done_when not in kept and f"initial:{s.id}" not in finished and not recently_asked:
             steps.append(_step(f"initial:{s.id}", "initial", s.topic, s.ask, s.opens, s.id, s.tone))
     for g in gaps.due(owner_id, n=3, now=now):
         # A gap that would hurt the family most is raised by Saathi; a smaller one waits for the owner.
@@ -296,6 +298,12 @@ def after_turn(owner_id: str, turn_id: str, decisions: list[tuple[str, str, str 
         if done_once or (step["source"] == "initial" and outcome in ("not_now", "declined")):
             fresh = store.get("conversation_plans", owner_id) or plan
             store.update("conversation_plans", owner_id, {"finished": [*fresh.get("finished", []), step["id"]]})
+    if step and step["source"] == "initial" and outcome in ("none", "answered", "unsure"):
+        # Asked once in this conversation: the owner talked about something else, or answered without
+        # keeping a card yet. It waits for the next conversation, so Saathi never asks it twice in a row.
+        fresh = store.get("conversation_plans", owner_id) or plan
+        store.update("conversation_plans", owner_id, {"asked": {**fresh.get("asked", {}), step["id"]: now}})
+        cause["asked"] = step["id"]
     if len(cause) == 2:
         return plan
     return refresh(owner_id, cause, add=add, now=now)
