@@ -65,7 +65,7 @@ Regulators across Asia are making the family's claim faster, simpler and measure
 
 **In India** *(these deadlines and penalties are Indian rules)*
 
-- **Banks** must settle claims on the deposit accounts of a customer who is no longer here within **15 calendar days** of receiving all required documents, in force by 31 March 2026. If the delay is the bank's, it pays interest of at least Bank Rate + 4%, or ₹5,000 a day for lockers.[^rbi-claims]
+- **Banks** must settle claims on the deposit accounts of a customer who is no longer here within **15 calendar days** of receiving all required documents. If the delay is the bank's, it pays interest of at least Bank Rate + 4%, or ₹5,000 a day for lockers.[^rbi-claims]
 - **Life insurers** must settle within **15 days of intimation**, or 45 days where investigation is needed, or pay interest at bank rate + 2%.[^irdai]
 - **Up to four nominees** per bank account are allowed from 1 November 2025.[^nominees]
 - **Data protection** under the DPDP Rules arrives in phases, with full obligations from May 2027.[^dpdp]
@@ -369,7 +369,7 @@ See [release-notes.md](release-notes.md) and the [release plan](https://github.c
 
 ## Sources
 
-[^rbi-claims]: Reserve Bank of India, [*Settlement of Claims Directions, 2025*](https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=12901&Mode=0) (RBI/2025-26/82, 26 September 2025), paragraphs 5, 31 to 34.
+[^rbi-claims]: Reserve Bank of India, [*Commercial Banks – Responsible Business Conduct Directions, 2025*](https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id=13140) (RBI/DOR/2025-26/170, 28 November 2025, updated 1 October 2026), the part on settlement of claims in respect of deceased customers. It replaced the separate *Settlement of Claims Directions, 2025* (RBI/2025-26/82, 26 September 2025), which RBI withdrew on 28 November 2025 when it consolidated its rules; the deadlines and compensation are unchanged. Banks' own claim policies cite it this way, for example [Indian Bank's](https://indianbank.bank.in/documents/d/guest/death-claim-settlement-policy-for-fy-2026_29).
 [^irdai]: IRDAI, [*Master Circular on Protection of Policyholders' Interests, 2024*](https://irdai.gov.in/document-detail?documentId=5625747) (5 September 2024).
 [^nominees]: Ministry of Finance, [*Key provisions relating to nomination under the Banking Laws (Amendment) Act, 2025*](https://www.pib.gov.in/PressReleasePage.aspx?PRID=2181734), Press Information Bureau, 23 October 2025.
 [^dpdp]: Ministry of Electronics and Information Technology, [*DPDP Rules, 2025 notified*](https://static.pib.gov.in/WriteReadData/specificdocs/documents/2025/nov/doc20251117695301.pdf), November 2025.
