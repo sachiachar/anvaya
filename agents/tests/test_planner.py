@@ -124,3 +124,12 @@ def test_the_talk_screen_reads_the_plan_and_a_keep_moves_it_on(client, monkeypat
     assert client.post(f"/api/proposals/{card['id']}/decision",
                        json={"collection": "moments", "decision": "approve"}).status_code == 200
     assert store.get("conversation_plans", OWNER)["cause"] == {"kind": "keep", "ref": card["id"]}
+
+
+def test_a_step_the_owner_talked_past_waits_for_the_next_conversation():
+    # Saathi asked the first step; the owner talked about something else. It isn't asked again now.
+    assert planner.current(NEW)["current"] == "initial:people"
+    plan = planner.after_turn(NEW, "turn_1", [], answered_step="initial:people", outcome="none")
+    assert plan["current"] != "initial:people" and plan["cause"]["asked"] == "initial:people"
+    later = planner.refresh(NEW, {"kind": "time"}, now=time.time() + planner.SAFE_STEP_SECONDS + 1)
+    assert later["current"] == "initial:people"  # a new conversation: it can come up once more

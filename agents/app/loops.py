@@ -126,8 +126,36 @@ def _script(text: str) -> str | None:
     return "Devanagari" if devanagari > latin else "Latin"
 
 
-def reply_problems(owner_message: str, reply: str) -> list[str]:
-    """Rules checked in code, because a light model follows them only most of the time."""
+# Words too common to tell two questions apart; what's left says what a question is about.
+_COMMON = frozenset({"there", "would", "like", "with", "that", "this", "from", "your", "have", "what", "about",
+                     "tell", "could", "share", "please", "today", "also", "some", "them", "they", "their",
+                     "which", "when", "where", "does", "just", "more", "maybe", "anything", "something"})
+REPEAT_OVERLAP = 0.5  # a question this close to one Saathi already asked counts as asking it again
+
+
+def _questions(text: str) -> list[str]:
+    return [q.strip() for q in re.findall(r"[^.?!।]*\?", text or "") if q.strip()]
+
+
+def _about(question: str) -> set[str]:
+    return {w for w in re.findall(r"\w+", question.lower()) if len(w) > 3 and w not in _COMMON}
+
+
+def repeated_question(reply: str, earlier: list[str]) -> str | None:
+    """The question Saathi already asked in this conversation that the reply asks again, if any."""
+    for q in _questions(reply):
+        mine = _about(q)
+        for said in earlier:
+            for asked in _questions(said):
+                theirs = _about(asked)
+                if mine and theirs and len(mine & theirs) / len(mine | theirs) >= REPEAT_OVERLAP:
+                    return asked
+    return None
+
+
+def reply_problems(owner_message: str, reply: str, earlier: list[str] | None = None) -> list[str]:
+    """Rules checked in code, because a light model follows them only most of the time. `earlier` is
+    what Saathi already said in this conversation, so it never asks the same question twice."""
     problems = []
     wanted, got = _script(owner_message), _script(reply)
     if wanted and got and wanted != got:
@@ -144,6 +172,9 @@ def reply_problems(owner_message: str, reply: str) -> list[str]:
     if about_their_death(reply):
         problems.append("Don't talk about their death or 'final wishes': they are alive and talking about "
                         "their life. Talk about the family knowing things instead.")
+    if asked := repeated_question(reply, earlier or []):
+        problems.append(f'You already asked this in this conversation: "{asked}" Don\'t ask it again. Respond '
+                        "to what they just said, and ask about something new, or ask nothing.")
     return problems
 
 
@@ -200,10 +231,11 @@ def _step_words(step: dict | None) -> str:
                        "tone": f"{step['tone']}: {step['tone_words']}"}, ensure_ascii=False)
 
 
-async def respond(owner: dict, step: dict | None, last_said: dict | None, text: str, known: dict) -> PlanReply:
+async def respond(owner: dict, step: dict | None, last_said: dict | None, text: str, known: dict,
+                  earlier: list[str] | None = None) -> PlanReply:
     """Saathi's reply (PR-2.12.3): it carries out the plan's current step, in its tone, after the
     guardian and the planner have seen the turn. A reply that breaks the language, honesty or
-    safe-route rules is rewritten once."""
+    safe-route rules, or asks again what Saathi already asked (`earlier`), is rewritten once."""
     prompt = (
         f"What is already saved: {json.dumps(known, ensure_ascii=False)}\n\n"
         f"Your last message in this conversation: {last_said['text'] if last_said else '(none: a new conversation)'}\n\n"
@@ -211,7 +243,7 @@ async def respond(owner: dict, step: dict | None, last_said: dict | None, text: 
         f"The owner's LATEST message (reply in its language): {text}"
     )
     result = await _respond_once(owner, prompt)
-    problems = reply_problems(text, result.reply)
+    problems = reply_problems(text, result.reply, earlier)
     if problems:
         prompt += "\n\nYour previous reply broke these rules; write it again:\n- " + "\n- ".join(problems)
         result = await _respond_once(owner, prompt)

@@ -268,8 +268,17 @@ async def converse(owner_id: str, text: str | None = Form(None), file: UploadFil
                               saathi_words=(last_said or {}).get("text") or "", known=known,
                               from_document=bool(attachment) and not voice)
     taken = await asyncio.to_thread(_take_in, owner_id, text, result, attachment, path, source, last_said)
-    reply = await loops.respond(owner, taken["step"], last_said, (text or "").strip() or result.heard, known)
+    reply = await loops.respond(owner, taken["step"], last_said, (text or "").strip() or result.heard, known,
+                                await asyncio.to_thread(_said_this_conversation, owner_id))
     return await asyncio.to_thread(_answer, owner_id, taken, result, reply, last_said)
+
+
+def _said_this_conversation(owner_id: str, now: float | None = None) -> list[str]:
+    """What Saathi said in this conversation (its last few messages), so it never asks a question twice."""
+    now = time.time() if now is None else now
+    mine = [t for t in store.list("turns", owner_id=owner_id)
+            if t.get("role") == "assistant" and now - t.get("at", 0) < gaps.CONVERSATION_GAP]
+    return [t["text"] for t in sorted(mine, key=lambda t: t.get("at", 0))[-6:] if t.get("text")]
 
 
 def _take_in(owner_id: str, text: str | None, result, attachment: dict | None, path: str | None, source: dict,
