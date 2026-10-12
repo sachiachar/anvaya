@@ -1,12 +1,21 @@
 # Anvaya, for banks and insurers
 
-*Team Saathi · BFSI track · Revision 4, 12 October 2026 · the full picture is in [concept.md](concept.md); the pitch to individuals is in [pitch-individuals.md](pitch-individuals.md); costs and margins are in [business-model.md](business-model.md); how it is built is in [architecture.md](architecture.md)*
+*Team Saathi · BFSI track · Revision 5, 12 October 2026 · the full picture is in [concept.md](concept.md); the pitch to individuals is in [pitch-individuals.md](pitch-individuals.md); costs and margins are in [business-model.md](business-model.md); how it is built is in [architecture.md](architecture.md)*
 
 ---
 
 ## The moment that defines the relationship
 
 Every institution will one day meet a family on the worst week of their lives. A customer has left them suddenly. There was no goodbye, and no folder on the shelf. The family doesn't know which accounts existed, who the nominee is, or where the papers are.
+
+This doesn't only happen late in life. Across Asia, sudden loss takes people in their 20s, 30s and 40s, the years when a family depends on them most:
+
+- **India:** at AIIMS Delhi, 57% of the sudden losses studied were people aged 18 to 45, most of them "apparently healthy".[^young-in] Adults aged 18 to 45 were 66.4% of those lost on India's roads in 2023.[^roads-in]
+- **South Korea:** more than 5,000 people aged 50 or younger have a sudden cardiac arrest each year.[^young-kr]
+- **Malaysia:** one in four patients with an acute heart attack is under 50.[^young-my]
+- **South-East Asia:** road crashes are the leading cause of loss for people aged 5 to 29.[^roads-who]
+
+A young customer has the least reason to have put things in order. Their family has the most to lose.
 
 How that family is treated in that week decides whether the next generation stays with you, or quietly moves everything elsewhere. And more and more, it is also a matter of regulation. In India, since 2026, it comes with a clock and a penalty attached.
 
@@ -65,6 +74,24 @@ These totals count all unclaimed money, not only what was left behind by someone
 
 **Anvaya is a succession service you offer your customers under your brand. They talk with Saathi, Anvaya's warm companion, about their accounts, nominees and wishes. Saathi helps them close the gaps while they are here. When the time comes, the right family member receives a careful, fraud-checked handover, and you receive a complete, pre-checked claim file.**
 
+## Bank-first, not bank-only
+
+In many places, people stay loyal to one bank for life. They keep most of their money there, and they trust it more than any app. That makes your institution the natural place to offer Anvaya.
+
+```mermaid
+flowchart LR
+    A["From your records<br/>accounts, deposits, lockers, nominees<br/>pre-filled, then confirmed"] --> B["The customer, with Saathi<br/>stories, wishes, papers<br/>and anything held elsewhere"]
+    B --> C["When the time comes<br/>you: a claim file for your products<br/>the family: a checklist for everything"]
+```
+
+- **Pre-filled from your records.** Your accounts, deposits, lockers and nominees appear as cards. The customer confirms each one with **Keep**. There is nothing to discover and little to type.
+- **Room for the rest.** The customer can also record an insurance policy, or an account at another institution. It stays private, for the family. **You never see it**, unless the customer agrees.
+- **Each gets their part.** You receive a claim file for your own products only. The family receives a checklist and letters for everything, wherever it is held.
+
+So you never have to promote a competitor, and your customer never has to hand a competitor their whole financial life. Because loyal customers keep most of their money with you, a bank-led Anvaya already covers most of what their family will need.
+
+*Pre-filling from your records is pilot work. Today the prototype records what the customer says, types or shows in a photo.*
+
 ## What the claim packet saves your team
 
 Anvaya doesn't replace your settlement process, and it doesn't certify legal heirship. Your staff still verify and decide, under your own policy. What changes is **what arrives on their desk**.
@@ -101,6 +128,32 @@ Today most succession planning relies on what a customer remembers. **What they 
 
 Elsewhere in Asia, the same check plugs into each country's consent-based network, such as Singapore's SGFinDex, Korea's MyData and Japan's My Number account links.
 
+## When a rule changes, every affected customer hears
+
+Rules on nominees, claims and accounts keep changing. Most customers never hear about a change, or never act on it. Anvaya turns each change into a gentle, personal check.
+
+```mermaid
+flowchart LR
+    A["A rule changes<br/>RBI, IRDAI, MAS,<br/>Bank Negara and others"] --> B["A rule card<br/>from the official source,<br/>checked by a person"]
+    B --> C["Fixed rules check<br/>each customer's<br/>kept accounts"]
+    C --> D["Saathi asks once<br/>with one tap into<br/>your own journey"]
+    D --> E["You see counts<br/>how many are up to date,<br/>never names"]
+```
+
+**An example.** From 1 November 2025, Indian bank depositors can name up to four nominees.[^nominees] A customer with one nominee on their savings account sees this, inside your app:
+
+> **Rule change · RBI · from 1 November 2025**
+> You can now name up to 4 nominees for a bank account. Your savings account has 1.
+> *Talk about this · Skip · Read the rule*
+
+- **From an official source only.** Each rule card links to the regulator's own notice, and a person checks it before any customer sees it.
+- **Asked once, gently.** Saathi raises it once, in plain words. The customer can skip it.
+- **Your journey, your records.** The change itself happens in your own nominee or account journey. Saathi never changes your records.
+- **Counts, never names.** You see how many affected customers are up to date. You never see their conversations.
+- **Safe by design.** The message appears only inside your app, and never asks for an OTP, a password or a PIN. Customers learn that a phone call about a "new RBI rule" is not how real changes reach them.
+
+*Rule cards are pilot work. They build on what runs today: gaps found by fixed rules in code, a question asked only once, and the guardian, which turns away any request for an OTP.*
+
 ## Fraud protection at every step
 
 Fraud doesn't only arrive with a forged certificate at the end. It can enter at any point in the journey. Anvaya runs a **guardian**: an independent layer of checks that watches every step and corrects course before anything takes effect.
@@ -117,6 +170,8 @@ Fraud doesn't only arrive with a forged certificate at the end. It can enter at 
 | **A family member probing for more than they're entitled to** | Questions about what the customer kept are answered freely, so the family is not over-restricted. Only a request for a vault secret, or words that try to steer the service, are turned away. A request for a fee or a change of bank details adds a helpful note for the family and a quiet check for our team. Hidden instructions in uploaded documents are caught. Every question is kept for audit. |
 | **An insider** | Cases are assigned to reviewers at random. Reviewers linked to a case are excluded. Unusual reviewer patterns, such as frequent overrides or the same pair appearing repeatedly, trigger a third check. |
 
+*Some of these checks are pilot work: the spoken random phrase, pressure on an elderly customer, the cooling-off delay, and insider patterns. [Where we are today](#where-we-are-today) shows which.*
+
 **How it responds:** continue; add a check; reduce what the service may do on its own; pause for a reviewer and alert the customer; or block. **People decide.** Every intervention is explained, logged, open to review, can be reversed, and is measured. The service also red-teams itself: it regularly imagines new ways to get around each safeguard, and shows your risk team which safeguard catches each one, and which nothing catches yet.
 
 **A fraud reference that grows every hour.** The checks draw on a fraud reference that the service researches every hour.
@@ -132,6 +187,7 @@ Fraud doesn't only arrive with a forged certificate at the end. It can enter at 
 
 | What you want | How Anvaya delivers it | What a pilot measures |
 | --- | --- | --- |
+| **Rule changes that land** | Each change that affects a customer becomes one gentle question, with one tap into your own journey | Share of affected customers up to date after each change |
 | **More complete nominations** | Saathi knows each policy should have a nominee, gently asks about a missing one when the moment is right, and takes the customer straight into your own nominee-update journey | Share of pilot customers with a complete nomination, before and after |
 | **Faster settlement** | Complete, pre-checked files mean the settlement clock (15 days in India) starts sooner and finishes on time | Days from first contact to complete file; share settled within the regulatory deadline |
 | **Fewer rejected or reopened claims** | Documents and authority are checked before the file reaches you | Share of files needing more documents |
@@ -232,8 +288,8 @@ Nobody opens a succession app on a quiet Tuesday. Offering Anvaya through your i
 | Moment | Who sees it | Natural prompt |
 | --- | --- | --- |
 | Buying or renewing a life policy | Insurer | "Who should receive this, and do they know it exists?" |
+| A rule change that affects the customer, such as India's four-nominee change (November 2025) | Either | "You can now name up to 4 nominees. Your account has 1." |
 | An empty or outdated nominee field | Bank | "Your account has no nominee. It takes two minutes with Saathi." |
-| New nomination rules, such as India's four-nominee change (November 2025) | Bank | A reason to reach every existing customer, not only new ones |
 | Opening an account, a fixed deposit maturing, a home loan | Bank | A short step inside a journey the customer is already on |
 | Marriage, a new child or grandchild, turning 50 or 60, retirement | Either | "Your family has grown. Let's make sure they're looked after." |
 | Tax-filing season | Either | "While your papers are out, let's note where everything is." |
@@ -276,9 +332,9 @@ Which law applies, and in what order, stays with licensed lawyers.
 
 ## Where we are today
 
-| Live now | Coming in the prototype release (18 October 2026) | For the pilot |
-| --- | --- | --- |
-| Voice and typed conversation; reading policy photos; one conversation plan; Keep cards that say only what was said; next steps; the vault on the phone; two-reviewer verification with a waiting period; the family's questions with sources; claims checklist and letters; the guardian's core checks (two real reviewers, owner alert with cancel, a check on everything new before it is kept, another voice noticed, fixed checks); **a fraud reference that grows every hour**, in the open format, shown as a map; **one conversation traceable end to end**; owner-only access to conversations with numbers hidden; kept knowledge in the open format with gentle gap questions; governed agents with allowances, visible autonomy and a governance dashboard; published quality measures | **The claim file and your Bank view**; **readiness checked at the source** (a simulated Account Aggregator flow and real statement upload); your institution's own view of the governance dashboard | Live Account Aggregator connection through your institution; per-bank stores with your own key; your budgets and the audit export; Apigee and Agent Gateway; pressure, cloned-voice and insider-pattern checks; trigger-moment prompts; single sign-on and in-app embedding; India data residency; the full partner catalogue |
+| Live now | For the pilot |
+| --- | --- |
+| Voice and typed conversation; reading policy photos; one conversation plan; Keep cards that say only what was said; a readiness score with next steps; the vault on the phone; two-reviewer verification with a waiting period; the family's questions with sources; claims checklist and letters; the guardian's core checks (two real reviewers, owner alert with cancel, a check on everything new before it is kept, another voice noticed, fixed checks); **a fraud reference that grows every hour**, in the open format, shown as a map; **one conversation traceable end to end**; owner-only access to conversations with numbers hidden; kept knowledge in the open format with gentle gap questions; governed agents with allowances, visible autonomy and a governance dashboard; published quality measures | **Bank-first:** pre-filling from your records; **the claim file and your bank view**; **rule cards** that reach every affected customer; readiness checked at the source (statement upload, then a live Account Aggregator connection through your institution); your institution's own view of the governance dashboard; per-bank stores with your own key; your budgets and the audit export; Apigee and Agent Gateway; pressure, cloned-voice, cooling-off and insider-pattern checks; trigger-moment prompts; single sign-on and in-app embedding; India data residency; the full partner catalogue |
 
 See [release-notes.md](release-notes.md).
 
@@ -313,6 +369,11 @@ We are looking for one bank and one insurer to shape the pilot with us: to be th
 [^aa]: Account Aggregator ecosystem figures as of 31 December 2025, reported in [*Account Aggregator Framework: 2026 Guide*](https://hyperverge.co/blog/account-aggregator-framework-rbi/).
 [^rebit]: ReBIT, [*Account Aggregator deposit schema*](https://specifications.rebit.org.in/api_schema/account_aggregator/documentation/deposit.html): the holder's `nominee` attribute, `REGISTERED` or `NOT-REGISTERED`; the same field appears in the mutual fund and equities schemas.
 [^fiu]: Sahamati, [*Financial Information Users in the AA ecosystem*](https://sahamati.org.in/fiu/).
+[^young-in]: AIIMS and ICMR autopsy study at AIIMS Delhi, May 2023 to April 2024 (103 of 180 sudden losses were aged 18 to 45), reported in [*Sudden deaths among young Indians linked to undiagnosed heart disease*](https://health.medicaldialogues.in/latest-news/sudden-deaths-among-young-indians-linked-to-undiagnosed-heart-disease-aiims-icmr-study-161897), Medical Dialogues, January 2026. The government's summary found no link with COVID-19 vaccines: [Press Information Bureau](https://www.pib.gov.in/PressReleasePage.aspx?PRID=2141419), 2 July 2025.
+[^roads-in]: Ministry of Road Transport and Highways, *Road Accidents in India 2023*, reported in [The Week](https://www.theweek.in/wire-updates/business/2025/08/28/del82-biz-road-accidents-report.html), 28 August 2025.
+[^young-kr]: [*People in their 30s and 40s are not safe either*](https://en.fnnews.com/news/202609010918360205), Financial News, 1 September 2026 (people aged 50 or younger are 15 to 20% of acute cardiac arrest patients).
+[^young-my]: [*When heart attacks strike early*](https://www.nst.com.my/lifestyle/heal/2026/08/1507871/health-when-heart-attacks-strike-early), New Straits Times, 10 August 2026.
+[^roads-who]: World Health Organization, South-East Asia, [*Accelerate safety measures to reduce road traffic deaths*](https://www.who.int/southeastasia/news/detail/02-09-2024-accelerate-safety-measures-to-reduce-road-traffic-deaths-who), 2 September 2024.
 [^sg]: CPF Board, [*CPF nominations*](https://www.cpf.gov.sg/member/infohub/reports-and-statistics/cpf-trends/cpf-nominations) (2023 data, updated 4 November 2024).
 
 ---
