@@ -4,7 +4,7 @@
 
 <p align="center"><strong>Your stories, your wishes, and everything your family will need.</strong></p>
 
-**When someone dies suddenly, their family can't find the money.** Anvaya is an app with a warm AI companion, **Saathi**. While people are alive, they talk to Saathi about their stories, money matters, family and wishes. When the time comes, Anvaya hands everything over safely to the right person.
+**When a loved one leaves us suddenly, the family often can't find the money they left behind.** Anvaya is an app with a warm AI companion, **Saathi**. While they're here, people talk to Saathi about their stories, money matters, family and wishes. When the time comes, Anvaya hands everything over safely to the right person.
 
 Built for the **AI Builder Cup 2026** · Track: **BFSI** · Google Gemini + Google Cloud.
 

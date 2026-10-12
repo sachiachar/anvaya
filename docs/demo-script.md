@@ -22,7 +22,7 @@ To change who is acting, tap a name in the **Show as** row under the header: Vik
 
 ## Scene 1: The problem (0:00–0:15)
 
-**Narration:** "When someone dies suddenly, their family can't find the money. In India alone, over ₹72,000 crore sits in unclaimed bank deposits. Nobody knew the accounts existed, or who the nominee was. Anvaya fixes that by letting you just talk."
+**Narration:** "When a loved one leaves us suddenly, the family often can't find the money they left behind. In India alone, over ₹72,000 crore sits in unclaimed bank deposits. Nobody knew the accounts existed, or who the nominee was. Anvaya fixes that by letting you just talk."
 
 [Show the navy sign-in screen with the thread mark, then sign in.]
 
