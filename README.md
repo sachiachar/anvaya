@@ -31,6 +31,7 @@ Built for the **AI Builder Cup 2026** · Track: **BFSI** · Google Gemini + Goog
 | [Business model](docs/business-model.md) | Revenue, costs, margins and the assumptions behind them |
 | [Architecture](docs/architecture.md) | How it's built: the loops, the guardian, data, security and design decisions |
 | [Release notes](docs/release-notes.md) | What's built, and the known limitations |
+| [Defined limits](docs/limits.md) | Every limit we set: call length (about 15 minutes), daily allowances, agent caps, the handover and the fraud module |
 | [Libraries and services](docs/dependencies.md) | Every library, version and licence, and the Google services used |
 
 ## The problem
