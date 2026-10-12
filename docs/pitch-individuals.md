@@ -1,6 +1,6 @@
 # Anvaya, for you and your family
 
-*Team Saathi · Revision 3, 12 October 2026 · the full picture is in [concept.md](concept.md); the pitch to banks and insurers is in [pitch-institutions.md](pitch-institutions.md)*
+*Team Saathi · Revision 4, 12 October 2026 · the full picture is in [concept.md](concept.md); the pitch to banks and insurers is in [pitch-institutions.md](pitch-institutions.md)*
 
 ---
 
@@ -19,7 +19,16 @@ A father goes for his morning walk and doesn't come home. A mother who ran the w
 
 The one person who knew every answer is the one person they can no longer ask.
 
-Across Asia, the money waiting to be claimed is staggering. In India, ₹72,454 crore sits in unclaimed bank deposits and nearly ₹9,000 crore in insurance.[^in] In Japan, a record ¥129.2 billion went to the national treasury in a single year because no heir came forward.[^jp] Malaysia holds RM13.3 billion in unclaimed money.[^my]
+And it isn't only something that happens late in life. Across Asia, sudden loss takes people in their 20s, 30s and 40s, the years when a family depends on them most:
+
+- In India, more than half of the sudden losses studied at AIIMS Delhi were people aged 18 to 45, most of them "apparently healthy".[^young-in]
+- In South Korea, more than 5,000 people aged 50 or younger have a sudden cardiac arrest each year.[^young-kr]
+- In Malaysia, one in four people with an acute heart attack is under 50.[^young-my]
+- In South-East Asia, road crashes are the leading cause of loss for people aged 5 to 29.[^roads-who]
+
+The younger we are, the less we think we need to put things in order. Our families have the most to lose.
+
+Across Asia, the money waiting to be claimed is staggering. In India, ₹72,454 crore sits in unclaimed bank deposits and nearly ₹9,000 crore in insurance.[^in] In Japan, a record ¥129.2 billion went to the national treasury in a single year because no heir came forward.[^jp] In South Korea, ₩10.3 trillion in insurance money waits to be claimed, and most families don't know it is theirs.[^kr] Malaysia holds RM13.3 billion in unclaimed money.[^my] In Australia, A$21.2 billion sits in lost and unclaimed superannuation.[^au]
 
 And the sudden losses leave families least prepared. In Singapore, 2 in 5 people lost before the age of 65 had never named a nominee for their CPF savings.[^sg]
 
@@ -85,6 +94,7 @@ Something this precious needs watching over, not just at the end, but all along 
 - **Nothing risky reaches your book.** Everything new is checked before Saathi offers it to keep. A password someone asked you for, or a payment someone else wants, is never kept.
 - **No one can pressure you through us.** If it ever seems someone is pushing you to change your wishes, Saathi won't confront anyone. It simply holds the change, and checks with you privately, later, when you're alone. You stay in charge.
 - **We watch ourselves too.** Two different people approve every handover. They can't pick which cases they review, and we keep an eye out for anything unusual in how our own team works.
+- **A rule change reaches you, gently.** When a new rule affects you, such as India now letting you name up to 4 nominees for a bank account, Saathi tells you once, inside the app. It links to the official notice and never asks for an OTP, a password or a PIN. So a phone call about a "new RBI rule" is easy to recognise as not real.
 - **Our checks keep learning.** The tricks people try change over time. Every hour, we look for new ones. What two independent sources confirm is added, our team checks the rest, and our team can remove anything.
 
 ## Vikram's story
@@ -126,13 +136,29 @@ Anvaya is a **simple yearly plan**, for less than most of us spend on the small 
 - **Partners set their own fees**, and you always see them before you choose.
 - **Your family never pays to receive what you left them.** The handover, and a generous allowance of questions to Saathi, checklists and draft letters, are included. If they need more, they can add it later.
 
-Download Anvaya from the app store, or look for it inside your bank's app. It is the same Saathi either way, and it records accounts at every bank and insurer, not just one.
+Download Anvaya from the app store, or look for it inside your bank's app. It is the same Saathi either way, and it records accounts at every bank and insurer, not just one. If your bank offers it, the accounts you hold with them can arrive already filled in, for you to confirm with **Keep**. Anything you hold elsewhere stays private, for your family. Your bank never sees it.
+
+## Where we are today
+
+Anvaya is a working prototype, and we say plainly what is ready and what comes next.
+
+| Ready to try today | Coming next |
+| --- | --- |
+| Talking with Saathi by voice or typing, and sharing a photo of a policy; cards you **Keep**; the book with its readiness score and next steps; the vault locked on your phone, for one person, with a matching code; your family member accepting in their own app; two different people confirming, a waiting period, and your one-tap cancel; your family's questions answered in your words, with where each answer came from; a checklist and draft claim letters; another voice noticed; nothing risky kept; checks that learn every hour | Your real voice played to your family, and voice letters; alerts by notification, SMS and email (today you see them in the app); the full choice of partners with prices (today, one sample legal partner); a pause and a check for big changes and new phones; holding a change when someone seems to push you; reviewers assigned at random; rule changes that reach you; your bank's accounts filled in for you; a native name in each country, such as Tsunagu in Japan and Ieum in Korea |
+
+The story of Vikram above shows the whole journey, including the parts that are coming next.
 
 
 ## Sources
 
 [^in]: Bank deposits as of 28 January 2026: Minister of State for Finance, written reply in Parliament, reported in [Free Press Journal](https://www.freepressjournal.in/business/unclaimed-bank-deposits-in-rbis-dea-fund-reach-72454-crore-government-promotes-udgam-portal-multiple-nominations). Insurance (₹8,974 crore) as of 28 February 2026: [Press Information Bureau, 24 March 2026](https://www.pib.gov.in/PressReleasePage.aspx?PRID=2244475).
 [^jp]: Financial year 2024, Supreme Court of Japan figures reported by [Bloomberg, 8 December 2025](https://www.bloomberg.com/jp/news/articles/2025-12-08/T6Q1AWKGIFQM00).
+[^kr]: As of the end of 2025, Financial Services Commission and insurers, reported in [*Claim your 10.3 trillion won in unclaimed insurance payouts*](https://view.asiae.co.kr/en/article/2026070710472791307), Asia Economy, 7 July 2026.
+[^au]: As of 30 June 2026, [Australian Taxation Office](https://www.ato.gov.au/media-centre/21-billion-dollars-in-lost-super-find-yours).
+[^young-in]: 103 of 180 sudden losses in 2,214 autopsies at AIIMS Delhi (May 2023 to April 2024) were people aged 18 to 45, reported in [Medical Dialogues](https://health.medicaldialogues.in/latest-news/sudden-deaths-among-young-indians-linked-to-undiagnosed-heart-disease-aiims-icmr-study-161897), January 2026. The studies found no link with COVID-19 vaccines: [Press Information Bureau](https://www.pib.gov.in/PressReleasePage.aspx?PRID=2141419), 2 July 2025.
+[^young-kr]: [Financial News](https://en.fnnews.com/news/202609010918360205), 1 September 2026.
+[^young-my]: [New Straits Times](https://www.nst.com.my/lifestyle/heal/2026/08/1507871/health-when-heart-attacks-strike-early), 10 August 2026.
+[^roads-who]: [World Health Organization, South-East Asia](https://www.who.int/southeastasia/news/detail/02-09-2024-accelerate-safety-measures-to-reduce-road-traffic-deaths-who), 2 September 2024.
 [^my]: As of April 2025, Accountant General of Malaysia, reported by [Free Malaysia Today](https://www.freemalaysiatoday.com/category/nation/2025/05/17/rm13-3bil-in-unclaimed-money-as-of-april).
 [^sg]: 2023 data, [CPF Board](https://www.cpf.gov.sg/member/infohub/reports-and-statistics/cpf-trends/cpf-nominations).
 
