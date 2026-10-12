@@ -27,6 +27,30 @@ log = logging.getLogger(__name__)
 
 QUOTE_MATCH = 0.85     # how close a quote must be to the owner's words; transcripts differ a little
 FIELD_SUPPORT = 2 / 3  # the share of a value's words that must appear in what was said
+# What a model writes in a field when nobody said anything ("N/A", "-", ".."). They mean empty.
+PLACEHOLDERS = frozenset({"", "n a", "na", "nil", "none", "null", "unknown", "not known", "not applicable",
+                          "not available", "tbd"})
+# Fields of a card that a placeholder may fill; each becomes empty ("" or None) instead.
+_PLACEHOLDER_FIELDS = ("institution", "product", "account_hint", "holder_name", "nominee_or_beneficiary",
+                       "approximate_value", "institution_contact", "papers_at", "intended_for")
+
+
+def placeholder(value: str | None) -> bool:
+    """Whether a value says nothing, like "N/A", "NA", "nil" or "-". Letters in any script count, so
+    a value in Hindi is never mistaken for an empty one."""
+    return " ".join(re.sub(r"[^\w']+", " ", (value or "").lower()).split()) in PLACEHOLDERS
+
+
+def _blank_placeholders(item):
+    """A copy of an inventory card with every placeholder value emptied, and an account hint with no
+    digits ("..") emptied too, so "N/A" never reaches a card, the book or a letter."""
+    fields = {name: ("" if isinstance(getattr(item, name), str) and name in ("institution", "product", "account_hint")
+                     else None)
+              for name in _PLACEHOLDER_FIELDS
+              if isinstance(getattr(item, name, None), str) and placeholder(getattr(item, name))}
+    if item.account_hint and not re.search(r"\d", item.account_hint):
+        fields["account_hint"] = ""
+    return item.model_copy(update=fields) if fields else item
 PREFIX = 5             # words that share their first 5 letters count as the same ("bedroom", "bedrooms")
 
 _STOP = frozenset(
@@ -150,6 +174,7 @@ def ground(result, *, owner_words: str, saathi_words: str = "", known: dict | No
     if hasattr(result, "inventory"):
         items = []
         for item in result.inventory:
+            item = _blank_placeholders(item)
             fields: dict = {}
             for name in ("papers_at", "intended_for") + (() if from_document else ("nominee_or_beneficiary",)):
                 if not _check_text(getattr(item, name), support, counts):

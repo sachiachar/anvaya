@@ -93,8 +93,9 @@ class InventoryItem(BaseModel):
         "bank_account", "investment", "retirement", "insurance", "property",
         "loan", "subscription", "digital_account", "other",
     ]
-    institution: str
-    product: str = Field(description="e.g. 'Term life policy', 'Savings account'")
+    institution: str = Field(description="The bank, insurer or company it is with. Empty if none was named; "
+                             "never write 'N/A' or similar")
+    product: str = Field(description="e.g. 'Term life policy', 'Savings account', 'Flat in Mysore'")
     account_hint: str = Field(
         description="Only the last 4 characters the owner said or the document shows, after two dots. Empty if "
         "nobody gave them. Never output a full account or policy number."

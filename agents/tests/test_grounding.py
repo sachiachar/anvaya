@@ -164,3 +164,45 @@ def test_a_quick_yes_in_a_call_is_checked_against_the_question_just_asked(client
     asyncio.run(live._save_exchange(WS(), {"id": OWNER, "name": "Vikram Rao"}, "Yes.", "Thank you.", main._expand))
     lic = [i for i in proposals.store.list("inventory", owner_id=OWNER) if i.get("institution") == "LIC"]
     assert any(i.get("papers_at") == "bedroom steel cupboard" for i in lic)
+
+
+# ---- Placeholders: the model once wrote "N/A · Flat in Mysore .." for a flat with no bank ----------
+
+FLAT_SAID = "One wish: our flat in Mysore should go to Meena, and after her, to Priya and Arjun equally."
+
+
+def test_a_placeholder_institution_and_an_empty_hint_become_empty():
+    item = InventoryItem(category="property", institution="N/A", product="Flat in Mysore", account_hint="..",
+                         intended_for="Meena")
+    found = grounding.ground(_turn(inventory=[item]), owner_words=FLAT_SAID).inventory[0]
+    assert (found.institution, found.account_hint, found.intended_for) == ("", "", "Meena")
+
+
+@pytest.mark.parametrize("value", ["N/A", "n/a", "NA", "nil", "-", "Not applicable", "  ", None])
+def test_placeholders_say_nothing(value):
+    assert grounding.placeholder(value)
+
+
+@pytest.mark.parametrize("value", ["LIC", "SBI", "Nana", "Navi Mumbai", "बेडरूम की अलमारी"])
+def test_real_values_are_not_placeholders(value):
+    assert not grounding.placeholder(value)
+
+
+def test_a_kept_property_with_no_institution_reads_plainly():
+    from app import knowledge
+    assert knowledge._description("inventory", {"product": "Flat in Mysore", "institution": ""}) == \
+        "Flat in Mysore; no nominee recorded"
+    assert not knowledge._present("N/A") and not knowledge._present("NA")
+
+
+def test_a_claim_letter_to_nobody_is_dropped(monkeypatch):
+    from app.schemas import ClaimLetter, Settlement
+
+    async def fake(**kwargs):
+        return Settlement(checklist=[], unclaimed_asset_searches=[], letters=[
+            ClaimLetter(institution="LIC", subject="Claim", body="Dear LIC"),
+            ClaimLetter(institution="N/A", subject="Flat", body="Dear [name]")])
+
+    monkeypatch.setattr(loops, "generate_json", fake)
+    plan = asyncio.run(loops.plan_settlement({"name": "Vikram Rao"}, [], []))
+    assert [letter.institution for letter in plan.letters] == ["LIC"]
