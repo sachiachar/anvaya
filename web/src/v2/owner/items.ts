@@ -13,6 +13,9 @@ const FIELD_WORDS: Record<string, string> = {
   institution_contact: "contact at the bank or insurer", intended_for: "who it's meant for",
 };
 const inWords = (field: string) => FIELD_WORDS[field] ?? field.replaceAll("_", " ");
+/** Empty, or a placeholder that says nothing ("N/A", "NA", "nil", "-"); the server's grounding.PLACEHOLDERS. */
+const blank = (s: string | null | undefined) =>
+  !s || /^(n\s*\/?\s*a|nil|none|null|unknown|not known|not applicable|not available|tbd|[-.\s•]*)$/i.test(s.trim());
 
 export type Described = { kind: string; title: string; detail: string | null; missing: string | null };
 
@@ -31,7 +34,10 @@ export function describe(p: Proposal): Described {
   const i = p as InventoryItem;
   const detail = [i.nominee_or_beneficiary && `Nominee: ${i.nominee_or_beneficiary}`,
     i.intended_for && `Meant for: ${i.intended_for}`, i.papers_at && `Papers: ${i.papers_at}`].filter(Boolean).join(" · ");
-  return { kind: `Account or policy${update}`, title: `${i.institution} · ${i.product} ${i.account_hint}`.trim(),
+  // A card saved before the server emptied placeholders may still say "N/A" or "..": leave those out.
+  const hint = /\d/.test(i.account_hint ?? "") ? ` ${i.account_hint}` : "";
+  const title = [i.institution, i.product].filter((s) => !blank(s)).join(" · ") + hint;
+  return { kind: `${i.category === "property" ? "Property" : "Account or policy"}${update}`, title: title.trim() || "An item",
     detail: detail || null, missing: i.missing_fields.length ? `Still missing: ${[...new Set(i.missing_fields.map(inWords))].join(", ")}` : null };
 }
 

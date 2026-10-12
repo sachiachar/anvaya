@@ -128,7 +128,8 @@ def _description(collection: str, item: dict) -> str:
         return item.get("summary", "")
     if collection == "inventory":
         nominee = item.get("nominee_or_beneficiary")
-        return f"{item.get('product', 'Account')} with {item.get('institution', 'an institution')}" + \
+        product, institution = item.get("product") or "Account", item.get("institution")
+        return (f"{product} with {institution}" if institution else product) + \
             (f"; nominee: {nominee}" if nominee else "; no nominee recorded")
     return f"{item.get('name', '')}, {item.get('relationship', '')} of the owner"
 
@@ -150,7 +151,7 @@ STATEMENT_LINKS = {**{p: "wants" for p in WISH_PREDICATES if p != "promised_to"}
 # Fields whose presence (never their value) the graph records, for the gap check (PR-7.10).
 HAS_FIELDS = ("nominee_or_beneficiary", "holder_name", "intended_for", "papers_at", "relationship")
 # Answers that mean "not known": the same as the gap check's (gaps.UNKNOWN; a test keeps them equal).
-UNKNOWN = {"", "unknown", "not sure", "none", "n/a"}
+UNKNOWN = {"", "unknown", "not sure", "none", "n/a", "n a", "na", "nil", "not applicable"}
 
 
 def _present(value: Any) -> bool:

@@ -13,7 +13,7 @@ import re
 from datetime import date, datetime
 
 from .fraud_guides import Guide, signs_for_check
-from . import step_guard
+from . import grounding, step_guard
 from .gemini import generate_json
 from .governance import core as governance
 from .tone import ALIVE_RULES, about_their_death, step_problems
@@ -519,14 +519,15 @@ def review_summary(check: DocumentCheck, guide: Guide | None = None) -> dict:
 
 
 async def plan_settlement(owner: dict, inventory: list[dict], moments: list[dict]) -> Settlement:
-    """Settlement loop: turn the inventory into a claims checklist and draft letters (Propose)."""
+    """Settlement loop: turn the inventory into a claims checklist and draft letters (Propose).
+    A letter needs someone to send it to: one to "N/A" or nobody is dropped, in code."""
     context = {
         "deceased": {k: owner.get(k) for k in ("name", "country")},
         "executor": owner.get("vault_recipient_name"),
         "inventory": inventory,
         "practical_moments": [m for m in moments if m.get("kind") == "practical"],
     }
-    return await generate_json(
+    plan = await generate_json(
         agent="settlement.planner",
         schema=Settlement,
         system=(
@@ -540,3 +541,5 @@ async def plan_settlement(owner: dict, inventory: list[dict], moments: list[dict
         ),
         prompt=json.dumps(context, ensure_ascii=False),
     )
+    letters = [letter for letter in plan.letters if not grounding.placeholder(letter.institution)]
+    return plan.model_copy(update={"letters": letters})

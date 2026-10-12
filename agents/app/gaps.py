@@ -29,7 +29,7 @@ from . import knowledge
 from .store import store
 
 NOMINEE_EXPECTED = {"insurance": 3, "bank_account": 2, "investment": 2, "retirement": 2}
-UNKNOWN = {"", "unknown", "not sure", "none", "n/a"}
+UNKNOWN = {"", "unknown", "not sure", "none", "n/a", "n a", "na", "nil", "not applicable"}
 KINDS = ("nominee", "conflict", "heir", "relationship", "papers", "will", "loans", "first_call", "digital",
          "confirm", "recheck")  # as listed above; the web app's Gap type has the same list
 DAY = 86400
