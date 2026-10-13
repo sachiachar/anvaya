@@ -116,6 +116,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
   const [reviewBusy, setReviewBusy] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [savedCount, setSavedCount] = useState(0);
+  const [waitingCount, setWaitingCount] = useState(0); // held by the voice check, still waiting
   const [callMinutes, setCallMinutes] = useState<number | null>(null);
   const [reviewEarlier, setReviewEarlier] = useState(false); // items left from before: no summary, no Discard
   const [retryReview, setRetryReview] = useState(false); // the conversation didn't load after a call
@@ -431,9 +432,10 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
     let saved = 0;
     const failed: string[] = [];
     let updateRefused = false;
-    for (const { p, save: keep, replace } of choices) {
+    for (const { p, save: keep, replace, wait, voiceConfirmed } of choices) {
+      if (wait) continue; // held by the voice check: it waits for "Yes, this was me"
       try {
-        await api.decide(p.id, p.collection, keep ? "approve" : "reject", keep && replace);
+        await api.decide(p.id, p.collection, keep ? "approve" : "reject", keep && replace, keep && voiceConfirmed);
         if (keep) saved += 1;
       } catch {
         failed.push(p.id);
@@ -451,6 +453,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
       return;
     }
     setSavedCount(saved);
+    setWaitingCount(choices.filter((c) => c.wait).length);
     setPhase("saved");
     await closeConversation();
   }
@@ -537,6 +540,7 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
           </div>
           <h2>{savedCount === 0 ? "Nothing was kept" : savedCount === 1 ? "Kept 1 thing for your family" : `Kept ${savedCount} things for your family`}</h2>
           <p className="v2-muted">{savedCount ? "They're in your book, under Kept. You can remove anything there later." : "That's fine. You can talk again whenever you like."}</p>
+          {waitingCount > 0 && <p className="v2-muted">{waitingCount === 1 ? "One thing waits" : `${waitingCount} things wait`} for you to say it was you. {waitingCount === 1 ? "It's" : "They're"} in Talk, under what's waiting from earlier.</p>}
           <button className="v2-btn" onClick={() => setPhase("talk")}>Back to Talk</button>
         </section>
       </div>
