@@ -106,7 +106,7 @@ flowchart LR
 - **Decisions:** fixed rules and the fraud reference give a risk level. A policy file (`agents/guardian.yaml`) maps it to one response. Code sets a floor: the file can make a response stricter, never weaker.
 - **The owner's conversation:** everything new the owner says is screened before any card exists. A secret passed on, or a payment someone else asked for, is deflected. The planner then adds a safe-route step. Words aimed at Saathi are blocked.
 - **Another voice:** Saathi notices a second voice on a call and asks, warmly, who is there. No audio is stored.
-- **The voice check (voice fingerprinting):** the owner can turn it on by reading three short sentences. A speaker model turns each recording into 192 numbers that describe the voice, and only those numbers are kept, as the owner's voiceprint. The check can then compare the first 5 seconds of someone's speech with it (`agents/app/voiceprint.py`). Turning it off deletes the voiceprint. Calls don't use the check yet.
+- **The voice check (voice fingerprinting):** the owner can turn it on by reading three short sentences. A speaker model turns each recording into 192 numbers that describe the voice, and only those numbers are kept, as the owner's voiceprint. On a call, the first 5 seconds of the owner's side of each exchange are compared with it (`agents/app/voiceprint.py`), beside the extractor, so the call never waits. If the voice doesn't match, that exchange's cards are held: Keep waits until the owner confirms "Yes, this was me" (the server checks it). The guardian records it for the team, and Saathi warmly asks who's there. A check with no answer (too little speech, the model down) holds nothing back. Turning it off deletes the voiceprint.
 - **The family:** questions are checked lightly, so the family can get what was kept. Only a vault secret and words aimed at the assistant are stopped. A fee request gets a gentle note and a quiet look from the team.
 - **Held actions:** a paused recipient change or release waits on the server until a reviewer decides.
 - **No access to secrets:** the guardian never reads the vault, the escrow or media. A test checks this.
@@ -144,6 +144,7 @@ flowchart LR
 | One visitor reaching another's demo | Each Google account gets its own copy, chosen from the verified sign-in. Any other copy's data answers 404. |
 | Someone acting outside their role | The server checks the acting person on every action. One reviewer can't confirm both steps. |
 | Personal data in the admin portal or logs | Users appear only as hashed keys. No conversation text or names. |
+| Someone else speaking for the owner on a call | The voice check, if the owner turns it on: a voice that doesn't match the owner's voiceprint holds that exchange's cards until the owner confirms it was them. |
 | A person's own model key leaking | Encrypted with its own KMS key, bound to its owner, never returned or logged. |
 | Deploys from the wrong place | Workload Identity Federation lets only the deploy workflow on `main` deploy. The deployer has no broad roles. |
 

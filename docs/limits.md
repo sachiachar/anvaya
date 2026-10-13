@@ -19,7 +19,10 @@ flowchart LR
 | **Length of one live call** | **About 15 minutes in practice.** Our policy allows 20 minutes, but Gemini Live ends a voice session at about 15. Saathi then sums up the call as usual, and the owner can start a new one. Resuming sessions past 15 minutes is planned ([#216](https://github.com/sachiachar/anvaya/issues/216)). | `saathi.voice: max_call_minutes: 20`; Gemini Live |
 | A live call also ends | When the person's voice minutes for the day run out | `user_allowances` |
 | Length of one spoken reply | 1,000 characters | `saathi.speech: max_characters` |
-| Audio kept for one exchange of a call | 90 seconds, in memory only, to notice another voice | `live.MAX_EXCHANGE_AUDIO` |
+| Audio kept for one exchange of a call | 90 seconds, in memory only, to notice another voice and for the voice check. After an exchange without the owner's words, its last 3 seconds carry over to the next | `live.MAX_EXCHANGE_AUDIO`, `CARRY_OVER_AUDIO` |
+| The voice check on a call | The first 5 seconds of the owner's speech in each exchange, after the silence before it. Less than 2 seconds gives no answer, and holds nothing back | `voiceprint.CLIP_SECONDS`, `MIN_SECONDS` |
+| A voice that matches the owner's | A similarity of 0.35 or more with their voiceprint. A registration sample below 0.35 isn't kept | `voiceprint.MATCH_THRESHOLD` |
+| Samples in a voiceprint | The check is on from 3; the oldest drops out after 10. One recording is at most 20 seconds | `voiceprint.SAMPLES_NEEDED`, `MAX_SAMPLES`, `MAX_UPLOAD_SECONDS` |
 | "This conversation" | Saathi's last message counts as the same conversation for 30 minutes | `gaps.CONVERSATION_GAP` |
 | The same question in one conversation | Asked once. A topic the owner talks past waits for the next conversation, and a reply that repeats a question is rewritten once | `planner.after_turn`, `loops.REPEAT_OVERLAP` (0.5) |
 | Topics in the plan | Up to 5 that Saathi opens, and 3 that wait for the owner | `planner.MAX_SAATHI_STEPS`, `MAX_OWNER_STEPS` |
