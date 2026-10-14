@@ -2,14 +2,16 @@
 // up, all marked to keep. The owner removes only what they don't want, then keeps the rest with
 // one tap (one word for it everywhere, PR-14.7), or discards the whole conversation. Keeping here is
 // the owner's own decision (AGENTS.md rule 3); leaving without choosing keeps nothing, and the
-// items wait for next time.
+// items wait for next time. What the voice check held (it didn't sound like the owner) is kept only
+// once the owner ticks "Yes, this was me" on it; until then it waits, and the server refuses it too.
 import { useState } from "react";
 import type { Proposal } from "../../api";
 import { Check, Close } from "../icons";
 import AutonomyTag from "../Autonomy";
 import { canReplace, describe } from "./items";
 
-export type ReviewChoice = { p: Proposal; save: boolean; replace: boolean };
+/** wait: held by the voice check and not confirmed, so neither kept nor removed. */
+export type ReviewChoice = { p: Proposal; save: boolean; replace: boolean; wait: boolean; voiceConfirmed: boolean };
 
 export default function Review({ items, summary, summaryState, meta, note = null, busy, error, onSave, onLater, onDiscard }: {
   items: Proposal[]; summary: string | null; summaryState: "loading" | "ready" | "failed"; meta: string; note?: string | null;
@@ -21,14 +23,19 @@ export default function Review({ items, summary, summaryState, meta, note = null
   // earlier one: nothing kept is replaced without the owner's own choice.
   const [update, setUpdate] = useState<ReadonlySet<string>>(new Set());
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  // "Yes, this was me", one item at a time: a call can hold the owner's words and someone else's.
+  const [itWasMe, setItWasMe] = useState<ReadonlySet<string>>(new Set());
+  const waits = (p: Proposal) => Boolean(p.voice_mismatch) && !itWasMe.has(p.id);
+  const waiting = items.filter((p) => !removed.has(p.id) && waits(p)).length;
   const toggle = (set: ReadonlySet<string>, id: string) => {
     const next = new Set(set);
     if (!next.delete(id)) next.add(id);
     return next;
   };
-  const saving = items.filter((p) => !removed.has(p.id)).length;
+  const saving = items.filter((p) => !removed.has(p.id) && !waits(p)).length;
   const choices = (): ReviewChoice[] =>
-    items.map((p) => ({ p, save: !removed.has(p.id), replace: canReplace(p) && update.has(p.id) }));
+    items.map((p) => ({ p, save: !removed.has(p.id) && !waits(p), replace: canReplace(p) && update.has(p.id),
+      wait: !removed.has(p.id) && waits(p), voiceConfirmed: Boolean(p.voice_mismatch) && itWasMe.has(p.id) }));
 
   return (
     <section className="v2-review" aria-labelledby="review-title">
@@ -57,7 +64,18 @@ export default function Review({ items, summary, summaryState, meta, note = null
                     <p className="v2-review-title">{d.title}</p>
                     {!off && d.detail && <p className="v2-review-detail">{d.detail}</p>}
                     {!off && d.missing && <p className="v2-review-missing">{d.missing}</p>}
-                    {!off && p.another_voice && (
+                    {!off && p.voice_mismatch && (
+                      <div className="v2-review-held">
+                        <p>{itWasMe.has(p.id) ? "Didn't sound like your voice. You said it was you, so it will be kept."
+                          : "Didn't sound like your voice, so it waits until you say it was you. If it wasn't, remove it."}</p>
+                        <label>
+                          <input type="checkbox" checked={itWasMe.has(p.id)} disabled={busy}
+                            onChange={() => setItWasMe((s) => toggle(s, p.id))} />
+                          Yes, this was me
+                        </label>
+                      </div>
+                    )}
+                    {!off && p.another_voice && !p.voice_mismatch && (
                       <p className="v2-review-voice">Another voice was heard when this was said. Keep it only if it's what you want.</p>
                     )}
                     {!off && canReplace(p) && p.looks_like && (
@@ -105,7 +123,8 @@ export default function Review({ items, summary, summaryState, meta, note = null
         <div className="v2-review-actions">
           <button className="v2-btn wide" disabled={busy} onClick={() => onSave(choices())}>
             <Check />
-            {items.length === 0 ? "Done" : saving === 0 ? "Keep nothing" : saving === 1 ? "Keep 1 thing" : `Keep ${saving} things`}
+            {items.length === 0 ? "Done" : saving === 0 ? (waiting > 0 ? "Keep nothing yet" : "Keep nothing")
+              : saving === 1 ? "Keep 1 thing" : `Keep ${saving} things`}
           </button>
           <div className="v2-row v2-review-minor">
             {items.length > 0 && <button className="v2-link" disabled={busy} onClick={onLater}>Decide later</button>}

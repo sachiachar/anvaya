@@ -26,6 +26,18 @@ export class MicError extends Error {
   }
 }
 
+/** Open the microphone, as the call and the voice check's recordings do. Throws MicError. */
+export async function openMic(): Promise<MediaStream> {
+  if (!navigator.mediaDevices?.getUserMedia) throw new MicError("unsupported");
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+  } catch (e) {
+    throw e instanceof DOMException || e instanceof Error ? new MicError(e.name, e.message) : new MicError("unknown", String(e));
+  }
+}
+
 export class LiveCall {
   private ws: WebSocket | null = null;
   private micCtx: AudioContext | null = null;
@@ -48,14 +60,7 @@ export class LiveCall {
   constructor(private onEvent: (e: CallEvent) => void, private onLevel?: (who: "you" | "saathi", level: number) => void) {}
 
   async start() {
-    if (!navigator.mediaDevices?.getUserMedia) throw new MicError("unsupported");
-    try {
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
-    } catch (e) {
-      throw e instanceof DOMException || e instanceof Error ? new MicError(e.name, e.message) : new MicError("unknown", String(e));
-    }
+    this.stream = await openMic();
     this.micCtx = new AudioContext({ sampleRate: 16000 });
     this.speakerCtx = new AudioContext({ sampleRate: 24000 });
     this.speakerOut = this.speakerCtx.createGain();
@@ -156,7 +161,7 @@ export class LiveCall {
 }
 
 /** Root-mean-square loudness of 16-bit PCM, scaled to 0..1 (speech sits around 0.2 to 0.6). */
-function loudness(pcm: Int16Array): number {
+export function loudness(pcm: Int16Array): number {
   let sum = 0;
   for (let i = 0; i < pcm.length; i++) sum += (pcm[i] / 0x8000) ** 2;
   return Math.min(1, Math.sqrt(sum / Math.max(1, pcm.length)) * 4);

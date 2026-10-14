@@ -9,7 +9,7 @@ import { ADMIN_URL, Nav, type OwnerTab } from "./nav";
 import { SAMPLES, type SampleKind } from "./Samples";
 
 type Go = { to: PersonId; tab?: OwnerTab; label: string };
-type Step = { title: string; points: string[]; go?: Go[]; samples?: SampleKind[]; admin?: boolean };
+type Step = { title: string; points: string[]; go?: Go[]; samples?: SampleKind[]; admin?: boolean; settings?: boolean };
 
 const STEPS: Step[] = [
   {
@@ -18,8 +18,10 @@ const STEPS: Step[] = [
       "Vikram is the owner. Tap Talk to Saathi and speak, or type below it.",
       "Tell Saathi about a policy, an account or a story. For example: “I have an LIC policy ending 4417, and Priya is the nominee.”",
       "At the end, review what Saathi picked up and tap Keep.",
+      "Optional: turn on the voice check in Settings (the gear at the top) by reading three sentences. If a call doesn't sound like Vikram, what Saathi picked up waits until he says it was him.",
     ],
     go: [{ to: "vikram", tab: "talk", label: "Go to Vikram's Talk" }],
+    settings: true,
   },
   {
     title: "Vikram keeps what matters and invites Priya",
@@ -116,6 +118,11 @@ export default function Tour({ onClose }: { onClose: () => void }) {
                 <span>{g.label}</span><Chevron />
               </button>
             ))}
+            {s.settings && (
+              <button className="v2-switch" onClick={() => { nav.openSettings(); fold(true); }}>
+                <span>Turn on the voice check</span><Chevron />
+              </button>
+            )}
             {s.admin && (
               <a className="v2-switch" href={`${ADMIN_URL}#/agents`} target="_blank" rel="noreferrer">
                 <span>Open the admin portal</span><Chevron />

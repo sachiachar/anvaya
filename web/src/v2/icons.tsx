@@ -24,6 +24,7 @@ export const Check = () => <Icon><path d="M5 12.5l4.5 4.5L19 7.5" /></Icon>;
 export const Close = () => <Icon><path d="M6 6l12 12M18 6L6 18" /></Icon>;
 export const Chevron = () => <Icon><path d="M9 6l6 6-6 6" /></Icon>;
 export const Send = () => <Icon><path d="M4 12l16-8-6 16-2.5-6.5z" /></Icon>;
+export const Gear = () => <Icon><circle cx="12" cy="12" r="3" /><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" /></Icon>;
 export const Shield = () => <Icon><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" /><path d="M9 12l2 2 4-4" /></Icon>;
 
 /** The unbroken thread, the brand mark: a heartbeat that rises into the "A" and loops on. */

@@ -62,6 +62,12 @@
 - **A trial of Saathi as a talking face:** a separate page, `/v3.html`, shows Saathi as an animated face instead of the microphone. Its mouth follows Saathi's voice, and its expression follows the tone of the plan's step. Tap the face to start or end a call. The app doesn't link to this page.
 - A gentle notice when the owner is close to, or has reached, today's allowance. Near the limit for spoken replies, replies stop being read aloud automatically, and the owner can turn it back on.
 
+**The voice check (optional)**
+- **Vikram can check that it's his voice on a call.** In Settings (the gear at the top), he turns on the voice check and reads three short sentences aloud, five seconds each. After each one, he sees whether it sounded like the others. A recording that sounds like a different voice isn't kept, and he records it again. The tour's first step offers it too.
+- Only numbers that describe his voice are kept, never the recording, and never with his name. Turning the check off deletes them, and so does "Reset my demo". "Record again" starts over, after asking, for a new phone or a quieter room. Settings is hidden during a call.
+- **On a call, the first five seconds of what Vikram says each time are checked against his voice.** If they don't sound like him, what Saathi picked up then waits: each item says "Didn't sound like your voice", and Keep leaves it out. If it was him, he ticks "Yes, this was me" on that item and keeps it. If not, he removes it, or it waits for later. Each item is confirmed on its own, so one tick never keeps someone else's words. The server refuses to keep a held item without his confirmation. Saathi also warmly asks who's with him, and our team gets a quiet note.
+- A check that can't answer, because there was too little speech or the voice service can't be reached, holds nothing back. The call never waits for the check.
+
 **Keeping what matters**
 - **Each page in the book shows when it was kept**, as "Kept on 10 Oct 2026, 12:14", in your own time zone.
 - When Vikram says what he wants, for example "the Mysore flat should go to Sunita" or "I want to take Sunita to Kashi", Saathi notices it as a wish, even in the middle of a story, and offers it as a card to keep. A kept wish links to the people it's for.
@@ -141,7 +147,7 @@
     - a second change of the vault recipient within a day waits for our team, and Vikram sees a notice;
     - if a certificate showed warning signs, or a reviewer went against a "not valid" check, the vault doesn't open when the waiting period ends: it waits for our team;
     - when Priya asks for a password or a PIN, she gets a plain answer that the vault comes to the person Vikram named.
-    - **Saathi notices when another voice joins a call or a voice note.** It never tries to tell who it is, and keeps no recording or voiceprint. When two people talk, or talk at the same time, Saathi warmly asks who's there in its next words. The things said then are marked "Another voice was heard" before Vikram decides to keep them, and our team gets a quiet note.
+    - **Saathi notices when another voice joins a call or a voice note.** It never tries to tell who it is, and keeps no recording or voiceprint of them. When two people talk, or talk at the same time, Saathi warmly asks who's there in its next words. The things said then are marked "Another voice was heard" before Vikram decides to keep them, and our team gets a quiet note.
     - **Our team can follow one conversation from start to finish** on the Guardian page: what the guardian decided about each thing Vikram said, the card it allowed, whether he kept it, how the plan changed, and the step Saathi took next. It shows only ids and decisions, never what was said. "Follow this conversation" on an intervention opens the same view.
     - **Priya can still ask about anything Vikram kept, freely.** The assistant stops only two kinds of question: one for a vault secret, and one that tries to steer it. If she mentions someone asking for a fee, wants a change approved, or asks who should get what, she gets her answer plus one helpful line, such as "banks don't ask for fees on a call". A full account number in an answer is shortened to its last 4 digits instead of being refused. Our team quietly looks at a few patterns, such as a change of bank details or very many questions in an hour, without slowing her down.
     - **everything new Vikram says goes to the guardian first,** before any card is made. It allows it, deflects it or blocks it, using fixed rules and the fraud tactics our team approved. A secret he passes on, or a payment or change someone else asked him for, becomes no card. Words that try to steer Saathi are blocked. Each decision is linked to its turn and card, so our team can trace it, and it never holds what he said.
@@ -192,6 +198,7 @@
 - Spend can't yet be split by agent or tenant on the bill; those show use instead.
 - The fraud knowledge graph doesn't change during a run. Open the Fraud page again to see what the run added.
 - Fraud knowledge saved before the move to the open format also stays in its old place. The app no longer reads or changes it. A person removes it after checking the new files.
+- The voice check uses a demo voice service with no secret, which may keep what it works out from the audio it's sent. Confirming "Yes, this was me" needs no second check, such as a passkey. Voice notes in typed chat aren't checked, only live calls.
 - Tapping a source chip under Priya's answer doesn't open the kept item yet. A wish and a story both show as "Story or wish".
 
 ### Next
