@@ -1,5 +1,7 @@
 """API tests with Gemini stubbed out, so they run without cloud credentials."""
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -9,6 +11,7 @@ from tests.people import ANJALI, PRIYA, RAHUL
 
 OWNER = "owner_demo_vikram"
 BACKUP = {"kdf": "PBKDF2-SHA256", "iterations": 600000, "salt": "c2FsdA==", "iv": "aXY=", "ciphertext": "Y3Q="}
+OWNER_KEY = {**BACKUP, "key_id": "0123456789abcdef0123456789abcdef"}
 RECIPIENT = {"name": "Priya", "relationship": "daughter", "public_key_jwk": {"kty": "RSA"}, "key_backup": BACKUP}
 
 
@@ -85,6 +88,51 @@ def test_no_answer_is_kept_by_a_cache(client):
     assert found.status_code == 200 and found.headers["cache-control"] == "no-store"
     assert client.get("/api/no-such-route").headers["cache-control"] == "no-store"
     assert client.get("/api/healthz").headers["cache-control"] == "no-store"
+
+
+def test_owner_key_backup_is_his_alone(client):
+    """His data key, locked with his recovery code, so a new phone can open his vault (PR-14.9).
+    Only he reads it back: not Priya, not a reviewer, not the release bundle."""
+    url = f"/api/owners/{OWNER}/vault/owner-key"
+    assert client.get(url).status_code == 404
+    assert client.put(url, json=OWNER_KEY, headers=PRIYA).status_code == 403
+    assert client.put(url, json={**OWNER_KEY, "kdf": "none"}).status_code == 422
+    assert client.put(url, json=BACKUP).status_code == 422  # which key it is, always
+    assert client.put(url, json=OWNER_KEY).status_code == 200
+    assert client.get(url).json() == {"key_backup": OWNER_KEY}
+    for who in (PRIYA, ANJALI, RAHUL):
+        assert client.get(url, headers=who).status_code == 403
+    assert "key_backup" not in json.dumps(client.get(f"/api/owners/{OWNER}", headers=PRIYA).json())
+
+    # A new code for the same key replaces the backup; a different key never does.
+    client.put(url, json={**OWNER_KEY, "salt": "bmV3"})
+    assert client.get(url).json()["key_backup"]["salt"] == "bmV3"
+    other = {**OWNER_KEY, "key_id": "f" * 32, "salt": "b3RoZXI="}
+    assert client.put(url, json=other).status_code == 409
+    assert client.get(url).json()["key_backup"]["salt"] == "bmV3"
+
+
+def test_owner_key_backup_never_reaches_the_release_bundle(client):
+    client.put(f"/api/owners/{OWNER}/vault/owner-key", json={**OWNER_KEY, "ciphertext": "b3duZXI="})
+    client.post(f"/api/owners/{OWNER}/vault/invite", json={"name": "Priya", "relationship": "daughter"})
+    client.post(f"/api/owners/{OWNER}/vault/recipient", json=RECIPIENT, headers=PRIYA)
+    client.post(f"/api/owners/{OWNER}/vault/recipient/decision", json={"decision": "approve"})
+    client.post(f"/api/owners/{OWNER}/vault/escrow", json={"recipient_wrapped_key": "d3JhcHBlZA=="})
+    files = {"certificate": ("c.jpg", b"img", "image/jpeg")}
+    case = client.post(f"/api/owners/{OWNER}/death-report", files=files, headers=PRIYA).json()["case"]
+    client.post(f"/api/admin/cases/{case['id']}/confirm-death", json={"reviewer": "team"}, headers=ANJALI)
+    client.post(f"/api/owners/{OWNER}/release/authority", files={"proof": ("p.jpg", b"img", "image/jpeg")}, headers=PRIYA)
+    client.post(f"/api/admin/cases/{case['id']}/confirm-authority", json={"reviewer": "team-2"}, headers=RAHUL)
+
+    bundle = client.get(f"/api/owners/{OWNER}/vault/release-bundle", headers=PRIYA)
+    assert bundle.status_code == 200 and "b3duZXI=" not in bundle.text
+    assert "b3duZXI=" not in client.get(f"/api/owners/{OWNER}/vault/recipient", headers=PRIYA).text
+
+
+def test_reset_clears_the_owner_key_backup(client):
+    client.put(f"/api/owners/{OWNER}/vault/owner-key", json=OWNER_KEY)
+    assert client.post("/api/demo/seed").status_code == 200
+    assert client.get(f"/api/owners/{OWNER}/vault/owner-key").status_code == 404
 
 
 def test_vault_cannot_be_sealed_for_an_unapproved_recipient(client):

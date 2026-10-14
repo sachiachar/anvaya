@@ -132,7 +132,7 @@ Three Gemini steps are measured against real Gemini on a small synthetic test se
 The "Start here" tour in the app walks these steps.
 
 1. **Vikram → Talk:** tap **Talk to Saathi**. Talk about family, a first job, and an LIC policy ("make Ajay the nominee"). Tap **End call**. Saathi sums it up and marks everything to keep. Tap **Keep**. Open **Kept** to see the book, its readiness score and the pages still to write.
-2. **Vikram → Family:** choose Priya and invite her. **Priya:** accept and keep the recovery code. **Vikram:** check that the codes match, then seal. **Vault:** lock a secret.
+2. **Vikram → Family:** choose Priya and invite her. **Priya:** accept and keep the recovery code. **Vikram:** check that the codes match, then seal. **Vault:** lock a secret, then make and keep Vikram's own recovery code.
 3. **Priya:** start the handover with the specimen certificate. **Anjali**, then **Rahul**: two different reviewers confirm. To go against a "not valid" check, a reviewer must write a reason.
 4. After the waiting period, **Priya** opens the vault. She asks "What insurance did Papa have?" and prepares the claim letters.
 5. **Admin:** open the admin portal. The Agents page shows the loops that just ran, and the Guardian page shows the audit chain for a conversation.

@@ -757,8 +757,8 @@ def record_legal_document(owner_id: str, document_type: str = Form(...), locatio
 
 
 class KeyBackup(BaseModel):
-    """The recipient's private key, encrypted on their device with a key derived
-    from their recovery code. Useless to us without that code."""
+    """A key encrypted on the person's device with a key derived from their recovery code: the
+    recipient's private key, or the owner's data key. Useless to us without that code."""
 
     kdf: Literal["PBKDF2-SHA256"]
     iterations: int
@@ -914,6 +914,40 @@ def add_vault_item(owner_id: str, body: VaultItem) -> dict:
 @api.get("/owners/{owner_id}/vault/items")
 def list_vault_items(owner_id: str) -> dict:
     return {"items": store.list("vault_items", owner_id=owner_id)}
+
+
+# The owner's data key, kept in the cloud locked with his recovery code, so a new phone or a
+# cleared browser can open his vault again. Only the owner reads it: it never goes to the
+# recipient, the release bundle or the admin portal, and it is useless without the code.
+OWNER_KEY_BACKUPS = "owner_key_backups"
+
+
+class OwnerKeyBackup(KeyBackup):
+    # Which key this is: a hash of it, made on his phone, that opens nothing. A phone compares it
+    # with its own key, so an old key left in a browser is never taken for the one kept here.
+    key_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+
+
+@api.put("/owners/{owner_id}/vault/owner-key", dependencies=[Depends(demo.only("owner"))])
+def set_owner_key_backup(owner_id: str, body: OwnerKeyBackup) -> dict:
+    """Saves the backup, or replaces it when the owner makes a new recovery code for the same key.
+    A different key never replaces it: that would lose the only copy of the key his secrets need."""
+    owner_or_404(owner_id)
+    kept = store.get(OWNER_KEY_BACKUPS, owner_id)
+    if kept and kept.get("key_id") != body.key_id:
+        raise HTTPException(409, "This phone has a different key from the one kept in the cloud. "
+                                 "Enter your recovery code to bring the right key here.")
+    store.put(OWNER_KEY_BACKUPS, {"id": owner_id, "owner_id": owner_id, "at": time.time(), **body.model_dump()})
+    return {"stored": True}
+
+
+@api.get("/owners/{owner_id}/vault/owner-key", dependencies=[Depends(demo.only("owner"))])
+def get_owner_key_backup(owner_id: str) -> dict:
+    owner_or_404(owner_id)
+    backup = store.get(OWNER_KEY_BACKUPS, owner_id)
+    if not backup:
+        raise HTTPException(404, "no owner key backup yet")
+    return {"key_backup": OwnerKeyBackup(**backup).model_dump()}
 
 
 # ---- Activation and vault release (Assist: a person decides) ------------------

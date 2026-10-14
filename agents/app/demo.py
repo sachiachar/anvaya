@@ -28,7 +28,7 @@ LOCAL = "local"
 # Collections whose documents belong to one owner (by owner_id); reset clears them all.
 OWNED = ("moments", "inventory", "people", "vault_items", "cases", "legal_documents", "turns",
          "access_requests", "handoffs", "tasks", "loop_cache", "gap_skips", "gap_asks", "handover_turns",
-         "handover_conversations")
+         "handover_conversations", "owner_key_backups")
 # Version of how a copy keeps knowledge. 1: kept items live in the owner's OKF bundle (PR-7);
 # copies from before are started again on their next sign-in, purging kept items from Firestore.
 KNOWLEDGE_VERSION = 1

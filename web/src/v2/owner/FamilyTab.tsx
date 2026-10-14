@@ -4,7 +4,8 @@
 import { useContext, useEffect, useState } from "react";
 import { type AccessRequest, api } from "../../api";
 import { useAction } from "../../ui";
-import { keyFingerprint, ownerDataKey, wrapForRecipient } from "../../vaultCrypto";
+import { keyFingerprint, wrapForRecipient } from "../../vaultCrypto";
+import { keyForLocking } from "./ownerKey";
 import { friendlyError } from "../copy";
 import { Check, Lock } from "../icons";
 import { Nav } from "../nav";
@@ -71,7 +72,7 @@ function VaultRecipient({ onVault }: { onVault: () => void }) {
   /** Seal: the vault's key is wrapped, on this phone, for the recipient's public key only. */
   const seal = () => run(async () => {
     const r = await api.getRecipient();
-    await api.setEscrow(await wrapForRecipient(await ownerDataKey(), r.public_key_jwk));
+    await api.setEscrow(await wrapForRecipient(await keyForLocking(), r.public_key_jwk));
     await refresh();
   });
 

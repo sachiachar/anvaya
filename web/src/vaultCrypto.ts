@@ -1,11 +1,12 @@
 // On-device vault encryption (Web Crypto). The server and the AI only ever see
-// ciphertext, a data key sealed with the recipient's public key, and a backup of
-// the recipient's private key that is encrypted with their recovery code.
+// ciphertext, a data key sealed with the recipient's public key, and backups of the
+// owner's data key and the recipient's private key, each encrypted with that person's
+// recovery code.
 //
-// Recipient keys are NOT tied to one phone:
-//   - The key pair is created in the app; the private key is encrypted with a key
-//     derived from a recovery code (PBKDF2-SHA256, 600,000 iterations) and the
-//     encrypted backup is stored on the server.
+// Neither person's key is tied to one phone:
+//   - The key is created in the app, then encrypted with a key derived from a
+//     recovery code (PBKDF2-SHA256, 600,000 iterations), and the encrypted backup
+//     is stored on the server.
 //   - A new or replacement phone downloads the backup and unlocks it with the code.
 //   - Anvaya never sees the code, so it can never open the backup.
 //
@@ -66,19 +67,70 @@ function remove(key: string) {
 const RSA = { name: "RSA-OAEP", hash: "SHA-256" } as const;
 
 // ---- Owner -----------------------------------------------------------------
+//
+// The owner's data key is cached on this device and kept in the cloud, locked with his recovery
+// code (PR-14.9), so a new phone or a cleared browser can open his vault again. Anvaya never
+// sees the code, so it can never open the backup.
 
-export async function ownerDataKey(): Promise<CryptoKey> {
+/** The owner's data key on this device, or null. Never makes one: a key made by mistake would
+ *  open nothing he kept, and secrets locked with it could not be opened by his recipient. */
+export async function ownerDataKey(): Promise<CryptoKey | null> {
   const stored = load(DATA_KEY);
-  if (stored) return crypto.subtle.importKey("raw", unb64(stored), "AES-GCM", true, ["encrypt", "decrypt"]);
+  return stored ? crypto.subtle.importKey("raw", unb64(stored), "AES-GCM", true, ["encrypt", "decrypt"]) : null;
+}
+
+/** A new data key for a vault that has none yet. The caller checks that none exists anywhere. */
+export async function createOwnerDataKey(): Promise<CryptoKey> {
+  if (load(DATA_KEY)) throw new Error("This phone already has your key.");
   const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
-  save(DATA_KEY, b64(await crypto.subtle.exportKey("raw", key)));
+  keepOwnerKey(b64(await crypto.subtle.exportKey("raw", key)));
   return key;
 }
 
-/** Whether this browser holds the owner's data key, without making one (ownerDataKey would). The
- *  owner's own "Show" (PR-14.9) checks this first: a key made then would lock nothing he kept. */
+/** Saved, or an error: a key that isn't kept would lock secrets that nothing can open later. */
+function keepOwnerKey(value: string) {
+  save(DATA_KEY, value);
+  if (load(DATA_KEY) !== value) {
+    throw new Error("This browser can't keep your key, so nothing was locked. Allow this site to store data, or use another browser.");
+  }
+}
+
 export function hasOwnerDataKey(): boolean {
   return load(DATA_KEY) !== null;
+}
+
+/** Which key it is: a hash of the raw key, which opens nothing (PR-14.9). */
+async function keyIdOf(raw: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", raw);
+  return Array.from(new Uint8Array(digest).slice(0, 16), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** The id of this device's owner key, or null without one. */
+export async function ownerKeyId(): Promise<string | null> {
+  const key = await ownerDataKey();
+  return key ? keyIdOf(await crypto.subtle.exportKey("raw", key)) : null;
+}
+
+/** Lock this device's data key with the owner's recovery code, for the cloud. */
+export async function backupOwnerKey(recoveryCode: string): Promise<KeyBackup> {
+  const key = await ownerDataKey();
+  if (!key) throw new Error("This phone doesn't have your key.");
+  const raw = await crypto.subtle.exportKey("raw", key);
+  return { ...(await lockWithCode(raw, recoveryCode)), key_id: await keyIdOf(raw) };
+}
+
+/** On a new phone or a cleared browser: unlock the cloud backup with the recovery code. It
+ *  replaces any other key this browser still has, such as one left from before a reset. */
+export async function restoreOwnerKey(backup: KeyBackup, recoveryCode: string): Promise<void> {
+  const raw = await unlockWithCode(backup, recoveryCode);
+  await crypto.subtle.importKey("raw", raw, "AES-GCM", true, ["encrypt", "decrypt"]); // a real key, or throws
+  if (backup.key_id && (await keyIdOf(raw)) !== backup.key_id) throw new Error("That backup doesn't hold your key.");
+  keepOwnerKey(b64(raw));
+}
+
+/** For a shared device: the key stays in the cloud, and the recovery code brings it back. */
+export function forgetOwnerKeyOnThisDevice() {
+  remove(DATA_KEY);
 }
 
 export async function encryptSecret(key: CryptoKey, payload: object) {
@@ -112,7 +164,8 @@ export function normalizeRecoveryCode(input: string): string {
   return cleaned.match(/.{1,5}/g)?.join("-") ?? "";
 }
 
-export type KeyBackup = { kdf: "PBKDF2-SHA256"; iterations: number; salt: string; iv: string; ciphertext: string };
+// key_id (the owner's backup only): which key it is, a hash of the key that opens nothing.
+export type KeyBackup = { kdf: "PBKDF2-SHA256"; iterations: number; salt: string; iv: string; ciphertext: string; key_id?: string };
 
 const ITERATIONS = 600_000;
 
@@ -124,6 +177,23 @@ async function keyFromCode(code: string, salt: BufferSource, iterations: number)
     material, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
 }
 
+/** A key's raw bytes, locked with a recovery code: the backup the server keeps. */
+async function lockWithCode(raw: ArrayBuffer, recoveryCode: string): Promise<KeyBackup> {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await keyFromCode(recoveryCode, salt, ITERATIONS), raw);
+  return { kdf: "PBKDF2-SHA256", iterations: ITERATIONS, salt: b64(salt), iv: b64(iv), ciphertext: b64(ciphertext) };
+}
+
+async function unlockWithCode(backup: KeyBackup, recoveryCode: string): Promise<ArrayBuffer> {
+  const key = await keyFromCode(recoveryCode, unb64(backup.salt), backup.iterations);
+  try {
+    return await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(backup.iv) }, key, unb64(backup.ciphertext));
+  } catch {
+    throw new Error("That recovery code doesn't match. Check it and try again.");
+  }
+}
+
 // ---- Recipient -------------------------------------------------------------
 
 /** Create the recipient key pair and an encrypted backup of the private key. */
@@ -133,26 +203,14 @@ export async function createRecipientKeys(recoveryCode: string): Promise<{ publi
     true,
     ["encrypt", "decrypt"],
   );
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const pkcs8 = await crypto.subtle.exportKey("pkcs8", pair.privateKey);
-  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await keyFromCode(recoveryCode, salt, ITERATIONS), pkcs8);
+  const backup = await lockWithCode(await crypto.subtle.exportKey("pkcs8", pair.privateKey), recoveryCode);
   save(RECIPIENT_PRIVATE, JSON.stringify(await crypto.subtle.exportKey("jwk", pair.privateKey)));
-  return {
-    publicJwk: await crypto.subtle.exportKey("jwk", pair.publicKey),
-    backup: { kdf: "PBKDF2-SHA256", iterations: ITERATIONS, salt: b64(salt), iv: b64(iv), ciphertext: b64(ciphertext) },
-  };
+  return { publicJwk: await crypto.subtle.exportKey("jwk", pair.publicKey), backup };
 }
 
 /** On a new or replacement phone: unlock the downloaded backup with the recovery code. */
 export async function restoreRecipientKey(backup: KeyBackup, recoveryCode: string): Promise<void> {
-  const key = await keyFromCode(recoveryCode, unb64(backup.salt), backup.iterations);
-  let pkcs8: ArrayBuffer;
-  try {
-    pkcs8 = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(backup.iv) }, key, unb64(backup.ciphertext));
-  } catch {
-    throw new Error("That recovery code doesn't match. Check it and try again.");
-  }
+  const pkcs8 = await unlockWithCode(backup, recoveryCode);
   const priv = await crypto.subtle.importKey("pkcs8", pkcs8, RSA, true, ["decrypt"]);
   save(RECIPIENT_PRIVATE, JSON.stringify(await crypto.subtle.exportKey("jwk", priv)));
 }
