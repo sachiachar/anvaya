@@ -26,7 +26,7 @@ This page lists everything that Anvaya is built on, with the version, licence an
 | pydantic | 2.13.5 | MIT | Request and response schemas; structured output from Gemini |
 | google-genai | 2.28.0 | Apache-2.0 | Gemini calls: conversation, extraction, documents, spoken replies, live calls |
 | google-adk | 2.11.0 | Apache-2.0 | The handover assistant agent (`executor_agent.py`) |
-| httpx | 0.28.1 | BSD-3-Clause | Calls Exa's search API for fraud research (`web_search.py`); also the test client's fallback |
+| httpx | 0.28.1 | BSD-3-Clause | Calls Exa's search API for fraud research (`web_search.py`) and the speaker model for the voice check (`voiceprint.py`); also the test client's fallback |
 | google-cloud-bigquery | 3.46.1 | Apache-2.0 | Reads actual costs from the Cloud Billing export (admin portal) |
 | google-cloud-firestore | 2.34.0 | Apache-2.0 | Data store on Google Cloud (`STORE=firestore`) |
 | google-cloud-kms | 3.18.0 | Apache-2.0 | Wraps the vault escrow blob with the KMS key, and encrypts the model keys people add themselves (PR-10.10) |
@@ -133,5 +133,6 @@ These are services from other companies. Each one needs the product owner's agre
 | Service | Purpose | What's sent | Key | Where in the code |
 | --- | --- | --- | --- | --- |
 | **Exa** (exa.ai), search API | Web search for the fraud research agent: finds pages that report fraud tactics, so a scenario or tactic can be checked against a quoted source. Replaced Google Search grounding on 3 October 2026, whose quota the free tier didn't cover. Paid per search, with free starting credit. | Fraud research queries only: a document type, a country, a claimed tactic. Never owner data (a test checks this). | `EXA_API_KEY`: the GitHub secret of that name (environment "production"), set on Cloud Run with each API deploy | `agents/app/web_search.py` |
+| **Speaker model** (`spkrec-wasm` on Akamai Functions), a team member's demo deployment | The voice check (voice fingerprinting): turns a recording into a speaker embedding. It runs SpeechBrain's `spkrec-ecapa-voxceleb` (ECAPA-TDNN, Apache-2.0), quantised to int8, as WebAssembly. Agreed by the product owner for the demo. | Up to 5 seconds of the owner's speech as a WAV file, with no name or ID. The service may keep what it computes from it. | None: the demo deployment has no secret. `VOICE_MODEL_URL` sets its address; empty turns the check off | `agents/app/voiceprint.py` |
 
 **Data use.** On the Gemini API's free tier, Google may use prompts and responses to improve its products. On the paid tier, it doesn't. Keep billing on for any environment that handles more than synthetic demo data.

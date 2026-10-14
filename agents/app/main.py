@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from . import (auth, demo, escrow, fraud_guides, fraud_pipeline, gaps, grounding, guardian_inputs, knowledge,
                knowledge_map, live, loops, media, model_access, planner, proposals, release, scheduler, speech, step_guard,
-               tasks, tone)
+               tasks, tone, voiceprint)
 from .config import settings
 from . import executor_agent
 from .executor_agent import UnknownSession, ask
@@ -914,6 +914,44 @@ def add_vault_item(owner_id: str, body: VaultItem) -> dict:
 @api.get("/owners/{owner_id}/vault/items")
 def list_vault_items(owner_id: str) -> dict:
     return {"items": store.list("vault_items", owner_id=owner_id)}
+
+
+# ---- Voice check (voice fingerprinting): does the voice on a call sound like the owner's? ---------
+
+
+@api.get("/owners/{owner_id}/voiceprint", dependencies=[Depends(demo.only("owner"))])
+def voiceprint_status(owner_id: str) -> dict:
+    """Whether the check is on and how many samples it has; never the voiceprint itself."""
+    owner_or_404(owner_id)
+    return voiceprint.status(owner_id)
+
+
+@api.post("/owners/{owner_id}/voiceprint/samples", dependencies=[Depends(demo.only("owner"))])
+async def add_voiceprint_sample(owner_id: str, request: Request) -> dict:
+    """One registration sample: the owner reading a sentence, as 16 kHz mono 16-bit PCM. The audio
+    goes to the speaker model and is then dropped; only the numbers that describe the voice are kept."""
+    await asyncio.to_thread(owner_or_404, owner_id)
+    cap = voiceprint.MAX_UPLOAD_SECONDS * voiceprint.BYTES_PER_SECOND
+    pcm = bytearray()
+    async for chunk in request.stream():  # read up to the cap, never the whole of a longer upload
+        pcm.extend(chunk)
+        if len(pcm) > cap:
+            raise HTTPException(413, "That recording is too long. Read one sentence at a time.")
+    try:
+        return await voiceprint.add_sample(owner_id, bytes(pcm))
+    except voiceprint.TooShort as e:
+        raise HTTPException(400, str(e)) from None
+    except voiceprint.NotSetUp as e:
+        raise HTTPException(503, str(e)) from None
+    except voiceprint.Unavailable as e:
+        raise HTTPException(502, str(e)) from None
+
+
+@api.delete("/owners/{owner_id}/voiceprint", dependencies=[Depends(demo.only("owner"))])
+def forget_voiceprint(owner_id: str) -> dict:
+    """Turn the check off: the voiceprint is deleted."""
+    owner_or_404(owner_id)
+    return voiceprint.forget(owner_id)
 
 
 # ---- Activation and vault release (Assist: a person decides) ------------------
