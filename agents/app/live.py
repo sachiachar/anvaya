@@ -28,7 +28,7 @@ from typing import Callable
 from fastapi import WebSocket, WebSocketDisconnect
 from google.genai import types
 
-from . import gaps, grounding, guardian_inputs, loops, planner, proposals
+from . import gaps, grounding, guardian_inputs, loops, planner, proposals, voiceprint
 from .config import settings
 from .gemini import client_for
 from .governance import core as governance
@@ -69,6 +69,9 @@ VOICE_NOTE = ("Note from the app, not from the person: the plan has changed. Cal
 # The owner's side of each exchange, as audio, so the extractor can tell whether another voice spoke
 # (PR-2.13.2). Held in memory only for that exchange, capped, and never stored.
 MAX_EXCHANGE_AUDIO = 16000 * 2 * 90  # 90 seconds of 16 kHz 16-bit mono
+# After an exchange without the owner's words, this much of their audio carries over to the next:
+# enough to catch them starting to speak over Saathi, short enough to leave out older sounds.
+CARRY_OVER_AUDIO = 16000 * 2 * 3  # 3 seconds
 
 
 def _wav(pcm: bytes, rate: int = 16000) -> bytes:
@@ -313,10 +316,17 @@ async def _to_browser(ws: WebSocket, session, owner: dict, expand,
                     if part.inline_data and part.inline_data.data:
                         await ws.send_bytes(part.inline_data.data)
             if content.turn_complete and (heard.strip() or said.strip()):
-                # Save in the background so the conversation keeps flowing.
-                audio = bytes(heard_audio) if heard_audio else None
+                # Save in the background so the conversation keeps flowing. The owner's audio goes with
+                # the exchange their words are in. When none of their words were heard (Saathi spoke),
+                # its last seconds carry over: they may have started speaking before Saathi's turn
+                # ended, and those words reach the next exchange.
+                owner_spoke = bool(heard.strip())
+                audio = bytes(heard_audio) if heard_audio and owner_spoke else None
                 if heard_audio is not None:
-                    heard_audio.clear()  # the next exchange starts empty
+                    if owner_spoke:
+                        heard_audio.clear()  # the next exchange starts empty
+                    else:
+                        del heard_audio[:-CARRY_OVER_AUDIO]
                 heard_live = bool(plan_state and plan_state.get("voice_heard"))
                 if plan_state is not None:
                     plan_state["voice_heard"] = False
@@ -350,6 +360,9 @@ async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expa
         plan_state["correct"] = problems[0]
         await asyncio.to_thread(governance.record_intervention, AGENT, "add_check", CORRECTED)
     owner_turn, ai_turn = await asyncio.to_thread(_start_exchange, owner_id, heard, said)
+    # The voice check runs beside the extractor, so it adds no wait: the start of the owner's speech
+    # against their voiceprint. No answer (off, too little speech, the model down) holds nothing back.
+    voice_check = asyncio.create_task(voiceprint.check(owner_id, audio)) if audio else None
     found, last_said = None, None
     try:
         known, last_said = await asyncio.to_thread(_known_and_last_said, owner_id)
@@ -364,14 +377,24 @@ async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expa
     except Exception:
         log.exception("extraction failed; saving the exchange without proposals")
         moments, inventory, people = [], [], []
+    except BaseException:  # cancelled: the voice check stops too
+        if voice_check is not None:
+            voice_check.cancel()
+        raise
+    try:
+        mismatch = voice_check is not None and await voice_check == "mismatch"
+    except Exception:
+        log.exception("voice check failed; nothing held back")
+        mismatch = False
 
     turns = await asyncio.to_thread(_finish_exchange, owner_id, owner_turn, ai_turn, moments, inventory, people, expand,
-                                    found, last_said, step, heard_live)
+                                    found, last_said, step, heard_live, mismatch)
     if turns is None:
         return
-    # The extractor heard a voice Saathi didn't report: if that put the warm step first, Saathi is told now.
-    if (session is not None and plan_state is not None and getattr(found, "voices", "one") == "more"
-            and not plan_state.get("voice_told")):
+    # The extractor heard a voice Saathi didn't report, or the voice didn't match the owner's: if that
+    # put the warm step first, Saathi is told now.
+    if (session is not None and plan_state is not None
+            and (getattr(found, "voices", "one") == "more" or mismatch) and not plan_state.get("voice_told")):
         plan_state["voice_told"] = True
         current = (await asyncio.to_thread(lambda: planner.view(planner.current(owner_id))))["current"]
         if current and current["source"] == "voice":
@@ -408,8 +431,9 @@ def _known_and_last_said(owner_id: str) -> tuple[dict, dict | None]:
 
 def _finish_exchange(owner_id: str, owner_turn: dict, ai_turn: dict, moments, inventory, people,
                      expand, found=None, last_said: dict | None = None, step: str | None = None,
-                     heard_live: bool = False) -> tuple[dict, dict] | None:
-    """Add the cards and clear the "saving" mark. None if the owner discarded the exchange."""
+                     heard_live: bool = False, voice_mismatch: bool = False) -> tuple[dict, dict] | None:
+    """Add the cards and clear the "saving" mark. None if the owner discarded the exchange. A voice
+    that didn't match the owner's voiceprint holds the exchange's cards until the owner confirms."""
     with proposals.saving(owner_id):
         if not store.get("turns", ai_turn["id"]) or not store.get("turns", owner_turn["id"]):
             return None  # discarded while Saathi was still reading it
@@ -423,17 +447,22 @@ def _finish_exchange(owner_id: str, owner_turn: dict, ai_turn: dict, moments, in
         # Another voice in this exchange (PR-2.13.2): Saathi heard it live, or the extractor did in the audio.
         in_audio = getattr(found, "voices", "one") == "more"
         voices = heard_live or in_audio
+        card_docs = [*[("moments", d) for d in moment_docs], *[("inventory", d) for d in item_docs],
+                     *[("people", d) for d in people_docs]]
         if voices:
             heard_by = [a for a, heard_it in ((AGENT, heard_live), ("capture.extractor", in_audio)) if heard_it]
-            guardian_inputs.another_voice(owner_id, owner_turn["id"], heard_by[0], heard_by=heard_by, card_docs=[
-                *[("moments", d) for d in moment_docs], *[("inventory", d) for d in item_docs],
-                *[("people", d) for d in people_docs]])
+            guardian_inputs.another_voice(owner_id, owner_turn["id"], heard_by[0], heard_by=heard_by,
+                                          card_docs=card_docs)
+        if voice_mismatch:
+            guardian_inputs.voice_mismatch(owner_id, owner_turn["id"], AGENT, card_docs=card_docs)
+        # A voice that isn't the owner's gets the same warm "who's with you" step as another voice.
         planner.after_turn(owner_id, owner_turn["id"], screened.outcomes, mood=getattr(found, "owner_mood", "calm"),
                            answered_step=(last_said or {}).get("step"), outcome=getattr(found, "step_outcome", "none"),
-                           another_voice=voices)
+                           another_voice=voices or voice_mismatch)
         try:
             owner_turn = store.update("turns", owner_turn["id"], {"saving": False, "guardian": screened.decisions,
-                                                                  "held_back": screened.held_back})
+                                                                  "held_back": screened.held_back,
+                                                                  **({"voice_mismatch": True} if voice_mismatch else {})})
             ai_turn = store.update("turns", ai_turn["id"], {"saving": False,
                                                             "proposals": {"moments": [m["id"] for m in moment_docs],
                                                                           "inventory": [i["id"] for i in item_docs],

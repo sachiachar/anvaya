@@ -206,3 +206,17 @@ def another_voice(owner_id: str, turn_id: str, agent: str, card_docs: list[tuple
             store.update(collection, doc["id"], {"another_voice": True})
             doc["another_voice"] = True
     return decision.action_id
+
+
+def voice_mismatch(owner_id: str, turn_id: str, agent: str, card_docs: list[tuple[str, dict]]) -> str:
+    """The voice check: the start of the owner's side of an exchange didn't sound like their
+    voiceprint (voiceprint.py). The guardian records it for the team, and each card from that
+    exchange is held: Keep waits until the owner confirms it was them. Nothing about the voice is
+    kept. Returns the guardian action id."""
+    decision = guardian.decide("owner_statement", agent, {"voice_mismatch": True},
+                               refs={"turn": turn_id, "voice": "mismatch"}, once=f"gev_voicecheck_{turn_id}")
+    for collection, doc in card_docs:
+        if store.get(collection, doc["id"]):
+            store.update(collection, doc["id"], {"voice_mismatch": True})
+            doc["voice_mismatch"] = True
+    return decision.action_id

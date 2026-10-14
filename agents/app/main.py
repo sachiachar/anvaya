@@ -421,6 +421,8 @@ class Decision(BaseModel):
     edits: dict | None = None
     # "Replace it" on a card that looks like a kept item: keep it as that item's new version.
     replace: bool = False
+    # "Yes, this was me" on a card the voice check held: the owner confirms the voice was theirs.
+    voice_confirmed: bool = False
 
 
 @api.post("/proposals/{doc_id}/decision", dependencies=[Depends(demo.only("owner"))])
@@ -431,9 +433,15 @@ def decide(doc_id: str, body: Decision) -> dict:
     if body.decision == "reject":
         store.delete(body.collection, doc_id)
         return {"id": doc_id, "status": "rejected"}
-    # Edits change what a card says, never what it is or where it came from.
+    # The voice check: a card from an exchange whose voice didn't match the owner's voiceprint waits
+    # until the owner confirms it was them. Checked before anything is saved.
+    held_by_voice = bool(doc.get("voice_mismatch"))
+    if held_by_voice and not body.voice_confirmed:
+        raise HTTPException(409, "This didn't sound like your voice. Confirm it was you to keep it.")
+    # Edits change what a card says, never what it is, where it came from, or the voice check's hold.
     safe_edits = {k: v for k, v in (body.edits or {}).items()
-                  if k not in ("id", "owner_id", "status", "updates", "looks_like", "recording", "document")}
+                  if k not in ("id", "owner_id", "status", "updates", "looks_like", "recording", "document",
+                               "voice_mismatch", "voice_confirmed")}
     replaces = None
     if body.replace:  # checked before any edit is saved, so a refused Replace changes nothing
         target = (doc.get("looks_like") or {}).get("id")
@@ -456,6 +464,9 @@ def decide(doc_id: str, body: Decision) -> dict:
         doc = store.update(body.collection, doc_id, safe_edits)
     if replaces:
         doc = store.update(body.collection, doc_id, {"updates": replaces})
+    # The voice check's hold belongs to the card, not to what's kept: the Keep decision's audit refs
+    # record that the owner confirmed, and later versions of the item don't inherit the mark.
+    doc = {k: v for k, v in doc.items() if k not in ("voice_mismatch", "voice_confirmed")}
     try:
         kept = proposals.approve(body.collection, doc)
     except knowledge.Removed as e:
@@ -463,7 +474,8 @@ def decide(doc_id: str, body: Decision) -> dict:
     # The audit chain (PR-2.12.5): the card is gone now, so the Keep decision remembers the decision
     # that allowed the card and the item it became.
     store.update("guardian_actions", decision.action_id, {"refs": {"card": doc_id, "kept": kept["id"],
-                 **({"statement": doc["guardian_action"]} if doc.get("guardian_action") else {})}})
+                 **({"statement": doc["guardian_action"]} if doc.get("guardian_action") else {}),
+                 **({"voice": "confirmed_by_owner"} if held_by_voice else {})}})
     planner.refresh(doc["owner_id"], {"kind": "keep", "ref": doc_id})  # a kept item can finish a step
     return kept
 
