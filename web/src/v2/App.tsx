@@ -297,6 +297,16 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
     run(async () => { await api.setNickname(value); onNicknameDone(); });
 
   const actingRole = people.find((p) => p.id === acting)?.role;
+  // Only with his key kept in the cloud: otherwise forgetting it here would lose it for good.
+  const [ownerKeyNote, setOwnerKeyNote] = useState<string | null>(null);
+  const forgetOwnerKey = () => run(async () => {
+    if (!(await api.ownerKeyBackup())) {
+      setOwnerKeyNote("Make Vikram's recovery code on the Vault tab first. Without it, his key would be lost.");
+      return;
+    }
+    forgetOwnerKeyOnThisDevice();
+    onClose();
+  });
   return (
     <dialog ref={dialog} className="v2-sheet" aria-labelledby="demo-title" onClose={onClose}>
       <header className="v2-sheet-top">
@@ -365,10 +375,10 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
               </button>
             )}
             {actingRole === "owner" && hasOwnerDataKey() && (
-              <button className="v2-row-btn" onClick={() => { forgetOwnerKeyOnThisDevice(); onClose(); }}>
+              <button className="v2-row-btn" disabled={busy} onClick={forgetOwnerKey}>
                 <span className="v2-row-text">
                   <b>Simulate a lost or new phone</b>
-                  <span>Forgets Vikram's key on this device</span>
+                  <span>{ownerKeyNote ?? "Forgets Vikram's key on this device"}</span>
                 </span>
               </button>
             )}
@@ -402,7 +412,7 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
               <div className="v2-confirm v2-group-confirm" role="alert">
                 <p>Restore your demo copy to the start? Everything you kept or changed in it is cleared. Nobody else's copy is affected.</p>
                 <div className="v2-row">
-                  <button className="v2-btn danger" disabled={busy} onClick={() => run(async () => { await api.seed(); forgetTour(); location.reload(); })}>Reset my demo</button>
+                  <button className="v2-btn danger" disabled={busy} onClick={() => run(async () => { await api.seed(); forgetOwnerKeyOnThisDevice(); forgetRecipientKeyOnThisDevice(); forgetTour(); location.reload(); })}>Reset my demo</button>
                   <button className="v2-btn quiet" onClick={() => setConfirmReset(false)}>Keep it</button>
                 </div>
               </div>

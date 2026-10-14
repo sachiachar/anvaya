@@ -83,26 +83,49 @@ export async function ownerDataKey(): Promise<CryptoKey | null> {
 export async function createOwnerDataKey(): Promise<CryptoKey> {
   if (load(DATA_KEY)) throw new Error("This phone already has your key.");
   const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
-  save(DATA_KEY, b64(await crypto.subtle.exportKey("raw", key)));
+  keepOwnerKey(b64(await crypto.subtle.exportKey("raw", key)));
   return key;
+}
+
+/** Saved, or an error: a key that isn't kept would lock secrets that nothing can open later. */
+function keepOwnerKey(value: string) {
+  save(DATA_KEY, value);
+  if (load(DATA_KEY) !== value) {
+    throw new Error("This browser can't keep your key, so nothing was locked. Allow this site to store data, or use another browser.");
+  }
 }
 
 export function hasOwnerDataKey(): boolean {
   return load(DATA_KEY) !== null;
 }
 
+/** Which key it is: a hash of the raw key, which opens nothing (PR-14.9). */
+async function keyIdOf(raw: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", raw);
+  return Array.from(new Uint8Array(digest).slice(0, 16), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** The id of this device's owner key, or null without one. */
+export async function ownerKeyId(): Promise<string | null> {
+  const key = await ownerDataKey();
+  return key ? keyIdOf(await crypto.subtle.exportKey("raw", key)) : null;
+}
+
 /** Lock this device's data key with the owner's recovery code, for the cloud. */
 export async function backupOwnerKey(recoveryCode: string): Promise<KeyBackup> {
   const key = await ownerDataKey();
   if (!key) throw new Error("This phone doesn't have your key.");
-  return lockWithCode(await crypto.subtle.exportKey("raw", key), recoveryCode);
+  const raw = await crypto.subtle.exportKey("raw", key);
+  return { ...(await lockWithCode(raw, recoveryCode)), key_id: await keyIdOf(raw) };
 }
 
-/** On a new phone or a cleared browser: unlock the cloud backup with the recovery code. */
+/** On a new phone or a cleared browser: unlock the cloud backup with the recovery code. It
+ *  replaces any other key this browser still has, such as one left from before a reset. */
 export async function restoreOwnerKey(backup: KeyBackup, recoveryCode: string): Promise<void> {
   const raw = await unlockWithCode(backup, recoveryCode);
   await crypto.subtle.importKey("raw", raw, "AES-GCM", true, ["encrypt", "decrypt"]); // a real key, or throws
-  save(DATA_KEY, b64(raw));
+  if (backup.key_id && (await keyIdOf(raw)) !== backup.key_id) throw new Error("That backup doesn't hold your key.");
+  keepOwnerKey(b64(raw));
 }
 
 /** For a shared device: the key stays in the cloud, and the recovery code brings it back. */
@@ -141,7 +164,8 @@ export function normalizeRecoveryCode(input: string): string {
   return cleaned.match(/.{1,5}/g)?.join("-") ?? "";
 }
 
-export type KeyBackup = { kdf: "PBKDF2-SHA256"; iterations: number; salt: string; iv: string; ciphertext: string };
+// key_id (the owner's backup only): which key it is, a hash of the key that opens nothing.
+export type KeyBackup = { kdf: "PBKDF2-SHA256"; iterations: number; salt: string; iv: string; ciphertext: string; key_id?: string };
 
 const ITERATIONS = 600_000;
 

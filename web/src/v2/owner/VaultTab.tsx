@@ -8,7 +8,7 @@ import { api, type VaultItem } from "../../api";
 import { useAction } from "../../ui";
 import {
   backupOwnerKey, decryptSecret, encryptSecret, forgetOwnerKeyOnThisDevice, type KeyBackup, newRecoveryCode,
-  normalizeRecoveryCode, ownerDataKey, restoreOwnerKey,
+  normalizeRecoveryCode, ownerDataKey, ownerKeyId, restoreOwnerKey,
 } from "../../vaultCrypto";
 import { friendlyError } from "../copy";
 import { Lock, Shield } from "../icons";
@@ -29,13 +29,16 @@ export default function VaultTab({ onFamily }: { onFamily: () => void }) {
   const [reveal, setReveal] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
   const [recipientKnown, setRecipientKnown] = useState(false);
-  const [backup, setBackup] = useState<KeyBackup | null | undefined>(undefined); // undefined: not checked yet
+  // undefined: not checked yet.
+  const [backup, setBackup] = useState<KeyBackup | null | undefined>(undefined);
+  const [localKeyId, setLocalKeyId] = useState<string | null | undefined>(undefined);
   const { busy, error, run } = useAction();
 
   const [checkError, setCheckError] = useState<string | null>(null);
   // Separately, and honestly: if either can't be checked, say so rather than "not sealed" or "nothing locked".
   const refresh = () => run(async () => {
     setCheckError(null);
+    setLocalKeyId(await ownerKeyId());
     const [list, who, kept] = await Promise.allSettled([
       api.vaultItems(),
       api.getRecipient().catch((e) => { if (/no vault recipient/.test(String(e?.message))) return null; throw e; }),
@@ -47,7 +50,13 @@ export default function VaultTab({ onFamily }: { onFamily: () => void }) {
     const failed = [list, who, kept].find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
     if (failed) setCheckError(friendlyError(failed.reason));
   });
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    refresh();
+    // Another tab may bring or forget the key.
+    const onStorage = (e: StorageEvent) => { if (e.key?.endsWith(".owner.dataKey")) void refresh(); };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   /** Locked on this phone first; only the locked form is sent. */
   const add = () => run(async () => {
@@ -61,7 +70,8 @@ export default function VaultTab({ onFamily }: { onFamily: () => void }) {
 
   const sealed = Boolean(recipient?.vault_sealed);
   // Known once the list, the seal and the backup are checked; until then nothing offers to lock.
-  const place: KeyPlace | null = items && recipientKnown && backup !== undefined ? keyPlace(backup, items.length, sealed) : null;
+  const place: KeyPlace | null = items && recipientKnown && backup !== undefined && localKeyId !== undefined
+    ? keyPlace(localKeyId, backup, items.length, sealed) : null;
   const lockBlocked = place === "inCloud" || place === "elsewhere";
   return (
     <div className="v2-stack v2-tab">
@@ -107,7 +117,7 @@ export default function VaultTab({ onFamily }: { onFamily: () => void }) {
         {items?.some((v) => !v.ai_label) && (
           <p className="v2-muted v2-small">A private label is locked along with its secret, so it shows here only as “a secret with a private label”, until you show it. {recipient?.name ?? "Your recipient"} sees it when the vault is opened.</p>
         )}
-        {place && (items.length > 0 || place === "here") && (
+        {place && (
           <OwnerKeyPanel place={place} backup={backup ?? null} sealedFor={sealed ? recipient?.name ?? null : null} onChange={refresh} />
         )}
       </section>
@@ -232,7 +242,10 @@ function OwnerKeyPanel({ place, backup, sealedFor, onChange }: {
         <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />
         I've written it down, or saved it in my password manager
       </label>
-      <button className="v2-btn" disabled={!saved || busy} onClick={keep}>Keep my key in the cloud</button>
+      <div className="v2-row">
+        <button className="v2-btn" disabled={!saved || busy} onClick={keep}>Keep my key in the cloud</button>
+        <button className="v2-btn quiet" disabled={busy} onClick={() => setNewCode(null)}>Not now</button>
+      </div>
     </div>
   );
   const lostFor = sealedFor ? `for you. ${sealedFor} can still open them when the time comes.` : "for good.";
