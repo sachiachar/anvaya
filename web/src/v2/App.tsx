@@ -15,7 +15,7 @@ import Talk from "./owner/Talk";
 import VaultTab from "./owner/VaultTab";
 import Journey from "./family/Journey";
 import Team from "./team/Team";
-import { forgetRecipientKeyOnThisDevice, hasRecipientKeys } from "../vaultCrypto";
+import { forgetOwnerKeyOnThisDevice, forgetRecipientKeyOnThisDevice, hasOwnerDataKey, hasRecipientKeys } from "../vaultCrypto";
 
 const SHOW_HOW_KEY = "anvaya.v2.showHow";
 
@@ -361,6 +361,14 @@ function DemoDrawer({ people, acting, onSwitch, onClose, showHow, onToggleShowHo
                 <span className="v2-row-text">
                   <b>Simulate a lost or new phone</b>
                   <span>Forgets Priya's key on this device</span>
+                </span>
+              </button>
+            )}
+            {actingRole === "owner" && hasOwnerDataKey() && (
+              <button className="v2-row-btn" onClick={() => { forgetOwnerKeyOnThisDevice(); onClose(); }}>
+                <span className="v2-row-text">
+                  <b>Simulate a lost or new phone</b>
+                  <span>Forgets Vikram's key on this device</span>
                 </span>
               </button>
             )}

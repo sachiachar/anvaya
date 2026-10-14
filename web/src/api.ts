@@ -330,6 +330,14 @@ export const api = {
   addVaultItem: (item: { category: string; iv: string; ciphertext: string; ai_label: string | null }) =>
     request<VaultItem>(o("/vault/items"), json(item)),
   vaultItems: () => request<{ items: VaultItem[] }>(o("/vault/items")),
+  /** The owner's data key, locked with his recovery code (PR-14.9). Null when he has none yet. */
+  ownerKeyBackup: () =>
+    request<{ key_backup: KeyBackup }>(o("/vault/owner-key")).then((r) => r.key_backup).catch((e) => {
+      if (/no owner key backup yet/.test(String(e?.message))) return null;
+      throw e;
+    }),
+  setOwnerKeyBackup: (backup: KeyBackup) =>
+    request<{ stored: boolean }>(o("/vault/owner-key"), { ...json(backup), method: "PUT" }),
 
   reportDeath: (certificate: File) =>
     request<{ case: Case }>(o("/death-report"), upload("certificate", certificate, certificate.name)),
