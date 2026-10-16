@@ -1,7 +1,9 @@
-"""The AI-first loops. Each function is one Gemini step inside a loop.
+"""The AI-first loops: the Gemini steps inside each loop, and the fixed rules around them
+(the persona, the checks on a reply, the certificate review summary). Gaps are found by fixed
+rules in gaps.py, not here.
 
 Autonomy levels (docs/architecture.md §4):
-  - Act within limits: transcription, extraction, gap detection
+  - Act within limits: transcription, extraction, replies
   - Propose:           anything entering the archive, legal handoff, claim letters
   - Assist:            death-certificate and legal-authority checks (a person decides)
 """

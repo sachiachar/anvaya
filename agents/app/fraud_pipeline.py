@@ -1,4 +1,4 @@
-"""Fraud foresight pipeline (PR-2.5, PR-2.6): imagine, check, map, then leave drafts for review.
+"""Fraud foresight pipeline (PR-2.5, PR-2.6): imagine, check, map, then add what is confirmed.
 
 Design: docs/architecture.md §4.1. Two agents, each with one job:
   - fraud.dreamer imagines attacks from our own material and maps each to a safeguard. No web access.
@@ -18,7 +18,7 @@ Rules in code, each with a test:
   - One failed model call costs one item, not the run: the item is logged as not checked and the
     run goes on. A run fails if it tried checks and none worked, if no imagining worked, or for a
     reason that stops every item (no search key, refused by the gateway, stopped).
-  - Limits per run come from the registry: 2 sequences, 3 scenarios each (2 close, 1 far-fetched),
+  - Limits per run come from policies.yaml: 2 sequences, 3 scenarios each (2 close, 1 far-fetched),
     2 new tactics per guide, and a cap on model calls per agent. One run at a time. A reviewer
     can stop a run; it stops before its next model call and keeps what was checked so far.
 """
@@ -82,8 +82,8 @@ class Stopped(Exception):
 
 class Guard:
     """Cost control for one run. Before every model call it checks whether a reviewer pressed
-    Stop, and whether the agent has calls left under its max_model_calls_per_run in the
-    registry. It also saves the counts after each step, so the portal shows progress live."""
+    Stop, and whether the agent has calls left under its max_model_calls_per_run in
+    policies.yaml. It also saves the counts after each step, so the portal shows progress live."""
 
     def __init__(self, run: dict):
         self.run = run

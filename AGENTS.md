@@ -22,7 +22,7 @@ Read [docs/architecture.md](docs/architecture.md) before changing anything in se
 ## Commands
 
 ```bash
-cd agents && uv run --group dev ruff check . && uv run --group dev pytest -q   # lint, then all API tests (about 1 second, no cloud credentials)
+cd agents && uv run --group dev ruff check . && uv run --group dev pytest -q   # lint, then all API tests (about 15 seconds, no cloud credentials)
 cd web && npm run lint && npm run build                                       # lint, then type-check and build both sites
 ```
 

@@ -57,8 +57,7 @@ def retry_for(agent: str, attempts: int | None = None) -> types.HttpRetryOptions
 
 @lru_cache(maxsize=1)
 def client() -> genai.Client:
-    # Reads GOOGLE_GENAI_USE_VERTEXAI / GOOGLE_CLOUD_PROJECT / GOOGLE_CLOUD_LOCATION
-    # (or GOOGLE_API_KEY) from the environment.
+    # Reads GOOGLE_API_KEY from the environment (the Gemini API key path; not Vertex AI).
     return genai.Client(http_options=types.HttpOptions(retry_options=RETRY))
 
 

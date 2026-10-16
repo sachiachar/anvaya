@@ -1,10 +1,11 @@
 """Gaps and conflicts drive the conversation (PR-7.10).
 
 Fixed rules, not the model, find what's missing in the owner's kept knowledge, and rank it by
-how much it would hurt the family. Saathi gets the top two that are due and raises at most one,
-gently, when the moment fits; Gemini only words the question. Code remembers which gap was asked and how
-it was answered, so a question comes back only as a reminder, after a wait (see `due`). "Skip"
-marks a gap as intentionally unknown, and it's never raised again.
+how much it would hurt the family. The conversation planner takes the gaps that are due as steps
+(planner.py), and Saathi raises them gently, when the moment fits; Gemini only words the question.
+Code remembers which gap was asked and how it was answered, so a question comes back only as a
+reminder, after a wait (see `due`). "Skip" marks a gap as intentionally unknown, and it's never
+raised again.
 
     nominee      an account or policy with no nominee or beneficiary
     conflict     a wish gives an account to someone other than its nominee

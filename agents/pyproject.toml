@@ -29,6 +29,12 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+# Two warnings from libraries, not our code: google-genai uses a typing name Python 3.17 removes,
+# and ADK marks FallbackModel (the handover assistant's model failover) as experimental.
+filterwarnings = [
+    "ignore:'_UnionGenericAlias' is deprecated:DeprecationWarning:google.genai.types",
+    "ignore:\\[EXPERIMENTAL\\] feature FeatureName.FALLBACK_MODEL is enabled:UserWarning",
+]
 
 [tool.ruff]
 # Matches the existing style; there is no formatter, so lines aren't rewrapped.

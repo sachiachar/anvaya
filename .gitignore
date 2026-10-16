@@ -13,6 +13,7 @@ agents/data/
 # Local scratch
 *.tmp
 web/dist-admin/
+*.tsbuildinfo
 
 # Personal agent settings (shared ones are in .claude/settings.json and AGENTS.md)
 .claude/settings.local.json
