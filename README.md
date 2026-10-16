@@ -125,7 +125,7 @@ Three Gemini steps are measured against real Gemini on a small synthetic test se
 
 **Main limitation:** genuine certificates are often flagged for a closer look, because the model raises free-text concerns. A reviewer always decides, so this costs reviewer time but never releases anything. Full results: [agents/evals/results/](agents/evals/results/).
 
-**Automated tests:** 721 tests run in about 6 seconds, with no cloud and Gemini stubbed. They enforce the rules in code: every Gemini call goes through the gateway, the guardian never reads the vault, two demo copies never reach each other, and the portal never returns conversation text.
+**Automated tests:** 749 tests run in about 15 seconds, with no cloud and Gemini stubbed. They enforce the rules in code: every Gemini call goes through the gateway, the guardian never reads the vault, two demo copies never reach each other, and the portal never returns conversation text.
 
 ## Demo walkthrough
 

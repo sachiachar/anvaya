@@ -1,8 +1,7 @@
 """Runtime configuration, read once from environment variables.
 
-Gemini itself is configured by the google-genai SDK's own variables:
-  GOOGLE_GENAI_USE_VERTEXAI=true, GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION
-(or GOOGLE_API_KEY for local experiments without Vertex AI).
+Gemini itself is configured by the google-genai SDK's own variables. The prototype release uses
+the Gemini API key path: GOOGLE_API_KEY, with GOOGLE_GENAI_USE_VERTEXAI=false (a test checks this).
 """
 
 import os

@@ -62,6 +62,15 @@ flowchart LR
 | Handover assistant | `executor_agent.py` (Google ADK) | Answers the family from the kept bundle, with real sources. Only after release. |
 | Fraud foresight | `fraud_pipeline.py`, `fraud_bundle.py` | Hourly research and "dreaming" that grow the fraud reference. See section 4.1. |
 | Audit chain | `audit_chain.py` | Follows one conversation turn to its decisions, by ids only. |
+| Step guard | `step_guard.py`, `step_types.py` | Never pursues a next step that could be part of a fraud: typed steps, flags worked out in code. |
+| Next steps | `tasks.py` | The owner's list from the readiness loop: at most 5 open, merged, and never back once done or dismissed. |
+| Knowledge map | `knowledge_map.py` | The kept knowledge as a graph for the demo. Read-only. |
+| Spoken replies | `speech.py` | Gemini text-to-speech in Saathi's own voice. Never imitates anyone. |
+| Own model key | `model_access.py`, `governance/keys.py` | A visitor's own Gemini key, used first for the calls they cause; the platform key is the failover. |
+| Fraud guides | `fraud_guides.py`, `fraud_graph.py`, `fraud_cues.py` | The reference guides, their graph for the portal, and anonymous gap counts that seed dreaming. |
+| Web search | `web_search.py` | Exa search for fraud research. Gemini only reads what came back. |
+| Hourly fraud cycle | `scheduler.py` | Cloud Scheduler runs the fraud cycle once an hour; "Run now" runs the same job. |
+| Spend | `governance/billing.py` | Dollar figures from the Cloud Billing export to BigQuery only. |
 
 ## 4. AI-first loops
 
@@ -213,7 +222,7 @@ sequenceDiagram
 
 ## 9. Quality and testing
 
-- **749 automated tests** (`agents/tests/`) run in about 12 seconds, with no cloud and a stubbed Gemini.
+- **749 automated tests** (`agents/tests/`) run in about 15 seconds, with no cloud and a stubbed Gemini.
 - Tests enforce the rules above. Some examples:
   - every Gemini call goes through the gateway;
   - the guardian never imports the vault;
