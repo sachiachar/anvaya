@@ -244,9 +244,6 @@ a.v2-switch { text-decoration: none; }
 /* ---- Panels ----------------------------------------------------------------------------------- */
 .v2-panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; display: grid; gap: 12px; }
 .v2-panel h2 { font-size: var(--step-2); }
-.v2-soon { display: grid; gap: 14px; justify-items: start; padding: 28px 22px; border-radius: var(--radius); background: var(--surface); border: 1px dashed var(--line); }
-.v2-soon h2 { font-size: var(--step-2); }
-
 /* ---- Owner alert: someone reported the owner has passed away ------------------------------------ */
 .v2-alert { background: var(--step-soft); border: 1.5px solid var(--step); border-radius: var(--radius); padding: 18px 20px; display: grid; gap: 10px; }
 .v2-alert h2 { font-size: var(--step-1); color: var(--ink); }

@@ -30,7 +30,7 @@ export type MapNode = { id: string; label: string; type: string;
   group: "owner" | "person" | "mentioned" | "story" | "wish" | "account" | "institution";
   description?: string; kept_at?: string | null; verified?: boolean };
 /** derived: implied by the cards' fields; typed links (PR-7.9) have derived false. */
-export type MapEdge = { from: string; to: string; label: string; derived: boolean };
+type MapEdge = { from: string; to: string; label: string; derived: boolean };
 export type KnowledgeMap = { nodes: MapNode[]; edges: MapEdge[]; gaps: { node: string; missing: string }[];
   recent: { at: string; action: "Creation" | "Update" | "Deprecation"; id: string; title: string }[];
   counts: { concepts: number; links: number; gaps: number } };
@@ -81,7 +81,7 @@ export type DocumentCheck = {
   autonomy?: Autonomy;
 };
 
-export type SignFinding = {
+type SignFinding = {
   id: string;
   look_for: string;
   result: "found" | "ruled_out" | "cant_tell";
@@ -137,7 +137,7 @@ export type Turn = {
 };
 
 /** A step of the conversation plan (PR-2.12.2), and who starts it: Saathi, or the owner when ready. */
-export type PlanStep = { id: string; source: "initial" | "gap" | "suggestion" | "safe_route"; topic: string; ask: string;
+type PlanStep = { id: string; source: "initial" | "gap" | "suggestion" | "safe_route"; topic: string; ask: string;
   opens: "saathi" | "owner";
   /** How Saathi speaks on it, and those words (PR-2.12.3). */
   tone?: "warm" | "gentle" | "light" | "clear" | "reassuring" | "patient"; tone_words?: string };
@@ -153,7 +153,7 @@ export type Task = {
   autonomy?: Autonomy;
 };
 
-export type AllowanceMeasure = { used: number; limit: number; share: number; state: "ok" | "warning" | "reached" };
+type AllowanceMeasure = { used: number; limit: number; share: number; state: "ok" | "warning" | "reached" };
 export type MoreKind = "daily_allowance" | "voice_minutes" | "spoken_replies";
 export type MoreRequest = { id: string; at: number; kind: MoreKind; amount: number; hours: number;
   status: "pending" | "approved"; expires_at?: number | null };
@@ -246,7 +246,6 @@ export const api = {
     request<{ access: ModelAccess; features: KeyFeature[] }>("/model-access", { ...json({ kind, key }), method: "PUT" }),
   removeModelKey: () => request<{ access: null }>("/model-access", { method: "DELETE" }),
   owner: () => request<{ name: string; family: string[] } & Record<string, unknown>>(o("")),
-  archive: () => request<{ moments: Moment[]; inventory: InventoryItem[] }>(o("/archive")),
   /** The owner's kept knowledge as a graph, for the demo's live knowledge map. */
   knowledgeMap: () => request<KnowledgeMap>(o("/knowledge-map")),
   /** Everything kept, current versions only, so the owner can remove a mistake. */
@@ -257,11 +256,6 @@ export const api = {
   gaps: () => request<{ gaps: Gap[] }>(o("/gaps")),
   skipGap: (key: string) => request<{ gaps: Gap[] }>(o(`/gaps/${encodeURIComponent(key)}/skip`), { method: "POST" }),
 
-  captureAudio: (audio: Blob, name: string) =>
-    request<{ autonomy: Autonomy; language: string; transcript: string; proposals: Moment[] }>(
-      o("/capture/audio"), upload("audio", audio, name)),
-  addDocument: (image: File) =>
-    request<{ autonomy: Autonomy; proposal: InventoryItem }>(o("/documents"), upload("image", image, image.name)),
   addWish: (text: string) => {
     const form = new FormData();
     form.append("text", text);

@@ -17,7 +17,7 @@ const inWords = (field: string) => FIELD_WORDS[field] ?? field.replaceAll("_", "
 const blank = (s: string | null | undefined) =>
   !s || /^(n\s*\/?\s*a|nil|none|null|unknown|not known|not applicable|not available|tbd|[-.\s•]*)$/i.test(s.trim());
 
-export type Described = { kind: string; title: string; detail: string | null; missing: string | null };
+type Described = { kind: string; title: string; detail: string | null; missing: string | null };
 
 export function describe(p: Proposal): Described {
   const update = p.updates ? " · an update" : "";

@@ -3,7 +3,7 @@
 import { json, request, type KeyFeature, type KeyKind, type ModelAccess } from "../api";
 
 /** demo_admin: a visitor with their own demo copy, who decides that copy's requests only (PR-12.9). */
-export type Role = "viewer" | "demo_admin" | "budget_approver" | "risk_reviewer" | "platform_admin";
+type Role = "viewer" | "demo_admin" | "budget_approver" | "risk_reviewer" | "platform_admin";
 export type Permission = "approve_budget" | "review_guardian" | "review_fraud" | "manage_demos" | "kill_switch" | "manage_privacy"
   | "manage_model_access";
 export type KillSwitchState = "off" | "optional_paused" | "all_paused";
@@ -85,7 +85,7 @@ export type AgentStep = { id: string; at: number; agent: string; purpose: string
 
 /** The agents map's live status (polled every 15 seconds). Counts only: no user and no text. */
 export type AgentState = "working" | "active" | "idle" | "paused" | "planned";
-export type FraudRunSummary = { id: string; kind: "dream" | "research"; status: Run["status"]; stage?: string | null;
+type FraudRunSummary = { id: string; kind: "dream" | "research"; status: Run["status"]; stage?: string | null;
   started_at: number; finished_at?: number | null; counts?: Record<string, number> | null };
 export type AgentLive = { state: AgentState; running_calls: number; paused_by: "kill_switch" | "daily_ceiling" | null;
   last: { at: number; model: string; result: "done" | "failed" } | null;
@@ -102,7 +102,7 @@ export type BudgetRequest = { id: string; at: number; tenant: string; user_key: 
   decided_by?: string; decision_reason?: string; expires_at?: number };
 
 /** One conversation's audit chain (PR-2.12.5): ids, decisions and kinds only, never words. */
-export type ChainDecision = { id: string; at: number; response: string; risk: string | null; detectors: string[];
+type ChainDecision = { id: string; at: number; response: string; risk: string | null; detectors: string[];
   event_id: string | null };
 export type Chain = {
   turn: { id: string; at: number; channel: string; held_back: number; user_key: string | null };
@@ -122,7 +122,7 @@ export type GuardianEvent = { id: string; at: number; response: "add_check" | "r
 export type Source = { title: string; url: string };
 
 /** Knowledge labels for fraud guide items (fraud_guides.py). */
-export type Label = "observed" | "derived" | "simulated" | "validated" | "invalidated";
+type Label = "observed" | "derived" | "simulated" | "validated" | "invalidated";
 
 export type Scenario = { id: string; at: number; scenario: string; safeguard: string; caught_by: string | null;
   coverage: "covered" | "partly" | "gap"; status: "verified" | "dreamt";
@@ -143,7 +143,7 @@ export type Draft = { id: string; at: number; guide_key: string; kind: "tactic" 
 export type RunStage = "imagine" | "check" | "map" | "save" | "research" | "skip";
 
 /** One line of a run's live view. */
-export type RunStep = { at: number; stage: RunStage; line: string; title?: string; confirmed?: boolean;
+type RunStep = { at: number; stage: RunStage; line: string; title?: string; confirmed?: boolean;
   coverage?: "covered" | "partly" | "gap" };
 
 export type Run = { id: string; kind: "dream" | "research"; guide_key: string;
@@ -194,7 +194,7 @@ export type GraphNode = {
   auto?: boolean; coverage?: string; version?: number; cue?: { owners: number } | null;
   history?: { guide: string; item: string } | { collection: string; item: string };
 };
-export type GraphLink = { source: string; target: string; kind: string };
+type GraphLink = { source: string; target: string; kind: string };
 export type FraudGraph = { nodes: GraphNode[]; links: GraphLink[]; guides: { id: string; title: string }[] };
 export type GraphEvent = { at: string; action: string; version?: number; reason?: string };
 

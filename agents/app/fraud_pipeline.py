@@ -168,11 +168,6 @@ def _words(text: str) -> set[str]:
     return {w for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) > 2 and w not in _STOP}
 
 
-def _similar(a: str, b: str) -> bool:
-    wa, wb = _words(a), _words(b)
-    return bool(wa and wb) and len(wa & wb) / len(wa | wb) >= 0.6
-
-
 # ---- Same topic: research and dreaming never add the same fraud twice -------------------
 #
 # The owner's rule: if research and dreaming end up on a topic already in the lists, it isn't
