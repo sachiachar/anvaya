@@ -1,6 +1,6 @@
 # Anvaya: Defined Limits
 
-*Every limit the prototype sets on purpose: how long, how much, how often. Last updated 12 October 2026.*
+*Every limit the prototype sets on purpose: how long, how much, how often. Last updated 16 October 2026.*
 
 These limits keep the demo safe, fair and affordable. Each one is enforced in code. Agent limits live in [`agents/policies.yaml`](../agents/policies.yaml), and a broken file stops the service at start-up. Other limits are constants in the code, named in the "Set in" column.
 
@@ -122,5 +122,16 @@ Every Gemini call passes one gateway. A request larger than its input limit is r
 | Recent AI steps shown on the Agents page | 2 days (the last 24 hours shown, up to 50 steps) | `core.STEPS_KEPT_DAYS` |
 | Hourly use for the charts | 14 days | `core.HOURS_KEPT_DAYS` |
 | History of each kept item | Every change keeps its own record; the catalog lists the last 2,000 | `knowledge.MAX_EVENTS` |
+
+## Anonymous user keys
+
+The admin portal and the logs show each person as a short key, never a name or email. The key is a hash of the person's sign-in ID and a salt.
+
+| Limit | Value | Set in |
+| --- | --- | --- |
+| The salt | `anvaya-demo`, the public default. Production doesn't set its own | `USER_KEY_SALT` in `config.py` |
+| What the key hides | Who a person is, from anyone who reads the portal or the logs. It is not a strong defence: anyone with a person's sign-in ID and this repo can work out their key. Sign-in IDs are random and never shown | `core.user_key`, `step_guard._digest` |
+| Why it stays for now | The key is also the ID of each person's demo copy. A new salt cuts every person off from their demo copy, their use, their allowance and their requests. All demo data is synthetic, so the risk is low | Owner's decision, 16 October 2026 |
+| Before real users | Set a secret `USER_KEY_SALT`, and start from fresh demo copies | Not yet done |
 
 See also: [architecture](architecture.md) (design, security and governance) and the [release notes](release-notes.md).
