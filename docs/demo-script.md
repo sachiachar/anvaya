@@ -18,6 +18,14 @@
 
 To change who is acting, tap a name in the **Show as** row under the header: Vikram, Priya, Anjali, Rahul or Admin. Where the demo waits for someone else, a **Switch to …** button does the same.
 
+
+## A live opening (optional)
+
+When you present the video in person, you can open with this story before you press play:
+
+> "Everyone needs someone to talk to. When I tell my best friend I want my daughter to have my flat, he doesn't lecture me. He says, 'You'll need a will. Let me find you a few good lawyers who don't overcharge, and you pick one.' A week later he asks if it's done. Saathi is that friend: always there, guiding without pushing, and helping close what's still open."
+
+Saathi never picks one lawyer for you. It shows a few vetted options, with prices and the same facts for each, and you choose.
 ---
 
 ## Scene 1: The problem (0:00–0:15)

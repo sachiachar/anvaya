@@ -38,6 +38,12 @@ And the sudden losses leave families least prepared. In Singapore, 2 in 5 people
 
 No forms. No lawyer's office. Just a conversation, in your own language, whenever you have a quiet moment.
 
+### Like a good friend
+
+Everyone needs someone to talk to. Imagine telling your best friend, *"I want my daughter to have the flat."* He doesn't lecture you, and he doesn't take sides. He says, *"You'll need a will for that. Let me find you a few good lawyers who don't overcharge, and you pick one."* Later, he asks, *"Did you meet them? Is the will done?"*
+
+Saathi is that friend. You can talk to Saathi any time. Saathi listens, guides you without pushing, finds out what it doesn't know, and helps you close what is still open. When you need a professional, Saathi shows you the options and you choose.
+
 ## What it feels like
 
 - **Tap the microphone and just talk.** It feels like a phone call with an old family friend. Saathi answers out loud, in your language, and you can interrupt any time. If your phone blocks the microphone, Saathi tells you how to allow it, or you can simply type.
@@ -56,7 +62,7 @@ No forms. No lawyer's office. Just a conversation, in your own language, wheneve
 
 ## Help when you need it, never a sales pitch
 
-When a next step needs a professional, such as a will writer or a safe place for original papers, Saathi shows you **vetted partners, with their prices up front**, and explains what each one does. You compare and choose. Saathi never recommends one over another, and no partner can pay to be shown first.
+When a next step needs a professional, such as a will writer or a safe place for original papers, Saathi shows you **a few vetted partners, usually three, with their prices up front** and the same facts for each: years in practice, languages, location, and how soon they can meet you. You compare and choose. Saathi never recommends one over another, and no partner can pay to be shown first.
 
 If your life spans more than one place, say a flat in Karnataka and savings in Singapore, Saathi notes where everything is and shows partners who can help in each place, so your family knows where to start.
 
