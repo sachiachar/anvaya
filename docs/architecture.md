@@ -205,6 +205,7 @@ sequenceDiagram
 
 - **Registry and policies.** 15 agents are registered in `agents/registry.yaml`. Each has one policy in `agents/policies.yaml`: autonomy, allowed models and tools, and limits. A broken file stops the service at start-up.
 - **The gateway denies by default.** An unregistered agent, or a model or tool its policy doesn't list, is refused and recorded.
+  - The ADK handover agent is checked at three points: before each model call (`gateway_check`), for each model the fallback chain tries (`KeyedGemini`), and before each tool (`tool_check`).
 - **Budgets.** Each person has a daily allowance. The whole service has a daily ceiling. Optional agents stop first. Safety checks (certificate checks, the guardian) never stop.
 - **Own model key.** A visitor may add their own Gemini key. Their calls use it first. The platform key is only the failover.
 - **Visibility.** The portal shows each agent's use, live status and recent steps, the guardian's events and the audit chain. It never shows conversation text.
@@ -212,7 +213,7 @@ sequenceDiagram
 
 ## 9. Quality and testing
 
-- **744 automated tests** (`agents/tests/`) run in about 6 seconds, with no cloud and a stubbed Gemini.
+- **749 automated tests** (`agents/tests/`) run in about 12 seconds, with no cloud and a stubbed Gemini.
 - Tests enforce the rules above. Some examples:
   - every Gemini call goes through the gateway;
   - the guardian never imports the vault;
