@@ -52,7 +52,6 @@ PATTERNS: dict[str, tuple[str, str | None]] = {
     "person.relationship_missing": ("a family member whose relationship isn't recorded", "relationship"),
 }
 ACCOUNTS = {"Bank Account": "bank_account", "Investment": "investment", "Retirement Account": "retirement"}
-PRIVACY_LINE = "We count common gaps, never the details, to protect everyone."
 
 
 def patterns_of(graphs: list[dict]) -> set[tuple[str, str]]:

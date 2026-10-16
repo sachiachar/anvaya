@@ -8,7 +8,7 @@ import pytest
 from google.genai import errors
 
 from app import executor_agent, gemini, live, speech
-from app.governance import core
+from app.governance import core, files
 from app.governance.seed import clear_samples as seed
 from app.schemas import DocumentCheck
 from app.store import store
@@ -170,7 +170,7 @@ def test_the_thinking_level_comes_from_the_policy(monkeypatch):
 
 def test_every_thinking_level_in_the_policies_is_valid():
     levels = {p["agent"]: p["models"]["thinking"] for p in core.policies() if "thinking" in p["models"]}
-    assert levels and set(levels.values()) <= gemini.THINKING_LEVELS
+    assert levels and set(levels.values()) <= set(files.THINKING_LEVELS)
 
 
 def test_an_answer_cut_off_at_the_output_limit_says_so(monkeypatch):

@@ -307,12 +307,6 @@ def forget_turns(owner_id: str, turn_ids: set[str]) -> None:
         store.update("owners", owner_id, {"last_said": None})
 
 
-def last_gap(owner_id: str, last_said: dict | None) -> dict | None:
-    """The gap Saathi's last message asked about, if it's still open, for judging the answer."""
-    key = (recent(last_said) or {}).get("gap")
-    return next(({"key": g["key"], "text": g["text"]} for g in find(owner_id) if g["key"] == key), None)
-
-
 def skip(owner_id: str, key: str) -> dict:
     """The owner chose not to answer: never raise this gap again."""
     if not any(g["key"] == key for g in find(owner_id, include_skipped=True)):
