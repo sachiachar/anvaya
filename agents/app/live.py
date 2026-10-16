@@ -21,12 +21,15 @@ import contextlib
 import io
 import json
 import logging
+import pathlib
 import time
+import traceback
 import wave
 from typing import Callable
 
 from fastapi import WebSocket, WebSocketDisconnect
 from google.genai import types
+from pydantic import ValidationError
 
 from . import gaps, grounding, guardian_inputs, loops, planner, proposals
 from .config import settings
@@ -36,6 +39,19 @@ from .governance import keys
 from .store import new_id, store
 
 log = logging.getLogger(__name__)
+
+
+def _failure(e: BaseException) -> str:
+    """What went wrong and where, never the message: a validation error's message holds the model's
+    output, which holds the owner's words. The error type, which fields (for a validation error)
+    and the last few code locations it passed through, enough to find a bug."""
+    what = type(e).__name__
+    if isinstance(e, ValidationError):
+        what += ": " + ", ".join(
+            f"{'.'.join(map(str, d['loc'])) or '(root)'} {d['type']}" for d in e.errors(include_input=False))
+    where = " < ".join(f"{pathlib.PurePath(f.filename).name}:{f.lineno} {f.name}"
+                       for f in reversed(traceback.extract_tb(e.__traceback__)[-4:]))
+    return f"{what} at {where}" if where else what
 
 
 AGENT = "saathi.voice"
@@ -177,7 +193,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> No
     except WebSocketDisconnect:
         return
     except Exception as e:  # report to the app instead of dropping the call silently
-        log.exception("live call failed")
+        log.error("live call failed (%s)", _failure(e))  # no traceback: it can hold the owner's words
         try:
             await ws.send_json({"type": "error", "detail": f"Live call failed: {keys.redact(str(e))}"})
         except Exception:
@@ -361,8 +377,9 @@ async def _save_exchange(ws: WebSocket, owner: dict, heard: str, said: str, expa
         question = await asyncio.to_thread(_question_before, owner_id, owner_turn["at"])
         found = grounding.ground(found, owner_words=heard, saathi_words=question, known=known)
         moments, inventory, people = found.moments, found.inventory, found.people
-    except Exception:
-        log.exception("extraction failed; saving the exchange without proposals")
+    except Exception as e:
+        # No traceback: a validation error carries the model's output, which holds the owner's words.
+        log.error("extraction failed (%s); saving the exchange without proposals", _failure(e))
         moments, inventory, people = [], [], []
 
     turns = await asyncio.to_thread(_finish_exchange, owner_id, owner_turn, ai_turn, moments, inventory, people, expand,

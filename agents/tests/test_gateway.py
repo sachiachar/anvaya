@@ -4,6 +4,7 @@ the live call and the ADK handover agent all go through the registry, the polici
 import asyncio
 import pathlib
 import re
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -106,3 +107,92 @@ def test_prototype_release_uses_the_gemini_api_not_vertex(monkeypatch):
     asyncio.run(gemini.generate_json(model=core.primary_model("saathi.chat"), schema=DocumentCheck, prompt="p",
                                      agent="activation.checker"))
     assert sent["config"].labels is None
+
+
+def test_handover_agent_tools_are_checked():
+    """The agent may use only the tools its policy grants; anything else is refused and recorded."""
+    assert executor_agent._runner.agent.before_tool_callback is executor_agent.tool_check
+    for name in ("read_bundle_index", "read_concept", "list_accounts"):
+        assert executor_agent.tool_check(SimpleNamespace(name=name), {}, None) is None
+    # Refused and recorded; the model is told, so the family's question still gets an answer.
+    assert "error" in executor_agent.tool_check(SimpleNamespace(name="web_search"), {}, None)
+    assert any(b["agent"] == "handover.assistant" and b["kind"] == "tool" and b["attempted"] == "(unknown tool)"
+               for b in store.list("gateway_blocked"))
+    # A name the model made up never reaches the portal: it could carry what someone said.
+    executor_agent.tool_check(SimpleNamespace(name="Vikram's PIN is 4821"), {}, None)
+    assert not any("4821" in str(b) for b in store.list("gateway_blocked"))
+
+
+def _fallback_run(monkeypatch) -> tuple[list, str]:
+    """The handover agent's first model is overloaded, so ADK moves on to the fallback model."""
+    from google import genai
+    from google.adk.models import Gemini
+    from google.adk.models.llm_request import LlmRequest
+    from google.adk.models.llm_response import LlmResponse
+    from google.genai import errors, types
+
+    from app import gemini
+
+    primary, fallback = core.models_in_order("handover.assistant")[:2]
+    monkeypatch.setattr(gemini, "client", lambda: genai.Client(api_key="AIzaSyTESTONLYpppppppppppppppppppppppppp"))
+
+    async def fake_generate(self, llm_request, stream=False):
+        if self.model == primary:
+            raise errors.APIError(503, {"error": {"code": 503, "message": "overloaded", "status": "UNAVAILABLE"}})
+        yield LlmResponse(content=types.Content(role="model", parts=[types.Part(text="ok")]))
+
+    monkeypatch.setattr(Gemini, "generate_content_async", fake_generate)
+    model = executor_agent.build_agent().model
+    request = LlmRequest(model=primary, config=types.GenerateContentConfig(),
+                         contents=[types.Content(role="user", parts=[types.Part(text="Where are the papers?")])])
+
+    async def run():
+        return [r async for r in model.generate_content_async(request)]
+
+    return asyncio.run(run()), fallback
+
+
+def test_handover_fallback_model_is_checked_by_the_gateway(monkeypatch):
+    """gateway_check sees only the first model; the fallback must pass the policy too."""
+    original = core.policy
+
+    def without_fallback(agent):
+        rules = original(agent)
+        if agent != "handover.assistant":
+            return rules
+        return {**rules, "models": {**rules["models"], "allow": [core.primary_model(agent)]}}
+
+    monkeypatch.setattr(core, "policy", without_fallback)
+    with pytest.raises(core.Refused):
+        _fallback_run(monkeypatch)
+    fallback = core.models_in_order("handover.assistant")[1]
+    assert any(b["agent"] == "handover.assistant" and b["kind"] == "model" and b["attempted"] == fallback
+               for b in store.list("gateway_blocked"))
+
+
+def test_handover_fallback_model_is_recorded_under_its_own_name(monkeypatch):
+    responses, fallback = _fallback_run(monkeypatch)
+    assert responses[0].custom_metadata["model"] == fallback
+    before = ((store.get("usage_days", core._today()) or {}).get("model_use") or {}).get(fallback, {}).get("calls", 0)
+    ctx = SimpleNamespace(state={"temp:model": core.primary_model("handover.assistant")})
+    executor_agent.gateway_record(ctx, SimpleNamespace(error_code=None, custom_metadata=responses[0].custom_metadata,
+                                                       usage_metadata=None))
+    assert store.get("usage_days", core._today())["model_use"][fallback]["calls"] == before + 1
+
+
+def test_agents_map_counts_only_the_last_30_days_of_blocked_calls():
+    from app.governance import portal
+
+    def blocked() -> int:
+        return {a["id"]: a for a in portal.agents_view()}["handover.assistant"]["usage_30d"]["blocked"]
+
+    before = blocked()
+    store.put("gateway_blocked", {"id": "blk_old", "at": time.time() - 40 * 86400, "day": "2000-01-01",
+                                  "agent": "handover.assistant", "kind": "model", "attempted": "x", "reason": "x"})
+    store.put("gateway_blocked", {"id": "blk_new", "at": time.time() - 86400, "day": "2000-01-01",
+                                  "agent": "handover.assistant", "kind": "model", "attempted": "x", "reason": "x"})
+    try:
+        assert blocked() == before + 1
+    finally:
+        store.delete("gateway_blocked", "blk_old")
+        store.delete("gateway_blocked", "blk_new")

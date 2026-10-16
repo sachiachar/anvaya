@@ -160,6 +160,10 @@
 - Roles in the portal (platform admin, budget approver, risk reviewer, viewer) are checked on the server. Anyone else who signs in can only view.
 - The portal never shows conversation text or names. People appear as anonymous keys, and counts under 5 are hidden.
 - Every call to Gemini is checked against the register of agents: the agent must be registered and the model allowed. Refused calls are recorded, and each call's tokens are counted.
+- The family's assistant is now held to its policy everywhere. It may use only the tools its policy lists. When its first model is busy, the fallback model gets the same checks, and its tokens are counted under its own name.
+- The Agents page counts blocked calls over the last 30 days, like the use beside them. Before, it counted every blocked call ever made.
+- When Saathi can't pick up the cards from part of a call, the server log says only what failed, never what was said.
+- The admin portal's site no longer serves the app's other pages, such as the talking-face trial and the demo documents.
 - A kill switch in the portal pauses voice and spoken replies first, then everything except certificate checks and the guardian.
 - Limits for each agent:
   - oversized requests are refused before anything is spent;

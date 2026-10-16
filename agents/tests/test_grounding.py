@@ -129,6 +129,22 @@ def test_a_live_call_card_is_checked_too_and_no_words_are_logged(client, monkeyp
     assert "cleared 1" in caplog.text and "folder" not in caplog.text and "bedroom" not in caplog.text
 
 
+def test_a_failed_extraction_logs_no_words(client, monkeypatch, caplog):
+    """The extractor's invalid output holds the owner's words; the log says only what failed."""
+    async def extract(owner, heard, said, known):
+        return Extraction.model_validate_json('{"moments": [{"kind": "the papers are in the steel almirah"}]}')
+
+    class WS:
+        async def send_json(self, data):
+            pass
+
+    monkeypatch.setattr(live.loops, "extract_from_exchange", extract)
+    with caplog.at_level(logging.INFO):
+        asyncio.run(live._save_exchange(WS(), {"id": OWNER, "name": "Vikram Rao"}, SAID, "Thank you.", main._expand))
+    assert "extraction failed (ValidationError: moments.0" in caplog.text and "test_grounding.py:" in caplog.text
+    assert "almirah" not in caplog.text and "bedroom" not in caplog.text
+
+
 def test_a_hindi_detail_nobody_said_is_cleared():
     heard = "मेरी एलआईसी पॉलिसी के कागज़ बेडरूम की अलमारी में हैं।"
     item = InventoryItem(**{**LIC, "nominee_or_beneficiary": "सुनीता देवी", "papers_at": "नीली फ़ाइल"})

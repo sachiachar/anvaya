@@ -8,3 +8,7 @@ rmSync("dist-admin/index.html");
 renameSync("dist-admin/admin.html", "dist-admin/index.html");
 rmSync("dist-admin/manifest.webmanifest", { force: true });
 rmSync("dist-admin/fonts", { recursive: true, force: true }); // only the app uses them
+// The app's other pages and files: the portal mustn't serve them (v3.html is a whole owner app).
+rmSync("dist-admin/v3.html", { force: true });
+rmSync("dist-admin/demo", { recursive: true, force: true });
+rmSync("dist-admin/pcm-recorder.js", { force: true });
