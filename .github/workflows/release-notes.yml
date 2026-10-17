@@ -1,7 +1,7 @@
 # Every pull request that changes what people use (the app, the API, the admin portal, the agents'
-# rules, hosting or the Firestore rules) adds its entry to docs/release-notes.md, so each release
-# lists what went live. A change nobody can notice, such as a refactor or a test, takes the
-# "no release note" label, and the PR says why.
+# rules, hosting or the Firestore rules) adds its own file to docs/release-notes/next/, so each
+# release lists what went live and two PRs never edit the same lines. A change nobody can notice,
+# such as a refactor or a test, takes the "no release note" label, and the PR says why.
 name: Release notes
 
 on:
@@ -24,11 +24,18 @@ jobs:
           SKIP: ${{ contains(github.event.pull_request.labels.*.name, 'no release note') }}
         run: |
           changed=$(git diff --name-only "$BASE" HEAD)
+          notes=$(git diff --name-only --diff-filter=AM "$BASE" HEAD -- 'docs/release-notes/next/*.md' | grep -v '/README.md$' || true)
+          # Every note file must have the right shape, whatever else changed.
+          for f in $notes; do
+            python3 -c "import sys; sys.path.insert(0, '.github/scripts'); import fold_release_notes as f; f.parse(open('$f').read())" \
+              || { echo "$f: write a bold group line, then bullets starting with '- '."; exit 1; }
+          done
           needs=$(echo "$changed" | grep -E '^(agents/app/|agents/(registry|policies)\.yaml|web/src/|web/public/|web/[^/]+\.html$|firebase\.json$|firestore\.rules$)' || true)
           if [ -z "$needs" ]; then echo "Nothing people use changed: no release note needed."; exit 0; fi
+          if [ -n "$notes" ]; then echo "Release note: $notes"; exit 0; fi
           if echo "$changed" | grep -qx 'docs/release-notes.md'; then echo "docs/release-notes.md is updated."; exit 0; fi
           if [ "$SKIP" = "true" ]; then echo "Labelled \"no release note\": skipped."; exit 0; fi
-          echo "These files change what people use, but docs/release-notes.md has no entry:"
+          echo "These files change what people use, but the PR has no release note:"
           echo "$needs" | sed 's/^/  /'
-          echo "Add an entry under \"Not yet released\", or label the PR \"no release note\" and say why."
+          echo "Add a file to docs/release-notes/next/ (see its README), or label the PR \"no release note\" and say why."
           exit 1

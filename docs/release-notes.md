@@ -1,6 +1,6 @@
 # Anvaya: Release Notes
 
-Every pull request that changes what people use adds its entry under "Not yet released". Production is released twice a day, at 13:00 and 19:00 IST. Each release that deploys something publishes a [GitHub Release](https://github.com/sachiachar/anvaya/releases) with the pull requests and the entries it took live.
+Every pull request that changes what people use adds its own note file to [release-notes/next/](release-notes/next/), so no two pull requests edit the same lines. Those notes are folded in under "Not yet released" from time to time. Production is released twice a day, at 13:00 and 19:00 IST. Each release that deploys something publishes a [GitHub Release](https://github.com/sachiachar/anvaya/releases) with the pull requests and the entries it took live.
 
 ## Not yet released
 
