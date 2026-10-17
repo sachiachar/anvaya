@@ -1,0 +1,24 @@
+# What `gcloud run deploy --source agents` leaves out of the source it uploads to Cloud Build.
+# gcloud reads only this folder's ignore files, not the repository's .gitignore. Without this
+# file, a deploy from a local checkout would upload agents/.env (real keys), the local demo
+# store and the virtual environment. The Dockerfile copies only what the API needs, by name.
+.gcloudignore
+.git
+.gitignore
+
+# Secrets and local data: never uploaded
+.env
+.env.*
+!.env.example
+data/
+
+# Local tools and caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Not part of the container
+tests/
+evals/
