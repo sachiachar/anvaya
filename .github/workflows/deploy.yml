@@ -157,7 +157,7 @@ jobs:
         run: '[ -n "$ALLOWED_EMAILS" ] || [ "$OPEN_SIGN_IN" = "true" ] || { echo "Set ALLOWED_EMAILS, or OPEN_SIGN_IN=true, in environment production"; exit 1; }'
 
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.0
       - name: Tests
         working-directory: agents
         run: uv run --group dev pytest -q
