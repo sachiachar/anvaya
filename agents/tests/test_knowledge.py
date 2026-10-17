@@ -242,7 +242,7 @@ def test_the_live_call_knows_the_family(monkeypatch):
 
     seen = {}
 
-    async def fake_call(ws, owner, expand):
+    async def fake_call(ws, owner, expand, accepted=False):
         seen["family"] = owner.get("family")
         await ws.close()
 

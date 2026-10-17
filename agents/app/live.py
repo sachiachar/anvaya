@@ -3,7 +3,8 @@
 The browser never talks to Gemini directly, so the API key stays on the server.
 
 WebSocket protocol
-  browser -> server  binary: 16 kHz mono 16-bit PCM from the microphone
+  browser -> server  text, first: {"type": "auth", "token": "<Firebase ID token>"} (never in the URL)
+                     binary: 16 kHz mono 16-bit PCM from the microphone
                      text:   {"type": "end"} to hang up
   server -> browser  binary: 24 kHz mono 16-bit PCM, the assistant's voice
                      {"type": "ready"}                       call connected
@@ -106,8 +107,9 @@ SAVE_GRACE_SECONDS = 30
 SAVING_EXPIRES_SECONDS = 120
 
 
-async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict]) -> None:
-    await ws.accept()
+async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict], *, accepted: bool = False) -> None:
+    if not accepted:  # with sign-in on, main.live_call already accepted it to read the token
+        await ws.accept()
     model = governance.primary_model(AGENT)  # from the registry, never an environment variable
     try:
         # The gateway checks the agent's registry entry, its policy and the kill switch before connecting.

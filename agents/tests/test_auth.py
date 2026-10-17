@@ -59,9 +59,25 @@ def test_every_api_route_is_protected_but_health_stays_open(client):
 
 def test_live_call_needs_an_allowed_token(client):
     with pytest.raises(WebSocketDisconnect) as closed:
-        with client.websocket_connect("/api/owners/owner_demo_vikram/live?token=stranger") as ws:
+        with client.websocket_connect("/api/owners/owner_demo_vikram/live") as ws:
+            ws.send_json({"type": "auth", "token": "stranger"})
             ws.receive_json()
     assert closed.value.code == 4403
+
+
+def test_the_live_call_token_comes_in_the_first_message_never_the_url(client, monkeypatch):
+    # SEC-7: a token in the URL would be kept in request logs, so the URL's token is ignored.
+    with pytest.raises(WebSocketDisconnect) as closed:
+        with client.websocket_connect("/api/owners/owner_demo_vikram/live?token=stranger") as ws:
+            ws.send_bytes(b"\x00\x00")  # audio before signing in, as an old page would send
+            ws.receive_json()
+    assert closed.value.code == 4401 and "Reload the page" in closed.value.reason
+    monkeypatch.setattr(main, "LIVE_AUTH_SECONDS", 0.05)
+    with pytest.raises(WebSocketDisconnect) as waited:
+        with client.websocket_connect("/api/owners/owner_demo_vikram/live") as ws:
+            ws.receive_json()  # sends nothing: the call closes after the wait
+    assert waited.value.code == 4401
+    assert "token" not in main.live_call.__code__.co_varnames[:main.live_call.__code__.co_argcount]
 
 
 # ---- Open sign-in for judging (PR-15.2) --------------------------------------------

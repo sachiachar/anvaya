@@ -71,12 +71,18 @@ export class LiveCall {
     this.speakerOut.connect(this.analyser);
     await this.micCtx.audioWorklet.addModule("/pcm-recorder.js");
 
-    // Browsers can't send headers on a WebSocket, so the sign-in token goes in the URL.
+    // Browsers can't send headers on a WebSocket. The sign-in token goes in the first message, never
+    // in the URL, where request logs would keep it (SEC-7). No audio is sent before it.
     const token = await idToken();
-    const query = new URLSearchParams({ acting_as: currentPerson(), ...(token ? { token } : {}) });
+    const query = new URLSearchParams({ acting_as: currentPerson() });
     const ws = new WebSocket(`${BASE}/api/owners/${currentOwnerId()}/live?${query}`);
     ws.binaryType = "arraybuffer";
     this.ws = ws;
+    let signedIn = false;
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "auth", token }));
+      signedIn = true;
+    };
     ws.onmessage = (m) => {
       if (m.data instanceof ArrayBuffer) return this.play(m.data);
       const event = JSON.parse(m.data) as CallEvent;
@@ -94,7 +100,7 @@ export class LiveCall {
     const recorder = new AudioWorkletNode(this.micCtx, "pcm-recorder");
     recorder.port.onmessage = (e) => {
       if (this.onLevel) this.onLevel("you", loudness(new Int16Array(e.data)));
-      if (ws.readyState === WebSocket.OPEN) ws.send(e.data);
+      if (signedIn && ws.readyState === WebSocket.OPEN) ws.send(e.data);
     };
     source.connect(recorder);
   }

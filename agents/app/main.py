@@ -7,6 +7,7 @@ Autonomy level of each action is returned as `autonomy` so the UI can show it.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import json
 import logging
@@ -323,11 +324,36 @@ def _answer(owner_id: str, taken: dict, result, reply, last_said: dict | None) -
     return {"autonomy": ACT, "owner_turn": _expand(taken["owner_turn"]), "assistant_turn": _expand(ai_turn)}
 
 
+# How long a call waits for its first message, the sign-in token, before it closes.
+LIVE_AUTH_SECONDS = 10
+
+
+async def _live_token(ws: WebSocket) -> str | None:
+    """The sign-in token from the call's first message, {"type": "auth", "token": "..."}.
+    Browsers can't send headers on a WebSocket, and a token in the URL would be kept in request
+    logs (SEC-7), so it comes as the first message instead."""
+    await ws.accept()
+    try:
+        message = await asyncio.wait_for(ws.receive(), LIVE_AUTH_SECONDS)
+    except TimeoutError:
+        return None
+    try:
+        first = json.loads(message.get("text") or "{}")
+    except ValueError:
+        return None
+    return first.get("token") if isinstance(first, dict) and first.get("type") == "auth" else None
+
+
 @app.websocket("/api/owners/{owner_id}/live")
-async def live_call(ws: WebSocket, owner_id: str, token: str | None = None, acting_as: str | None = None) -> None:
+async def live_call(ws: WebSocket, owner_id: str, acting_as: str | None = None) -> None:
     """Two-way voice call with the companion (Gemini Live API). See live.py for the protocol.
-    Browsers can't send headers on a WebSocket, so the sign-in token comes as ?token=."""
+    With sign-in on, the first message must carry the sign-in token (_live_token)."""
     if settings.auth_required:
+        token = await _live_token(ws)
+        if not token:
+            with contextlib.suppress(RuntimeError):  # the browser may already have gone
+                await ws.close(code=4401, reason="Reload the page to update the app, then call again.")
+            return
         try:
             user = await asyncio.to_thread(auth.verify, token)
         except HTTPException as e:
@@ -348,7 +374,8 @@ async def live_call(ws: WebSocket, owner_id: str, token: str | None = None, acti
         await ws.close(code=4404)
         return
     family = await asyncio.to_thread(knowledge.family, owner_id)
-    await live.call(ws, {**owner, "family": family}, _expand)  # family from kept people
+    await live.call(ws, {**owner, "family": family}, _expand,  # family from kept people
+                    accepted=settings.auth_required)
 
 
 def _speech_name(text: str) -> str:
