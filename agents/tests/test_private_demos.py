@@ -98,10 +98,10 @@ def test_no_route_by_id_reaches_another_copy(client, copies):
     assert client.post("/api/admin/cases/case_a/confirm-death", headers=b_reviewer, json={}).status_code == 404
     assert client.post("/api/access-requests/req_a/decision", headers=b_reviewer,
                        json={"decision": "approve", "decided_by": "team"}).status_code == 404
-    assert client.get("/api/admin/cases", headers=b).json()["cases"] == []
-    assert client.get("/api/admin/access-requests", headers=b).json()["requests"] == []
+    assert client.get("/api/admin/cases", headers=b_reviewer).json()["cases"] == []
+    assert client.get("/api/admin/access-requests", headers=b_reviewer).json()["requests"] == []
     # A still sees their own.
-    assert [c["id"] for c in client.get("/api/admin/cases", headers=h("judge-a")).json()["cases"]] == ["case_a"]
+    assert [c["id"] for c in client.get("/api/admin/cases", headers=h("judge-a", "anjali")).json()["cases"]] == ["case_a"]
     assert store.get("moments", "m_a")["status"] == "pending" and store.get("tasks", "task_a")["status"] == "open"
 
 

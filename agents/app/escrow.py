@@ -28,6 +28,8 @@ DEV_PREFIX = "dev:"
 
 def wrap(recipient_wrapped_key_b64: str) -> str:
     if not settings.kms_key_name:
+        if settings.store == "firestore":  # SEC-8.2: dev mode never reaches real storage
+            raise RuntimeError("KMS_KEY_NAME isn't set, so the vault escrow can't be wrapped")
         return DEV_PREFIX + recipient_wrapped_key_b64
     from google.cloud import kms
 

@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field, ValidationError
 from . import (auth, demo, escrow, fraud_guides, fraud_pipeline, gaps, grounding, guardian_inputs, knowledge,
                knowledge_map, live, loops, media, model_access, planner, proposals, release, scheduler, speech, step_guard,
                tasks, tone, voiceprint)
-from .config import settings
+from .config import production_problems, settings
 from . import executor_agent
 from .executor_agent import UnknownSession, ask
 from .governance import core as governance_core
@@ -41,6 +41,10 @@ log = logging.getLogger(__name__)
 governance_core.check_files()
 guardian.check_policy()  # a broken guardian.yaml stops start-up too
 planner.check_plan()  # and so does a broken conversation_plan.yaml (PR-2.12.2)
+# Fail closed (SEC-8): on Google Cloud, refuse to start rather than run without sign-in or KMS.
+if _problems := production_problems(settings):
+    raise RuntimeError("Refusing to start on Google Cloud: " + "; ".join(_problems))
+
 app = FastAPI(title="Anvaya agents", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
@@ -174,9 +178,15 @@ def seed_demo() -> dict:
     return {"owner": demo.reset()}
 
 
+# What every person in the copy may see of the owner record (SEC-9): never the vault escrow, the
+# recipient's key backup, contacts or the readiness details, which have their own owner-only routes.
+OWNER_FIELDS = ("id", "name", "family", "language")
+
+
 @api.get("/owners/{owner_id}")
 def get_owner(owner_id: str) -> dict:
-    return owner_or_404(owner_id)
+    owner = owner_or_404(owner_id)
+    return {k: owner[k] for k in OWNER_FIELDS if k in owner}
 
 
 # ---- Capture loop -------------------------------------------------------------
@@ -227,7 +237,7 @@ def _expand(turn: dict) -> dict:
     return {**turn, "proposals": items, "discarded": sum(len(v) for v in ids.values()) - len(items)}
 
 
-@api.get("/owners/{owner_id}/conversation")
+@api.get("/owners/{owner_id}/conversation", dependencies=[Depends(demo.only("owner"))])
 def get_conversation(owner_id: str) -> dict:
     turns = [_expand(t) for t in sorted(store.list("turns", owner_id=owner_id), key=lambda t: t["at"])]
     # An item mentioned several times (e.g. a policy, then its nominee) shows once: on its latest turn.
@@ -433,7 +443,7 @@ def add_wish(owner_id: str, text: str = Form(...)) -> dict:
 # ---- Curation loop (Propose: the owner decides) -------------------------------
 
 
-@api.get("/owners/{owner_id}/review")
+@api.get("/owners/{owner_id}/review", dependencies=[Depends(demo.only("owner"))])
 def review_queue(owner_id: str) -> dict:
     label = governance_core.autonomy(CARDS)
     return {
@@ -507,8 +517,11 @@ def decide(doc_id: str, body: Decision) -> dict:
     return kept
 
 
-@api.get("/owners/{owner_id}/archive")
+@api.get("/owners/{owner_id}/archive", dependencies=[Depends(demo.only("owner", "family"))])
 def archive(owner_id: str) -> dict:
+    """Everything kept: the owner's, or the family's once the handover is complete (SEC-2.2)."""
+    if demo.person()["role"] == "family":
+        require_handover(owner_id)
     return {
         "moments": knowledge.items(owner_id, "moments"),
         "inventory": knowledge.items(owner_id, "inventory"),
@@ -638,7 +651,7 @@ def get_plan(owner_id: str) -> dict:
     return planner.view(planner.current(owner_id))
 
 
-@api.get("/owners/{owner_id}/tasks")
+@api.get("/owners/{owner_id}/tasks", dependencies=[Depends(demo.only("owner"))])
 def list_tasks(owner_id: str) -> dict:
     owner = owner_or_404(owner_id)
     return {"score": owner.get("readiness_score"), "tasks": _labelled_steps(owner_id)}
@@ -950,7 +963,7 @@ def add_vault_item(owner_id: str, body: VaultItem) -> dict:
     return store.put("vault_items", {"id": new_id("vault"), "owner_id": owner_id, **body.model_dump()})
 
 
-@api.get("/owners/{owner_id}/vault/items")
+@api.get("/owners/{owner_id}/vault/items", dependencies=[Depends(demo.only("owner"))])
 def list_vault_items(owner_id: str) -> dict:
     return {"items": store.list("vault_items", owner_id=owner_id)}
 
@@ -1094,7 +1107,7 @@ async def submit_authority(owner_id: str, proof: UploadFile = File(...)) -> dict
     return {"autonomy": ASSIST, "case": store.put("cases", case)}
 
 
-@api.get("/admin/cases")
+@api.get("/admin/cases", dependencies=[Depends(demo.only("reviewer"))])
 def list_cases() -> dict:
     cases = [_refresh(c) for c in store.list("cases", owner_id=demo.owner_id())]
     for c in cases:
@@ -1263,14 +1276,14 @@ def request_access(owner_id: str, body: AccessRequest) -> dict:
     return {"message": NEUTRAL_REPLY}
 
 
-@api.get("/owners/{owner_id}/access-requests")
+@api.get("/owners/{owner_id}/access-requests", dependencies=[Depends(demo.only("owner"))])
 def owner_access_requests(owner_id: str) -> dict:
     owner = owner_or_404(owner_id)
     return {"requests": store.list("access_requests", owner_id=owner_id, status="pending_owner"),
             "contacts": owner.get("contacts", [])}
 
 
-@api.get("/admin/access-requests")
+@api.get("/admin/access-requests", dependencies=[Depends(demo.only("reviewer"))])
 def team_access_requests() -> dict:
     return {"requests": store.list("access_requests", owner_id=demo.owner_id(), status="pending_review")}
 

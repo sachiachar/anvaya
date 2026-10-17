@@ -437,6 +437,7 @@ paths:
   /api/owners/{owner_id}/archive:
     get:
       summary: Archive
+      description: 'Everything kept: the owner''s, or the family''s once the handover is complete (SEC-2.2).'
       operationId: archive_api_owners__owner_id__archive_get
       parameters:
       - name: owner_id
