@@ -121,3 +121,35 @@ def test_someone_without_a_demo_copy_stays_a_viewer(client):
         assert client.get("/api/platform/me", headers=h("browser")).json()["role"] == "viewer"
     finally:
         TOKENS.pop("browser")
+
+
+def _approve(client, req, who="judge-a"):
+    return client.post(f"/api/platform/approvals/{req}/decision", headers=h(who),
+                       json={"decision": "approve", "reason": "Fine for the demo", "hours": 24})
+
+
+def test_a_judge_grants_their_own_copy_at_most_two_a_day(client):
+    for kind, amount in (("daily_allowance", 100), ("voice_minutes", 30)):
+        assert _approve(client, _ask(client, kind=kind, amount=amount).json()["request"]["id"]).status_code == 200
+    third = _ask(client, kind="spoken_replies", amount=50).json()["request"]["id"]
+    refused = _approve(client, third)
+    assert refused.status_code == 409 and "2 extra grants" in refused.json()["detail"]
+    assert store.get("budget_requests", third)["status"] == "pending"  # still there to reject or approve later
+    rejected = client.post(f"/api/platform/approvals/{third}/decision", headers=h("judge-a"),
+                           json={"decision": "reject", "reason": "Not today"})
+    assert rejected.status_code == 200  # rejecting is never limited
+
+
+def test_no_self_grant_once_the_shared_ceiling_is_filling(client, monkeypatch):
+    monkeypatch.setattr(core, "service_status", lambda: {"tokens": {"state": "optional_paused"},
+                                                          "voice_minutes": {"state": "ok"}})
+    busy = _approve(client, _ask(client).json()["request"]["id"])
+    assert busy.status_code == 409 and "busy today" in busy.json()["detail"]
+    voice = _ask(client, kind="voice_minutes", amount=30).json()["request"]["id"]
+    assert _approve(client, voice).status_code == 200  # voice minutes are measured on their own
+
+
+def test_real_approvers_are_not_held_to_the_self_grant_limit(client):
+    for kind, amount in (("daily_allowance", 100), ("voice_minutes", 30), ("spoken_replies", 50)):
+        req = _ask(client, who="judge-b", kind=kind, amount=amount).json()["request"]["id"]
+        assert _approve(client, req, who="approver").status_code == 200
