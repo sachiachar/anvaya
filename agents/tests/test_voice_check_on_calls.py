@@ -51,7 +51,7 @@ def test_a_mismatch_holds_the_cards_records_a_look_and_adds_a_warm_step(client, 
     [action] = check_actions()
     assert action["response"] == "add_check" and action["refs"]["turn"] == owner_turns()[-1]["id"]
     event = next(e for e in store.list("guardian_events") if e["id"] == action["event_id"])
-    assert event["reason"] == "The voice didn't match the owner's voiceprint"
+    assert event["reason"] == "The voice on the call didn't sound like the owner's"
     plan = store.get("conversation_plans", OWNER)
     assert plan["steps"][0]["source"] == "voice" and plan["steps"][0]["tone"] == "warm"
 

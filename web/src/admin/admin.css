@@ -449,3 +449,12 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .pa-dates label { flex: 1 1 0; }
   .pa-filters select { max-width: none; width: 100%; }
 }
+
+/* ---- Guardian page: the numbers are buttons that filter the list; the conversation trail folds away ---- */
+button.pa-kpi { font: inherit; font-weight: 400; text-align: left; color: inherit; background: var(--pa-surface); border-color: var(--pa-line); cursor: pointer; min-height: 0; }
+button.pa-kpi:hover { border-color: var(--pa-accent); }
+button.pa-kpi[aria-pressed="true"] { border-color: var(--pa-gold); box-shadow: inset 0 0 0 1px var(--pa-gold); }
+button.pa-kpi em { text-decoration: underline; }
+.pa-fold > summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.pa-fold > summary h2 { margin: 0; }
+.pa-fold[open] > summary { margin-bottom: 12px; }

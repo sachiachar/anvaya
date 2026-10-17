@@ -241,7 +241,7 @@ def statement_rules(facts: dict) -> Finding | None:
     if facts.get("tactics_unavailable"):
         return Finding("fraud_module", "medium", "The fraud guides couldn't be read", floor="add_check")
     if facts.get("voice_mismatch"):  # the voice check: not the owner's voiceprint, never whose it is
-        return Finding("voice_rule", "medium", "The voice didn't match the owner's voiceprint", floor="add_check")
+        return Finding("voice_rule", "medium", "The voice on the call didn't sound like the owner's", floor="add_check")
     if facts.get("another_voice"):  # PR-2.13.2: how many voices, never whose
         return Finding("voice_rule", "medium", "Another voice was heard in the owner's conversation", floor="add_check")
     return None
