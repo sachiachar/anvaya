@@ -1,6 +1,6 @@
 # Anvaya, for you and your family
 
-*Team Saathi · Revision 4, 12 October 2026 · the full picture is in [concept.md](concept.md); the pitch to banks and insurers is in [pitch-institutions.md](pitch-institutions.md)*
+*Team Saathi · Revision 5, 17 October 2026 · the full picture is in [concept.md](concept.md); the pitch to banks and insurers is in [pitch-institutions.md](pitch-institutions.md)*
 
 ---
 
@@ -38,11 +38,30 @@ And the sudden losses leave families least prepared. In Singapore, 2 in 5 people
 
 No forms. No lawyer's office. Just a conversation, in your own language, whenever you have a quiet moment.
 
-### Like a good friend
+## A true friend
 
-Everyone needs someone to talk to. Imagine telling your best friend, *"I want my daughter to have the flat."* He doesn't lecture you, and he doesn't take sides. He says, *"You'll need a will for that. Let me find you a few good lawyers who don't overcharge, and you pick one."* Later, he asks, *"Did you meet them? Is the will done?"*
+Most of us have one friend we call when something is hard to say out loud.
 
-Saathi is that friend. You can talk to Saathi any time. Saathi listens, guides you without pushing, finds out what it doesn't know, and helps you close what is still open. When you need a professional, Saathi shows you the options and you choose.
+> Over tea one evening, you tell your oldest friend, *"I want my daughter to have the flat."*
+>
+> He doesn't lecture you, and he doesn't take sides. He lets you say all of it: why the flat, why her, what worries you.
+>
+> Then he says, *"You'll need a will for that. Let me find you a few good lawyers who don't overcharge. You pick one."*
+>
+> A month later, he asks, *"Did you meet them? Is the will done?"*
+>
+> He remembers the story of your first salary, the policy you mentioned once, the nephew you trust. What you tell him in confidence stays with him.
+>
+> And one day, when you are no longer here, he sits with your daughter and tells her, in your own words, everything you wanted her to know.
+
+Not everyone has a friend like that. **Saathi is that friend, for everyone.** Saathi is the word for a companion who walks beside you.
+
+- **Listens first.** You talk, in your own language, whenever you like. Saathi lets you finish, and the practical questions can wait for another day.
+- **Never takes sides, never sells.** When you need a lawyer or any other professional, Saathi finds a few good ones, shows you their prices, and you choose.
+- **Follows up.** Saathi remembers what is still open, and gently asks about it later: *"Is the will done?"*
+- **Remembers what you said, as you said it.** It never adds a word you didn't say, and it never guesses.
+- **Keeps your confidences.** Only what you choose to keep is passed on, and your secrets stay locked on your own phone.
+- **Is there for your family.** When the time comes, Saathi answers your family's questions in your words, and helps them with what comes next.
 
 ## What it feels like
 
@@ -53,7 +72,7 @@ Saathi is that friend. You can talk to Saathi any time. Saathi listens, guides y
 - **You decide what is kept.** Small cards appear as you talk: a story, a piece of advice, a bank account, a family member. You tap **Keep** or **Not now**. Only what you keep becomes part of what your family will one day receive.
 - **Your words, as you said them.** Each card says only what you said. If a detail is missing, Saathi leaves it empty and asks you later. It never guesses.
 - **A book for your family.** Everything you keep becomes a book, with chapters for your stories, money matters, wishes and people. Each page shows the day you kept it, and the cover shows how ready it is.
-- **Your conversation stays private.** It's held only so Saathi can follow along, with account and card numbers hidden. It's never handed over, and you can delete it whenever you like.
+- **Your conversation stays private.** It's held only so Saathi can follow along. It's never handed over, and you can delete it whenever you like. In everything you keep, account and card numbers are shortened to their last 4 digits.
 - **Keep your real voice.** For any story, you can keep the recording of you telling it, so one day your family hears it from you, not about you.
 - **Leave voice letters.** Record a message for someone special or a moment you may not be there for: *"For Priya, on her wedding day."* It stays sealed until the time comes, and reaches only the person you chose.
 - **Saathi notices what's missing.** "No nominee on this policy." "No will for the flat." You get simple next steps, each with a button. And when the moment is right, Saathi gently asks about the one thing that matters most: *"Who should receive the LIC policy?"* Say "skip", and it won't ask again.
@@ -96,7 +115,8 @@ Something this precious needs watching over, not just at the end, but all along 
 - **You hear first.** If anyone ever reports your passing, we tell you straight away, with a link to cancel. One tap, and nothing moves.
 - **Big changes take a breath.** Changing who receives your vault, or who your nominee is, takes a short pause and your own confirmation. If the change comes from a phone we haven't seen before, we check with you first.
 - **Your voice alone can't change anything important.** We always ask you to confirm on your own screen, so even a copy of your voice could never take over.
-- **Saathi notices another voice.** If someone else joins your conversation, Saathi warmly asks who is there. What was said then is marked, so you can decide calmly what to keep. Saathi never records anyone's voiceprint.
+- **Saathi notices another voice.** If someone else joins your conversation, Saathi warmly asks who is there. What was said then is marked, so you can decide calmly what to keep. Saathi never keeps a voiceprint of anyone else.
+- **Saathi is learning your voice (being tested).** If you choose, Saathi learns the sound of your voice from three short sentences. Today, when the voice on a call doesn't sound like yours, Saathi marks what was said, so you can check it before you keep it. Once it is fully live, it will make sure nobody else can keep anything in your book in your name. Only numbers that describe your voice are kept, never the recording, and you can switch it off at any time.
 - **Nothing risky reaches your book.** Everything new is checked before Saathi offers it to keep. A password someone asked you for, or a payment someone else wants, is never kept.
 - **No one can pressure you through us.** If it ever seems someone is pushing you to change your wishes, Saathi won't confront anyone. It simply holds the change, and checks with you privately, later, when you're alone. You stay in charge.
 - **We watch ourselves too.** Two different people approve every handover. They can't pick which cases they review, and we keep an eye out for anything unusual in how our own team works.
@@ -118,6 +138,8 @@ Something this precious needs watching over, not just at the end, but all along 
 > Then she asks about his first job, and Saathi asks, *"Would you like to hear him tell it?"* And there is Vikram, in his own voice, talking about the salary he gave to his mother.
 >
 > He had left one more thing: a voice letter, *"For Priya, on her wedding day"*.
+>
+> For years, Saathi had been Vikram's friend, the one he told everything to. Now it was there for Priya.
 
 ## Our promises to you
 
@@ -150,7 +172,7 @@ Anvaya is a working prototype, and we say plainly what is ready and what comes n
 
 | Ready to try today | Coming next |
 | --- | --- |
-| Talking with Saathi by voice or typing, and sharing a photo of a policy; cards you **Keep**; the book with its readiness score and next steps; the vault locked on your phone, for one person, with a matching code; your family member accepting in their own app; two different people confirming, a waiting period, and your one-tap cancel; your family's questions answered in your words, with where each answer came from; a checklist and draft claim letters; another voice noticed; nothing risky kept; checks that learn every hour | Your real voice played to your family, and voice letters; alerts by notification, SMS and email (today you see them in the app); the full choice of partners with prices (today, one sample legal partner); a pause and a check for big changes and new phones; holding a change when someone seems to push you; reviewers assigned at random; rule changes that reach you; your bank's accounts filled in for you; a native name in each country, such as Tsunagu in Japan and Ieum in Korea |
+| Talking with Saathi by voice or typing, and sharing a photo of a policy; cards you **Keep**; the book with its readiness score and next steps; the vault locked on your phone, for one person, with a matching code; your family member accepting in their own app; two different people confirming, a waiting period, and your one-tap cancel; your family's questions answered in your words, with where each answer came from; a checklist and draft claim letters; showing your own secrets on your phone, and a recovery code that brings them back on a new phone; another voice noticed; nothing risky kept; checks that learn every hour | The voice check fully live (it is being tested today); your real voice played to your family, and voice letters; alerts by notification, SMS and email (today you see them in the app); the full choice of partners with prices (today, one sample legal partner); a pause and a check for big changes and new phones; holding a change when someone seems to push you; reviewers assigned at random; rule changes that reach you; your bank's accounts filled in for you; a native name in each country, such as Tsunagu in Japan and Ieum in Korea |
 
 The story of Vikram above shows the whole journey, including the parts that are coming next.
 
