@@ -15,7 +15,7 @@ Anvaya is an app with an AI companion, Saathi, for capturing a person's stories,
 | Tests | `agents/tests/` |
 | Cloud setup scripts | `infra/` |
 | Design | `docs/architecture.md` |
-| Plan | GitHub issues: milestone "Prototype release" (PR-1 to PR-12); parent issue #43 for governance |
+| Plan | GitHub issues: milestone "Prototype release" (PR-1 to PR-12) |
 
 Read [docs/architecture.md](docs/architecture.md) before changing anything in security, the vault or the handover.
 

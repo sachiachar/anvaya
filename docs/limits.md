@@ -16,7 +16,7 @@ flowchart LR
 
 | Limit | Value | Set in |
 | --- | --- | --- |
-| **Length of one live call** | **About 15 minutes in practice.** Our policy allows 20 minutes, but Gemini Live ends a voice session at about 15. Saathi then sums up the call as usual, and the owner can start a new one. Resuming sessions past 15 minutes is planned ([#216](https://github.com/sachiachar/anvaya/issues/216)). | `saathi.voice: max_call_minutes: 20`; Gemini Live |
+| **Length of one live call** | **About 15 minutes in practice.** Our policy allows 20 minutes, but Gemini Live ends a voice session at about 15. Saathi then sums up the call as usual, and the owner can start a new one. Resuming sessions past 15 minutes is planned. | `saathi.voice: max_call_minutes: 20`; Gemini Live |
 | A live call also ends | When the person's voice minutes for the day run out | `user_allowances` |
 | Length of one spoken reply | 1,000 characters | `saathi.speech: max_characters` |
 | Audio kept for one exchange of a call | 90 seconds, in memory only, to notice another voice and for the voice check. After an exchange without the owner's words, its last 3 seconds carry over to the next | `live.MAX_EXCHANGE_AUDIO`, `CARRY_OVER_AUDIO` |
