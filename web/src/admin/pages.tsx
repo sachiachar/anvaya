@@ -46,15 +46,16 @@ function Section({ title, children, aside }: { title: string; children: ReactNod
   );
 }
 
-function Status({ value }: { value: string }) {
-  return <span className={`pa-status pa-status-${value}`}>{fmt.label(value)}</span>;
+function Status({ value, label }: { value: string; label?: string }) {
+  return <span className={`pa-status pa-status-${value}`}>{label ?? fmt.label(value)}</span>;
 }
 
 /** A decision with a required reason (and optional hours). Every decision is logged. */
-function DecisionForm({ actions, withHours, defaultHours, onDecide }: {
+function DecisionForm({ actions, withHours, defaultHours, onDecide, reasonLabel = "Reason (required, logged)" }: {
   actions: { value: string; label: string; tone?: "danger" }[];
   withHours?: boolean;
   defaultHours?: number;
+  reasonLabel?: string;
   onDecide: (value: string, reason: string, hours?: number) => Promise<unknown>;
 }) {
   const [reason, setReason] = useState("");
@@ -72,7 +73,7 @@ function DecisionForm({ actions, withHours, defaultHours, onDecide }: {
   return (
     <div className="pa-decide">
       <label>
-        <span>Reason (required, logged)</span>
+        <span>{reasonLabel}</span>
         <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
       </label>
       {withHours && (
@@ -535,7 +536,31 @@ function ChainView({ chain, onClose }: { chain: Chain; onClose: () => void }) {
   );
 }
 
-const GUARDIAN_STATUS: [string, string][] = [["open", "Open"], ["decided", "Decided"], ["confirmed", "Confirmed"], ["reversed", "Reversed"]];
+// The Guardian page in plain words: what it is, what's waiting, and one question for each event.
+
+/** Who found it: the agent's job in a few words, never its id first. */
+const FOUND_BY: Record<string, string> = {
+  "saathi.chat": "Saathi, in typed chat", "saathi.voice": "Saathi, on a call", "saathi.speech": "Saathi's spoken replies",
+  "capture.extractor": "Picking up what was said", "saathi.summary": "The call summary", "documents.reader": "Reading a document",
+  "readiness.planner": "Next steps", "legal.needs": "The legal needs check", "activation.checker": "The certificate check",
+  "handover.assistant": "The family's assistant", "settlement.planner": "The settlement plan",
+  "guardian.detectors": "The guardian's own checks", "fraud.researcher": "Fraud research", "fraud.dreamer": "Fraud dreaming",
+  "access.tester": "The key test", "person:owner": "Something the owner did",
+};
+const foundBy = (agent: string) => FOUND_BY[agent] ?? agent;
+
+/** What the guardian did, as an action. */
+const DID: Record<string, string> = {
+  add_check: "Asked for a check", reduce_autonomy: "Asked a person first", deflect: "Steered to a safer route",
+  pause: "Paused it", block: "Stopped it",
+};
+const did = (response: string) => DID[response] ?? fmt.label(response);
+
+const OUTCOME: Record<GuardianEvent["status"], string> = { open: "Waiting", confirmed: "Guardian was right", reversed: "Flagged by mistake" };
+
+const GUARDIAN_STATUS: [string, string][] = [
+  ["open", "Waiting for a person"], ["decided", "Decided"], ["confirmed", "Guardian was right"], ["reversed", "Flagged by mistake"],
+];
 
 export function GuardianPage({ me }: { me: Me }) {
   const [version, setVersion] = useState(0);
@@ -547,21 +572,63 @@ export function GuardianPage({ me }: { me: Me }) {
     setChainError(null);
     get.then(setChain).catch((e) => setChainError(String(e.message ?? e)));
   };
-  // The numbers cover all of the viewer's interventions, whatever the filters.
-  const byResponse = events.data?.choices?.response ?? {};
+  // The numbers cover all of the viewer's events, whatever the filters.
   const counts = events.data?.counts;
+  const show = (status: string) => events.set("status", events.params.status === status ? "" : status);
   return (
     <>
-      <p className="pa-lede">The guardian watches every agent step and can add a check, reduce autonomy, pause or block. It never approves or rejects a case: people review every intervention here.</p>
+      <p className="pa-lede">The guardian is Anvaya's safety check. It watches every step and steps in when something looks risky:
+        it asks for a check, steers to a safer route, pauses or stops it. It never decides a case. A person looks at each time it stepped in and says whether it was right.</p>
       {counts && (
         <div className="pa-kpis">
-          {Object.entries(byResponse).map(([k, v]) => <div className="pa-kpi" key={k}><span>{fmt.label(k)}</span><strong>{v}</strong></div>)}
-          <div className="pa-kpi"><span>False alarms</span><strong>{counts.decided ? fmt.pct(counts.mistake / counts.decided) : "—"}</strong><em>Reversed after review</em></div>
+          <button type="button" className="pa-kpi" aria-pressed={events.params.status === "open"} onClick={() => show("open")}>
+            <span>Waiting for a person</span><strong className={counts.waiting ? "pa-warn" : ""}>{counts.waiting}</strong><em>Show them</em></button>
+          <button type="button" className="pa-kpi" aria-pressed={events.params.status === "decided"} onClick={() => show("decided")}>
+            <span>Decided</span><strong>{counts.decided}</strong><em>Show them</em></button>
+          <button type="button" className="pa-kpi" aria-pressed={events.params.status === "reversed"} onClick={() => show("reversed")}>
+            <span>Flagged by mistake</span><strong>{counts.mistake}</strong>
+            <em>{counts.decided ? `${fmt.pct(counts.mistake / counts.decided)} of those decided` : "None decided yet"}</em></button>
         </div>
       )}
       {chainError && <p className="pa-error" role="alert">{chainError}</p>}
       {chain && <ChainView chain={chain} onClose={() => setChain(null)} />}
-      <Section title="Follow a conversation">
+      <Section title="Each time the guardian stepped in">
+        <ListView list={events} search="Search what happened"
+          empty="Nothing yet. Each time the guardian steps in, it appears here for a person to look at."
+          filters={[{ key: "status", label: "Show", options: GUARDIAN_STATUS },
+            { key: "response", label: "What it did", show: did }, { key: "agent", label: "Found by", show: foundBy }]}>
+          {(items) => (
+            <ul className="pa-list">
+              {items.map((e) => (
+                <li key={e.id}>
+                  <div className="pa-row">
+                    <Status value={e.status} label={OUTCOME[e.status]} />
+                    <strong>{did(e.response)}</strong>
+                    <span className="pa-muted">{fmt.when(e.at)} · found by {foundBy(e.agent)}{e.case_key ? ` · case ${e.case_key}` : ""}</span>
+                  </div>
+                  <p>{e.reason}</p>
+                  {e.id.startsWith("gev_st_") && (
+                    <button type="button" className="pa-link" onClick={() => follow(platform.eventChain(e.id))}>See this conversation step by step</button>
+                  )}
+                  {e.status === "open" ? (
+                    can(me, "review_guardian") ? (
+                      <>
+                        <p><strong>Was the guardian right?</strong> <span className="pa-muted">"No" lets a held change or release go ahead. The owner is told either way.</span></p>
+                        <DecisionForm reasonLabel="Why? (required, logged)"
+                          actions={[{ value: "confirm", label: "Yes, it was right" }, { value: "reverse", label: "No, release it", tone: "danger" }]}
+                          onDecide={(v, reason) => platform.decideGuardian(e.id, v as "confirm" | "reverse", reason).then(() => setVersion((n) => n + 1))} />
+                      </>
+                    ) : <p className="pa-muted">Waiting for a risk reviewer.</p>
+                  ) : <p className="pa-muted">{e.status === "confirmed" ? "Right" : "A mistake"}, said {e.decided_by}{e.decision_reason ? `: ${e.decision_reason}` : ""}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </ListView>
+      </Section>
+      <details className="pa-card pa-fold">
+        <summary><h2>Follow one conversation, step by step</h2>
+          <span className="pa-muted">For checking: what the guardian decided at each turn, as ids and counts only.</span></summary>
         <ListView list={trails} search="Search key or turn id" empty="No conversation turns yet. Each turn the guardian decides on appears here."
           filters={[{ key: "held", label: "Held back", options: [["true", "Something held back"], ["false", "Nothing held back"]] }]}>
           {(items) => (
@@ -577,38 +644,7 @@ export function GuardianPage({ me }: { me: Me }) {
             </ul>
           )}
         </ListView>
-      </Section>
-      <Section title="Interventions">
-        <ListView list={events} search="Search reason, agent or case"
-          empty="No interventions yet. They appear here when the guardian adds a check, reduces autonomy, pauses or blocks a step."
-          filters={[{ key: "status", label: "Status", options: GUARDIAN_STATUS },
-            { key: "response", label: "Response" }, { key: "agent", label: "Agent", show: (v) => v }]}>
-          {(items) => (
-            <ul className="pa-list">
-              {items.map((e) => (
-                <li key={e.id}>
-                  <div className="pa-row">
-                    <Status value={e.status} />
-                    <strong>{fmt.label(e.response)}</strong>
-                    <span className="pa-mono">{e.agent}</span>
-                    <span className="pa-muted">{fmt.when(e.at)}{e.case_key ? ` · case ${e.case_key}` : ""}</span>
-                  </div>
-                  <p>{e.reason}</p>
-                  {e.id.startsWith("gev_st_") && (
-                    <button type="button" className="pa-link" onClick={() => follow(platform.eventChain(e.id))}>Follow this conversation</button>
-                  )}
-                  {e.status === "open" ? (
-                    can(me, "review_guardian") ? (
-                      <DecisionForm actions={[{ value: "confirm", label: "Confirm" }, { value: "reverse", label: "Reverse", tone: "danger" }]}
-                        onDecide={(v, reason) => platform.decideGuardian(e.id, v as "confirm" | "reverse", reason).then(() => setVersion((n) => n + 1))} />
-                    ) : <p className="pa-muted">A risk reviewer decides this.</p>
-                  ) : <p className="pa-muted">{fmt.label(e.status)} by {e.decided_by}{e.decision_reason ? `: ${e.decision_reason}` : ""}</p>}
-                </li>
-              ))}
-            </ul>
-          )}
-        </ListView>
-      </Section>
+      </details>
     </>
   );
 }
