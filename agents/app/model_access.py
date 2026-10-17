@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException
 from google.genai import errors, types
 from pydantic import BaseModel
 
-from .gemini import make_client
+from .gemini import make_client, tokens
 from .governance import core as governance
 from .governance import keys
 
@@ -78,8 +78,7 @@ async def _one_call(client, model: str) -> tuple[str, int, int]:
                                              http_options=ONE_TRY, automatic_function_calling=NO_TOOLS)
         response = await client.aio.models.generate_content(model=model, contents="Reply with the word OK.",
                                                             config=config)
-    usage = response.usage_metadata
-    return "works", (usage.prompt_token_count or 0) if usage else 0, (usage.candidates_token_count or 0) if usage else 0
+    return "works", *tokens(response.usage_metadata)
 
 
 async def test_key(kind: str, key: str) -> tuple[list[dict], bool]:

@@ -17,7 +17,7 @@ from google import genai
 from google.genai import errors, types
 
 from .config import settings
-from .gemini import with_keys
+from .gemini import tokens, with_keys
 from .governance import core as governance
 
 log = logging.getLogger(__name__)
@@ -89,9 +89,7 @@ async def speak(text: str) -> bytes:
 
             response, source = await with_keys(AGENT, call, platform=lambda: _client())
             audio = response.candidates[0].content.parts[0].inline_data
-            usage = response.usage_metadata
-            t_in = (usage.prompt_token_count or 0) if usage else 0
-            t_out = (usage.candidates_token_count or 0) if usage else 0
+            t_in, t_out = tokens(response.usage_metadata)
             governance.record_usage(AGENT, model, "direct", tokens_in=t_in, tokens_out=t_out, key_source=source)
             return _as_wav(audio.data, audio.mime_type or "")
         except errors.APIError as e:

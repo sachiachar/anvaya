@@ -185,6 +185,7 @@
 - A live call ends when the person's voice minutes for the day run out. Two calls at the same time can't each use the full allowance.
 - The whole demo now has a daily limit too, shared by everyone: 10 million tokens and 300 voice minutes a day. Calls on your own model key don't count. As the day's use grows, live voice, spoken replies and conversation summaries pause first. Then everything else pauses, except checking a certificate, which always works. The app says the feature is paused for today, and it resets at midnight UTC. The admin portal's overview shows how much of the day's limit is used.
 - Live calls show their tokens in the admin portal, as well as their minutes. Before, every call showed 0 tokens.
+- Spoken replies and own-key tests now count the model's thinking, like every other call. Before, their thinking tokens were left out of use, allowances and the daily limit.
 
 **Documents**
 - New concept document and two pitches: one for people and families, one for banks and insurers. They cite figures for India and Asia, and regulatory deadlines. Branded PDFs are included.
