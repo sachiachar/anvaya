@@ -613,9 +613,13 @@ export function GuardianPage({ me }: { me: Me }) {
                   {e.status === "open" ? (
                     can(me, "review_guardian") ? (
                       <>
-                        <p><strong>Was the guardian right?</strong> <span className="pa-muted">"No" lets a held change or release go ahead. The owner is told either way.</span></p>
+                        <p><strong>Was the guardian right?</strong> <span className="pa-muted">{e.holds
+                          ? "\"No\" lets the held change or release go ahead. The owner is told either way."
+                          : `"No" marks it a false alarm. Your answer is recorded; it changes nothing for the owner.${
+                            e.id.startsWith("gev_voicecheck_") ? " The cards from that exchange wait for the owner's \"Yes, this was me\"." : ""}`}</span></p>
                         <DecisionForm reasonLabel="Why? (required, logged)"
-                          actions={[{ value: "confirm", label: "Yes, it was right" }, { value: "reverse", label: "No, release it", tone: "danger" }]}
+                          actions={[{ value: "confirm", label: "Yes, it was right" },
+                            e.holds ? { value: "reverse", label: "No, release it", tone: "danger" } : { value: "reverse", label: "No, a false alarm" }]}
                           onDecide={(v, reason) => platform.decideGuardian(e.id, v as "confirm" | "reverse", reason).then(() => setVersion((n) => n + 1))} />
                       </>
                     ) : <p className="pa-muted">Waiting for a risk reviewer.</p>

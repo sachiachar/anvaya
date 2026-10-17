@@ -117,7 +117,9 @@ export type ChainRow = { turn: string; at: number; user_key: string | null; deci
 
 export type GuardianEvent = { id: string; at: number; response: "add_check" | "reduce_autonomy" | "deflect" | "pause" | "block";
   agent: string; reason: string; status: "open" | "confirmed" | "reversed"; case_key: string | null;
-  decided_by?: string; decision_reason?: string };
+  decided_by?: string; decision_reason?: string;
+  /** It keeps a change or a release waiting: the answer finishes or cancels it. Otherwise the answer is only recorded. */
+  holds?: boolean };
 
 export type Source = { title: string; url: string };
 
