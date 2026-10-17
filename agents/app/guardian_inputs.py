@@ -192,27 +192,38 @@ def family_answer(answer: str) -> tuple[str, dict]:
 # ---- Another voice (PR-2.13.2) -----------------------------------------------------------------
 
 
+def needs_owner_confirmation(collection: str, doc: dict) -> bool:
+    """With someone else in the room, these cards wait for the owner's confirmation: a wish, a money
+    matter (practical), an account or policy, or a person. Stories and advice stay keepable."""
+    return collection in ("inventory", "people") or (collection == "moments" and doc.get("kind") in ("wish", "practical"))
+
+
 def another_voice(owner_id: str, turn_id: str, agent: str, card_docs: list[tuple[str, dict]], *,
                   heard_by: list[str] | None = None) -> str:
     """Another voice was heard in the owner's side of an exchange: the guardian records it for the
-    team, and each card from that exchange is marked, so the owner sees it before Keep. Nothing
-    about the voice is kept: no audio, no voiceprint. `heard_by` lists every agent that heard it
-    (Saathi live, the extractor in the audio). Returns the guardian action id."""
+    team, and each card from that exchange is marked, so the owner sees it before Keep. A wish,
+    money or people card is also held (another_voice_hold): at Keep, the guardian's voice rule
+    waits for the owner to confirm on the card that it's what they want. Nothing about the voice
+    is kept: no audio, no voiceprint. `heard_by` lists every agent that heard it (Saathi live, the
+    extractor in the audio). Returns the guardian action id."""
     refs = {"turn": turn_id, "voice": "another", "heard_by": ",".join(heard_by or [agent])}
     decision = guardian.decide("owner_statement", agent, {"another_voice": True}, refs=refs,
                                once=f"gev_voice_{turn_id}")
     for collection, doc in card_docs:
         if store.get(collection, doc["id"]):
-            store.update(collection, doc["id"], {"another_voice": True})
-            doc["another_voice"] = True
+            mark = {"another_voice": True, **({"another_voice_hold": True}
+                                              if needs_owner_confirmation(collection, doc) else {})}
+            store.update(collection, doc["id"], mark)
+            doc.update(mark)
     return decision.action_id
 
 
 def voice_mismatch(owner_id: str, turn_id: str, agent: str, card_docs: list[tuple[str, dict]]) -> str:
     """The voice check: the start of the owner's side of an exchange didn't sound like their
-    voiceprint (voiceprint.py). The guardian records it for the team, and each card from that
-    exchange is held: Keep waits until the owner confirms it was them. Nothing about the voice is
-    kept. Returns the guardian action id."""
+    voiceprint (voiceprint.py). The guardian records it for the team, and marks each card from that
+    exchange. At Keep, the guardian's voice rule (guardian.unconfirmed_voice) holds a marked card
+    until the owner confirms on it that it was them. Nothing about the voice is kept. Returns the
+    guardian action id."""
     decision = guardian.decide("owner_statement", agent, {"voice_mismatch": True},
                                refs={"turn": turn_id, "voice": "mismatch"}, once=f"gev_voicecheck_{turn_id}")
     for collection, doc in card_docs:

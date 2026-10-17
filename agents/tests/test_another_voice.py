@@ -4,6 +4,7 @@ with you" step in the plan (once a conversation) and a mark on that exchange's c
 voiceprint is stored. All data here is synthetic."""
 
 import asyncio
+import sys
 import time
 
 from app import audit_chain, live, loops, main, planner
@@ -271,3 +272,40 @@ def test_no_note_when_the_warm_step_was_not_put_first(client, monkeypatch):  # n
     monkeypatch.setattr(live.planner, "after_turn", lambda *a, **kw: {})  # e.g. already asked this conversation
     exchange(monkeypatch, "more", state=state, session=session)
     assert session.notes == []
+
+
+def _keep(card: dict, **body):
+    from fastapi.testclient import TestClient
+    return TestClient(main.app).post(f"/api/proposals/{card['id']}/decision",
+                                     json={"collection": "moments", "decision": "approve", **body})
+
+
+def test_a_wish_said_with_someone_else_there_waits_for_the_owner(client, monkeypatch):  # noqa: F811
+    exchange(monkeypatch, "more")
+    [card] = [c for c in store.list("moments", owner_id=OWNER, status="pending") if c["quote"] == SAID]
+    assert card["another_voice_hold"] is True
+    refused = _keep(card)
+    assert refused.status_code == 409 and "Confirm it's what you want" in refused.json()["detail"]
+    assert _keep(card, edits={"kind": "story", "another_voice_hold": False}).status_code == 409  # edits can't free it
+    refusal = max((a for a in store.list("guardian_actions") if a["action"] == "keep_card"), key=lambda a: a["at"])
+    assert refusal["response"] == "deflect" and refusal["detectors"] == ["voice_rule"]
+    kept = _keep(card, voice_confirmed=True)
+    assert kept.status_code == 200 and "another_voice_hold" not in kept.json()
+    allowed = max((a for a in store.list("guardian_actions") if a["action"] == "keep_card"), key=lambda a: a["at"])
+    assert allowed["response"] == "continue" and allowed["refs"]["voice"] == "confirmed_by_owner"
+
+
+def test_a_story_said_with_someone_else_there_is_only_marked(client, monkeypatch):  # noqa: F811
+    story = Moment(kind="story", title="First salary", summary=SAID, quote=SAID)
+    monkeypatch.setattr(sys.modules[__name__], "WISH", story)
+    exchange(monkeypatch, "more")
+    [card] = [c for c in store.list("moments", owner_id=OWNER, status="pending") if c["quote"] == SAID]
+    assert card["another_voice"] is True and not card.get("another_voice_hold")
+    assert _keep(card).status_code == 200
+
+
+def test_which_cards_wait_when_someone_else_is_there():
+    from app.guardian_inputs import needs_owner_confirmation as needs
+    assert needs("moments", {"kind": "wish"}) and needs("moments", {"kind": "practical"})
+    assert needs("inventory", {}) and needs("people", {})
+    assert not needs("moments", {"kind": "story"}) and not needs("moments", {"kind": "advice"})
