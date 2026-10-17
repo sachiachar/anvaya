@@ -1,6 +1,6 @@
 # Anvaya: Architecture
 
-*Status: working prototype for the AI Builder Cup 2026 (BFSI track). Last updated 12 October 2026.*
+*Status: working prototype for the AI Builder Cup 2026 (BFSI track). Last updated 17 October 2026.*
 
 Anvaya is a family succession service. People talk with **Saathi**, a warm companion built on Gemini. Saathi helps them record their stories, money matters, family, wishes and secrets. When the time comes, a verified handover gives the right people what they need. All demo data is synthetic.
 
@@ -34,6 +34,7 @@ flowchart LR
         api --> fs[("Firestore<br/>workflow")]
         api --> gcs[("Cloud Storage<br/>OKF bundles, media")]
         api --> kms["Cloud KMS"]
+        api --> sm["Secret Manager<br/>Gemini and Exa keys"]
     end
     api --> exa["Exa web search<br/>fraud research only"]
     api --> voice["Speaker model<br/>voice check, Akamai Functions"]
@@ -42,9 +43,9 @@ flowchart LR
 | Part | Stack |
 | --- | --- |
 | Web app | React 19, TypeScript, Vite. Installable, mobile first. Holds all vault cryptography (Web Crypto), the microphone and the playback. |
-| Admin portal | A separate site for the platform team: agents, guardian, fraud, usage, model keys, audit. Charts and graphs use Apache ECharts. Long lists come one page at a time, with search and filters, from the server (`governance/paging.py`); each list is scoped to the viewer before it is counted, so a demo admin's totals never include anyone else's records. |
+| Admin portal | A separate site for the platform team: overview and usage, agents, approvals, guardian, fraud, demo copies, model keys and the audit log. The Guardian page asks each question in plain words. Charts and graphs use Apache ECharts. Long lists come one page at a time, with search and filters, from the server (`governance/paging.py`), with shared search, filter and page controls (`listControls.tsx`); each list is scoped to the viewer before it is counted, so a demo admin's totals never include anyone else's records. |
 | Agents service | Python 3.14, FastAPI on Cloud Run. Runs the Gemini steps, the live-call relay, the Google ADK handover agent, the guardian and the gateway. |
-| Models | Gemini through the Gemini API: `gemini-3.1-flash-lite` for most steps (with a fallback), `gemini-3.8-live` for voice calls, Gemini TTS for spoken replies. Each agent's models are set in `agents/registry.yaml`, never in an environment variable. |
+| Models | Gemini through the Gemini API: `gemini-3.1-flash-lite` for most steps (with `gemini-3.5-flash-lite` as the fallback), `gemini-3.8-flash` for fraud research and dreaming, `gemini-3.8-live` for voice calls, Gemini TTS for spoken replies. Each agent's models are set in `agents/registry.yaml`, never in an environment variable. |
 
 ## 3. Main components
 
@@ -58,6 +59,8 @@ flowchart LR
 | Gaps | `gaps.py` | Fixed rules find what's missing (a nominee, a will, where papers are) and rank it by harm to the family. |
 | Guardian | `governance/guardian.py`, `guardian_inputs.py` | Central control for every loop. See section 4.1. |
 | Gateway | `governance/core.py` | Every model call: registered agent, allowed model and tools, budget, kill switch. |
+| Token counts | `gemini.tokens()` | One count for every model call's tokens. Thinking counts as output, as Gemini bills it. |
+| Voice check | `voiceprint.py`, `guardian_inputs.voice_mismatch` | Compares the owner's voice on a call with his opt-in voiceprint, and holds the cards from an exchange that doesn't match. |
 | Certificate check | `loops.check_document` | Reads a certificate against the fraud reference guide, sign by sign. Assists reviewers only. |
 | Release | `release.py`, `escrow.py` | Two reviewers, a waiting period and the owner's cancel; Cloud KMS for the outer key layer. |
 | Handover assistant | `executor_agent.py` (Google ADK) | Answers the family from the kept bundle, with real sources. Only after release. |
@@ -151,12 +154,15 @@ flowchart LR
 | A false report that someone is no longer here | The certificate check flags warning signs; two different reviewers; a reason to go against "not valid"; a waiting period; the owner can cancel. |
 | A lost phone | The owner's key and the recipient's key are each backed up under that person's 125-bit recovery code, which Anvaya never sees. |
 | A second owner key, made by mistake | The app makes an owner key only when none exists on the device, in the cloud, or behind locked secrets or a seal. |
-| One visitor reaching another's demo | Each Google account gets its own copy, chosen from the verified sign-in. Any other copy's data answers 404. |
-| Someone acting outside their role | The server checks the acting person on every action. One reviewer can't confirm both steps. |
+| One visitor reaching another's demo | Each Google account gets its own copy, chosen from the verified sign-in. Any other copy's data answers 404. With open sign-in (`OPEN_SIGN_IN`), any Google account gets a copy, and each visitor is the `demo_admin` of their own copy only. |
+| Someone acting outside their role | The server checks the acting person on every action, also inside one copy. Only the owner reads his conversation, cards, next steps, vault items and access requests. The family reads the archive only after the handover. Only reviewers read the review lists. `GET /owners/{id}` returns only id, name, family and language (`OWNER_FIELDS`). One reviewer can't confirm both steps. |
+| A sign-in token in a URL or a log | The live call sends the token in its first WebSocket message, not the URL. No valid token within 10 seconds (`LIVE_AUTH_SECONDS`) closes the call with 4401. |
+| Another site framing Keep, consent or Confirm | Both sites send `Content-Security-Policy: frame-ancestors 'none'`, `X-Frame-Options: DENY`, nosniff and a strict Referrer-Policy (`firebase.json`). Only the app may use the microphone and camera. |
+| A server that starts open on Google Cloud | On Cloud Run or with Firestore, the service refuses to start without sign-in, a Firebase project, an allowlist or open sign-in, and a KMS key (`config.production_problems`). Dev-mode escrow is refused with Firestore. |
 | Personal data in the admin portal or logs | Users appear only as hashed keys. No conversation text or names. |
 | Someone else speaking for the owner on a call | The voice check, if the owner turns it on: a voice that doesn't match the owner's voiceprint holds that exchange's cards until the owner confirms it was them. |
 | A person's own model key leaking | Encrypted with its own KMS key, bound to its owner, never returned or logged. |
-| Deploys from the wrong place | Workload Identity Federation lets only the deploy workflow on `main` deploy. The deployer has no broad roles. |
+| Deploys from the wrong place | Workload Identity Federation lets only the deploy workflow on `main` deploy. The deployer has no broad roles. A ruleset protects `main`: changes come only through reviewed pull requests that pass the `api` and `web` checks. The release job may write only releases and tags. The Gemini and Exa keys come from Secret Manager. |
 
 ## 7. Key flows
 
@@ -169,13 +175,16 @@ sequenceDiagram
     participant API as Agents service
     participant Live as Gemini Live
     Owner->>App: Tap the microphone
-    App->>API: WebSocket, 16 kHz audio
+    App->>API: open the WebSocket
+    App->>API: first message {type: auth, token}
+    Note over API: no valid token in 10 s → close 4401
+    App->>API: 16 kHz audio
     API->>Live: Saathi persona + kept items + tools
     loop each exchange
         Live->>API: current_step (the plan's step and tone)
         Live-->>App: voice (24 kHz) + captions
-        API->>API: extract cards → grounding → guardian → plan update
-        API-->>App: only the cards the guardian allowed
+        API->>API: voice check (first 5 s), extract cards → grounding → guardian → plan update
+        API-->>App: only the cards the guardian allowed (held if the voice didn't match)
     end
 ```
 
@@ -214,27 +223,44 @@ sequenceDiagram
 - The owner's key backup never goes to the recipient, the release bundle or the admin portal. Tests check this.
 - If the owner loses his code and every device, he can't open his secrets any more. A sealed vault still opens for the recipient after release.
 
+**Release to production**
+
+```mermaid
+flowchart LR
+    pr["Pull request<br/>checks: api, web, release notes"] -->|"a person merges"| main["main"]
+    main --> sched["Deploy at 13:00 and 19:00 IST<br/>or Run workflow: changed, all, allowlist"]
+    sched -->|"agents/** changed"| api["Tests, then Cloud Run"]
+    sched -->|"web/**, firebase.json, firestore.rules changed"| web["Firebase Hosting + rules"]
+    api --> rel["GitHub Release<br/>PRs + release-note files"]
+    web --> rel
+```
+
+- Each part deploys what changed since its own last successful deploy. A release with only docs deploys nothing.
+- Each PR that changes what people use adds a file to `docs/release-notes/next/`, and a PR check enforces it. `.github/scripts/fold_release_notes.py` later folds the files into `docs/release-notes.md`.
+
 ## 8. Governance and cost control
 
 - **Registry and policies.** 15 agents are registered in `agents/registry.yaml`. Each has one policy in `agents/policies.yaml`: autonomy, allowed models and tools, and limits. A broken file stops the service at start-up.
 - **The gateway denies by default.** An unregistered agent, or a model or tool its policy doesn't list, is refused and recorded.
   - The ADK handover agent is checked at three points: before each model call (`gateway_check`), for each model the fallback chain tries (`KeyedGemini`), and before each tool (`tool_check`).
 - **Budgets.** Each person has a daily allowance. The whole service has a daily ceiling. Optional agents stop first. Safety checks (certificate checks, the guardian) never stop.
+- **Asking for more.** A person can ask for more allowance. A copy's own `demo_admin` may approve at most 2 grants in 24 hours (`core.SELF_GRANTS_PER_DAY`), and none once the service's daily total for that measure is past its optional pause line. Real approvers have no cap.
+- **Roles.** viewer, demo_admin (approve_budget only), budget_approver, risk_reviewer and platform_admin.
 - **Own model key.** A visitor may add their own Gemini key. Their calls use it first. The platform key is only the failover.
-- **Visibility.** The portal shows each agent's use, live status and recent steps, the guardian's events and the audit chain. It never shows conversation text.
+- **Visibility.** The portal shows each agent's use, live status and recent steps, the guardian's events and the audit chain. It never shows conversation text. Token counts come from one function, `gemini.tokens()`, and include thinking tokens.
 - **Kill switch.** A platform admin can stop all agents at once.
 
 ## 9. Quality and testing
 
-- **786 automated tests** (`agents/tests/`) run in about 15 seconds, with no cloud and a stubbed Gemini.
+- **803 automated tests** (`agents/tests/`) run in about 15 seconds, with no cloud and a stubbed Gemini.
 - Tests enforce the rules above. Some examples:
   - every Gemini call goes through the gateway;
   - the guardian never imports the vault;
   - two demo copies never reach each other;
   - the portal never returns conversation text;
   - the release keeps two reviewers and the waiting period.
-- **CI** runs the linters (ruff, Biome), the tests and the web build on every pull request.
-- **API description.** [docs/openapi.yaml](openapi.yaml) is the OpenAPI 3.1 description of every route, grouped, with how each one signs in and the live-call protocol. FastAPI builds it from the code (`agents/app/openapi_spec.py`), and a test fails if the file is out of date.
+- **CI** runs the linters (ruff, Biome), the tests and the web build on every pull request. `api` and `web` are required checks on `main`. A release-notes check fails a PR that changes what people use and has no note file, unless it has the `no release note` label.
+- **API description.** [docs/openapi.yaml](openapi.yaml) is the OpenAPI 3.1 description of every route, grouped, with how each one signs in and the live-call protocol. FastAPI builds it from the code (`agents/app/openapi_spec.py`), and a test fails if the file is out of date. AGENTS.md rule 10 asks every change to a route to update the file in the same PR.
 - **Supply chain.** Every dependency is the latest stable release, with a permissive licence. A test checks the inventory and the licences.
 - **Checked by hand:** the vault and recovery round trip, live calls, and real Gemini runs.
 
