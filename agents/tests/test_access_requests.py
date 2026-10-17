@@ -31,7 +31,7 @@ def test_reply_never_reveals_whether_the_owner_exists(client):
 def test_while_alive_only_the_owner_decides(client):
     client.post(f"/api/owners/{OWNER}/access-requests", json=ARJUN, headers=PRIYA)
     req = client.get(f"/api/owners/{OWNER}/access-requests").json()["requests"][0]
-    assert client.get("/api/admin/access-requests").json()["requests"] == []
+    assert client.get("/api/admin/access-requests", headers=ANJALI).json()["requests"] == []
     # The team cannot approve a request that belongs to a living owner.
     assert client.post(f"/api/access-requests/{req['id']}/decision",
                        json={"decision": "approve", "decided_by": "team"}, headers=ANJALI).status_code == 404
@@ -44,7 +44,7 @@ def test_after_a_death_the_team_reviews(client):
     client.post(f"/api/owners/{OWNER}/death-report", files={"certificate": ("c.jpg", b"img", "image/jpeg")}, headers=PRIYA)
     client.post(f"/api/owners/{OWNER}/access-requests", json=ARJUN, headers=PRIYA)
     assert client.get(f"/api/owners/{OWNER}/access-requests").json()["requests"] == []
-    req = client.get("/api/admin/access-requests").json()["requests"][0]
+    req = client.get("/api/admin/access-requests", headers=ANJALI).json()["requests"][0]
     r = client.post(f"/api/access-requests/{req['id']}/decision",
                     json={"decision": "decline", "decided_by": "team"}, headers=ANJALI)
     assert r.json()["status"] == "declined"

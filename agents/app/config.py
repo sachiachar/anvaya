@@ -78,4 +78,23 @@ class Settings:
     cors_origins: str = os.getenv("CORS_ORIGINS", "http://localhost:5173")
 
 
+def production_problems(s: Settings, environ: dict | None = None) -> list[str]:
+    """What would make the server run open on Google Cloud (SEC-8). On Cloud Run (K_SERVICE is set)
+    or with the Firestore store, it must require sign-in, know its Firebase project, have someone
+    who may sign in, and wrap vault escrow with Cloud KMS. Locally, nothing is required."""
+    environ = os.environ if environ is None else environ
+    if not (environ.get("K_SERVICE") or s.store == "firestore"):
+        return []
+    problems = []
+    if not s.auth_required:
+        problems.append("AUTH_REQUIRED must be true")
+    if not s.firebase_project_id:
+        problems.append("FIREBASE_PROJECT_ID must be set")
+    if not (s.allowed_emails or s.open_sign_in):
+        problems.append("set ALLOWED_EMAILS, or OPEN_SIGN_IN=true")
+    if not s.kms_key_name:
+        problems.append("KMS_KEY_NAME must be set: vault escrow can't use dev mode here")
+    return problems
+
+
 settings = Settings()
