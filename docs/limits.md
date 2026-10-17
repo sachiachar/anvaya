@@ -54,6 +54,7 @@ Use is counted on the server for each signed-in account, and resets each day. Ce
 | --- | --- | --- |
 | Warning in the app | At 80% of an allowance | `core.WARN_AT` |
 | "Ask for more", at most | 300,000 tokens, 60 voice minutes or 100 spoken replies, for up to 72 hours. A person approves it, and nobody can approve their own request | `core.REQUEST_LIMITS`, `REQUEST_MAX_HOURS` |
+| A judge approving their own copy's requests | At most 2 grants in any 24 hours, and none while the shared daily ceiling for that measure is past its optional pause line. Rejecting is never limited, and real approvers aren't held to this | `core.SELF_GRANTS_PER_DAY`, `self_grant_refusal` |
 
 ## The demo-wide daily limit
 
