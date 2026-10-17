@@ -60,6 +60,11 @@ These protect users and the budget. Tests enforce several of them, so don't weak
 7. **The prototype release uses the Gemini API key path, not Vertex AI.** A test checks this. The one exception: a person's own Vertex AI express-mode key (PR-10.10), used only for the calls they cause.
 8. **Rules belong in code, not only in prompts.** If a model must always or never do something, enforce it in code and add a test.
 9. **Tests run without the cloud.** Use the memory store and stub Gemini, as the existing tests do.
+10. **Keep the API specification current.** [docs/openapi.yaml](docs/openapi.yaml) describes every route. When you add, remove or change a route, its parameters, its request or response model, or how it signs in, write the file again in the same PR:
+    - run `cd agents && uv run python -m app.openapi_spec`, and commit `docs/openapi.yaml` with the code;
+    - a new route needs a group: add a pattern to `TAGS` in `agents/app/openapi_spec.py`, or the build fails;
+    - a change to the live-call messages, the error codes, sign-in or the paged lists also changes the description text in that file;
+    - `test_openapi_spec.py` fails while the file is out of date. Never edit `docs/openapi.yaml` by hand.
 
 ## Things only a person does
 
@@ -101,6 +106,7 @@ Update docs in the same PR as the code:
 
 - `docs/release-notes.md` for anything a user or judge would notice (Claude Code users can run `/release-notes` to draft the entry);
 - `docs/architecture.md` when the design, security model or tests change;
+- `docs/openapi.yaml` when any API route changes (rule 10 above);
 - `README.md` when setup or commands change.
 
 How to write:

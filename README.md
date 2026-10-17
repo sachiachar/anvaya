@@ -35,6 +35,7 @@ Built for the **AI Builder Cup 2026** · Track: **BFSI** · Google Gemini + Goog
 | [Architecture](docs/architecture.md) | How it's built: the loops, the guardian, data, security and design decisions |
 | [Release notes](docs/release-notes.md) | What's built, and the known limitations |
 | [Defined limits](docs/limits.md) | Every limit we set: call length (about 15 minutes), daily allowances, agent caps, the handover and the fraud module |
+| [API specification](docs/openapi.yaml) | Every route of the API in OpenAPI 3.1: groups, sign-in, paged lists, errors and the live call |
 | [Libraries and services](docs/dependencies.md) | Every library, version and licence, and the Google services used |
 
 ## The problem
@@ -151,3 +152,5 @@ cd ../web && npm install && npm run dev    # http://localhost:5173 (admin: /admi
 ```
 
 Tests, with no cloud credentials: `cd agents && uv run --group dev pytest -q`.
+
+After changing a route, write the API specification again: `cd agents && uv run python -m app.openapi_spec`. A test fails until `docs/openapi.yaml` matches the code.

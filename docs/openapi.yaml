@@ -1,0 +1,4428 @@
+openapi: 3.1.0
+info:
+  title: Anvaya agents
+  version: 0.1.0
+  description: |
+    The Anvaya API: the app, the live call, the handover and the platform admin portal.
+    All demo data is synthetic.
+
+    ## Signing in
+    - Every `/api` route needs a **Firebase ID token** from Google sign-in, as `Authorization: Bearer <token>`.
+      Running locally with `AUTH_REQUIRED=false`, no token is needed.
+    - Each signed-in account works on **its own demo copy**. A route with an `owner_id` refuses one that isn't
+      the caller's copy.
+    - `/api/platform` routes check the caller's **portal role** on the server: viewer, demo admin, budget
+      approver, risk reviewer or platform admin. A demo admin sees and decides only their own copy's records.
+    - `/api/healthz` is open. `/internal/fraud/cycle` takes only the Cloud Scheduler service account's
+      Google-signed ID token.
+
+    ## What the API never returns
+    - Vault secrets in readable form: they are encrypted on the device, and the server holds only what it can't open.
+    - Conversation text or names in `/api/platform` routes: people appear as hashed keys.
+
+    ## Paged lists
+    The `/api/platform` list routes (`…/events`, `…/entries`, `…/copies` and others) take `page`, `size`
+    (20 by default, at most 100), `q` (every word must match, in any case), and `from` and `to` dates
+    (`YYYY-MM-DD`, whole days in UTC). They return `items`, `page` (`page`, `size`, `total`, `pages`) and
+    `choices`: each filter's values with how many rows have them.
+
+    ## Errors
+    Errors come as `{"detail": "..."}`.
+
+    | Status | Meaning |
+    | --- | --- |
+    | 400 | The request can't be done as asked |
+    | 401 | No sign-in, or the token isn't valid |
+    | 403 | The role or the governance gateway refuses it, or the allowance is used up |
+    | 404 | Not found, or not in the caller's demo copy |
+    | 409 | It clashes with the current state, for example a second request while one waits |
+    | 413 | The upload is too large |
+    | 422 | A field is missing or not valid |
+    | 502 | Gemini failed, or its answer didn't match the expected format |
+    | 503 | A cloud service isn't set up or can't be reached |
+
+    ## The live call (WebSocket)
+    `GET /api/owners/{owner_id}/live?token=<Firebase ID token>`, upgraded to a WebSocket. Browsers can't
+    send headers on a WebSocket, so the token comes in the query.
+
+    | Direction | Frame | Content |
+    | --- | --- | --- |
+    | app → server | binary | 16 kHz mono 16-bit PCM from the microphone |
+    | app → server | text | `{"type": "end"}` to hang up |
+    | server → app | binary | 24 kHz mono 16-bit PCM, Saathi's voice |
+    | server → app | text | `{"type": "ready"}`: the call is connected |
+    | server → app | text | `{"type": "heard" or "said", "text"}`: live captions |
+    | server → app | text | `{"type": "interrupted"}`: the owner started talking, so stop playback |
+    | server → app | text | `{"type": "turn", "owner_turn", "assistant_turn"}`: after each exchange, with things to keep |
+    | server → app | text | `{"type": "error", "detail"}` |
+servers:
+- url: https://anvaya-saathi.web.app
+  description: Production, through Firebase Hosting to Cloud Run
+- url: http://localhost:8080
+  description: Local development
+security:
+- firebase: []
+tags:
+- name: Service
+  description: Whether the service is up, and how it is set up.
+- name: Scheduler
+  description: Work that Cloud Scheduler starts, such as the hourly fraud cycle.
+- name: Your demo copy
+  description: 'The caller''s own demo copy: who they are, their allowance, their own model key, and starting again.'
+- name: Voice check
+  description: The owner's optional voice check. Only numbers that describe the voice are kept, never the recording.
+- name: Vault and family
+  description: Choosing who receives the vault, and the vault itself. Secrets arrive already encrypted on the device.
+- name: Handover
+  description: 'When the time comes: the death report, two reviewers, the waiting period, the release, and the family''s questions.'
+- name: Wishes and legal
+  description: Which wishes need a legal document, and the legal partner.
+- name: Owner
+  description: Talking to Saathi, keeping what matters, the plan, gaps and tasks.
+- name: 'Admin portal: guardian'
+  description: Each time the guardian stepped in, and whether it was right.
+- name: 'Admin portal: fraud'
+  description: The fraud reference guides, what the pipeline added, reviews and runs.
+- name: 'Admin portal: agents and use'
+  description: The agents, their use, spend and refused calls.
+- name: 'Admin portal: people'
+  description: Allowance requests, demo copies and people's own model keys.
+- name: 'Admin portal: settings and audit'
+  description: The caller's role, the kill switch, privacy settings and the audit log.
+paths:
+  /api/healthz:
+    get:
+      summary: Healthz
+      operationId: healthz_api_healthz_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Healthz Api Healthz Get
+      tags:
+      - Service
+      security: []
+  /internal/fraud/cycle:
+    post:
+      summary: Fraud Cycle
+      description: |-
+        The hourly fraud cycle (Cloud Scheduler, scheduler.py). Outside /api: no person signs in here;
+        only the scheduler's own service account, by its Google-signed ID token. The runs happen inside
+        this request, so Cloud Run keeps the CPU on until they finish.
+      operationId: fraud_cycle_internal_fraud_cycle_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Fraud Cycle Internal Fraud Cycle Post
+      tags:
+      - Scheduler
+      security:
+      - scheduler: []
+  /api/demo/seed:
+    post:
+      summary: Seed Demo
+      description: |-
+        Reset the caller's own demo copy to the synthetic persona (PR-1.5). Never touches another
+        copy. Never use real personal data in demos.
+      operationId: seed_demo_api_demo_seed_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Seed Demo Api Demo Seed Post
+      tags:
+      - Your demo copy
+  /api/owners/{owner_id}:
+    get:
+      summary: Get Owner
+      operationId: get_owner_api_owners__owner_id__get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Owner Api Owners  Owner Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/capture/audio:
+    post:
+      summary: Capture Audio
+      operationId: capture_audio_api_owners__owner_id__capture_audio_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_capture_audio_api_owners__owner_id__capture_audio_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Capture Audio Api Owners  Owner Id  Capture Audio Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/conversation:
+    get:
+      summary: Get Conversation
+      operationId: get_conversation_api_owners__owner_id__conversation_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Conversation Api Owners  Owner Id  Conversation Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+    post:
+      summary: Converse
+      description: |-
+        One turn: the owner talks, types, or shares a photo or document. The AI replies,
+        and anything worth keeping comes back as proposals the owner can keep or discard.
+        Store and media calls run in worker threads, so one slow read doesn't hold up everyone else.
+      operationId: converse_api_owners__owner_id__conversation_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_converse_api_owners__owner_id__conversation_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Converse Api Owners  Owner Id  Conversation Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/speech:
+    post:
+      summary: Speech Audio
+      description: |-
+        Spoken version of one of Saathi's replies, as a WAV file (PR-10.3).
+
+        Only a reply Saathi actually gave can be spoken, never arbitrary text. The audio is
+        saved and reused for the same words, so replaying a reply, or a reply that repeats
+        earlier words, costs nothing.
+      operationId: speech_audio_api_speech_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Speech'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/documents:
+    post:
+      summary: Add Document
+      operationId: add_document_api_owners__owner_id__documents_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_add_document_api_owners__owner_id__documents_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Add Document Api Owners  Owner Id  Documents Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/wishes:
+    post:
+      summary: Add Wish
+      description: A wish the owner types is the owner's own action, so it is approved at once.
+      operationId: add_wish_api_owners__owner_id__wishes_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Body_add_wish_api_owners__owner_id__wishes_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Add Wish Api Owners  Owner Id  Wishes Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/review:
+    get:
+      summary: Review Queue
+      operationId: review_queue_api_owners__owner_id__review_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Review Queue Api Owners  Owner Id  Review Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/proposals/{doc_id}/decision:
+    post:
+      summary: Decide
+      operationId: decide_api_proposals__doc_id__decision_post
+      parameters:
+      - name: doc_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Doc Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/app__main__Decision'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Decide Api Proposals  Doc Id  Decision Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/archive:
+    get:
+      summary: Archive
+      operationId: archive_api_owners__owner_id__archive_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Archive Api Owners  Owner Id  Archive Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/kept:
+    get:
+      summary: List Kept
+      description: Everything the owner has kept, current versions only, so they can remove a mistake.
+      operationId: list_kept_api_owners__owner_id__kept_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Kept Api Owners  Owner Id  Kept Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/kept/{item_id}:
+    delete:
+      summary: Remove Kept
+      description: |-
+        The owner removes something wrongly recorded: it and every earlier version are deleted from
+        the bundle, so it never reaches the family. Only the owner, and not while a release case is
+        open: then the bundle is what the reviewers and the family rely on.
+      operationId: remove_kept_api_owners__owner_id__kept__item_id__delete
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      - name: item_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Item Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Remove Kept Api Owners  Owner Id  Kept  Item Id  Delete
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/knowledge-map:
+    get:
+      summary: Get Knowledge Map
+      description: The owner's kept knowledge as a graph, for the demo's knowledge map (read-only).
+      operationId: get_knowledge_map_api_owners__owner_id__knowledge_map_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Knowledge Map Api Owners  Owner Id  Knowledge Map Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/gaps:
+    get:
+      summary: Get Gaps
+      description: |-
+        What's missing, found by fixed rules (PR-7.10), most harmful first. Saathi may ask about
+        the top two; the owner can skip any of them.
+      operationId: get_gaps_api_owners__owner_id__gaps_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Gaps Api Owners  Owner Id  Gaps Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/gaps/{key}/skip:
+    post:
+      summary: Skip Gap
+      description: 'The owner chose not to answer this one: Saathi never raises it again.'
+      operationId: skip_gap_api_owners__owner_id__gaps__key__skip_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Skip Gap Api Owners  Owner Id  Gaps  Key  Skip Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/readiness:
+    post:
+      summary: Readiness
+      description: 'Readiness loop: score, plus next steps that stay on the owner''s list until done.'
+      operationId: readiness_api_owners__owner_id__readiness_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Readiness Api Owners  Owner Id  Readiness Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/plan:
+    get:
+      summary: Get Plan
+      description: |-
+        The conversation plan (PR-2.12.2): the current step, who starts it, and the next ones. The
+        only source of what Saathi talks about; worked out on a cold start or when it's over an hour old.
+      operationId: get_plan_api_owners__owner_id__plan_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Plan Api Owners  Owner Id  Plan Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/tasks:
+    get:
+      summary: List Tasks
+      operationId: list_tasks_api_owners__owner_id__tasks_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Tasks Api Owners  Owner Id  Tasks Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/tasks/{task_id}:
+    post:
+      summary: Update Task
+      operationId: update_task_api_tasks__task_id__post
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Update Task Api Tasks  Task Id  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/conversation/prompt:
+    post:
+      summary: Companion Asks
+      description: |-
+        Start a topic from a next step: the companion's question appears in the chat,
+        and the next typed message or live call carries on from it. The text comes from the app, so it
+        gets the same checks as a next step (PR-13.3) and as anything Saathi says (no death words).
+      operationId: companion_asks_api_owners__owner_id__conversation_prompt_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Prompt'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Companion Asks Api Owners  Owner Id  Conversation Prompt Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/conversation/summary:
+    post:
+      summary: Summarize Conversation
+      description: |-
+        A few sentences that sum up a conversation that just ended. Shown, never stored or logged;
+        numbers are masked in code, whatever the model wrote.
+      operationId: summarize_conversation_api_owners__owner_id__conversation_summary_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TurnIds'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Summarize Conversation Api Owners  Owner Id  Conversation Summary Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/conversation/forget:
+    post:
+      summary: Forget Conversation
+      description: |-
+        The owner discards a conversation: its turns are deleted, with every card from it still
+        waiting for Keep. Anything already kept stays: removing that is a separate, deliberate step
+        (DELETE /kept). Saathi no longer carries on from what was deleted.
+      operationId: forget_conversation_api_owners__owner_id__conversation_forget_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TurnIds'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Forget Conversation Api Owners  Owner Id  Conversation Forget Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/legal-needs:
+    post:
+      summary: Legal Needs
+      operationId: legal_needs_api_owners__owner_id__legal_needs_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Legal Needs Api Owners  Owner Id  Legal Needs Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Wishes and legal
+  /api/owners/{owner_id}/legal-handoff:
+    post:
+      summary: Legal Handoff
+      description: |-
+        Send a pre-filled summary to a legal partner. Requires the owner's explicit consent.
+
+        The summary never includes vault contents. In this MVP the partner is mocked;
+        the payload is what a real partner integration would receive.
+      operationId: legal_handoff_api_owners__owner_id__legal_handoff_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Handoff'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Legal Handoff Api Owners  Owner Id  Legal Handoff Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Wishes and legal
+  /api/owners/{owner_id}/legal-documents:
+    post:
+      summary: Record Legal Document
+      operationId: record_legal_document_api_owners__owner_id__legal_documents_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Body_record_legal_document_api_owners__owner_id__legal_documents_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Record Legal Document Api Owners  Owner Id  Legal Documents Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Wishes and legal
+  /api/owners/{owner_id}/vault/invite:
+    post:
+      summary: Invite Recipient
+      description: |-
+        The owner chooses who receives the vault. Choosing someone new replaces the old choice. A
+        change asks the guardian first (PR-2.7.4): a second change within a day waits for a risk
+        reviewer, and the owner sees that in the app.
+      operationId: invite_recipient_api_owners__owner_id__vault_invite_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Invite'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Invite Recipient Api Owners  Owner Id  Vault Invite Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Vault and family
+    get:
+      summary: Get Invite
+      operationId: get_invite_api_owners__owner_id__vault_invite_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Invite Api Owners  Owner Id  Vault Invite Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Vault and family
+  /api/owners/{owner_id}/vault/recipient:
+    post:
+      summary: Set Recipient
+      description: |-
+        The invited person accepts and registers their key. A new key (e.g. recovery code lost)
+        means the owner's device must re-seal the vault, so only allowed while no case is open.
+      operationId: set_recipient_api_owners__owner_id__vault_recipient_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Recipient'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Set Recipient Api Owners  Owner Id  Vault Recipient Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Vault and family
+    get:
+      summary: Get Recipient
+      operationId: get_recipient_api_owners__owner_id__vault_recipient_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Recipient Api Owners  Owner Id  Vault Recipient Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Vault and family
+  /api/owners/{owner_id}/vault/recipient/decision:
+    post:
+      summary: Decide Recipient
+      description: Only the owner can accept someone as vault recipient.
+      operationId: decide_recipient_api_owners__owner_id__vault_recipient_decision_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecipientDecision'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Decide Recipient Api Owners  Owner Id  Vault Recipient Decision Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Vault and family
+  /api/owners/{owner_id}/vault/escrow:
+    post:
+      summary: Set Escrow
+      operationId: set_escrow_api_owners__owner_id__vault_escrow_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Escrow'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Set Escrow Api Owners  Owner Id  Vault Escrow Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Vault and family
+  /api/owners/{owner_id}/vault/items:
+    post:
+      summary: Add Vault Item
+      operationId: add_vault_item_api_owners__owner_id__vault_items_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaultItem'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Add Vault Item Api Owners  Owner Id  Vault Items Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Vault and family
+    get:
+      summary: List Vault Items
+      operationId: list_vault_items_api_owners__owner_id__vault_items_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Vault Items Api Owners  Owner Id  Vault Items Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Vault and family
+  /api/owners/{owner_id}/voiceprint:
+    get:
+      summary: Voiceprint Status
+      description: Whether the check is on and how many samples it has; never the voiceprint itself.
+      operationId: voiceprint_status_api_owners__owner_id__voiceprint_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Voiceprint Status Api Owners  Owner Id  Voiceprint Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Voice check
+    delete:
+      summary: Forget Voiceprint
+      description: 'Turn the check off: the voiceprint is deleted.'
+      operationId: forget_voiceprint_api_owners__owner_id__voiceprint_delete
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Forget Voiceprint Api Owners  Owner Id  Voiceprint Delete
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Voice check
+  /api/owners/{owner_id}/voiceprint/samples:
+    post:
+      summary: Add Voiceprint Sample
+      description: |-
+        One registration sample: the owner reading a sentence, as 16 kHz mono 16-bit PCM. The audio
+        goes to the speaker model and is then dropped; only the numbers that describe the voice are kept.
+      operationId: add_voiceprint_sample_api_owners__owner_id__voiceprint_samples_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Add Voiceprint Sample Api Owners  Owner Id  Voiceprint Samples Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Voice check
+  /api/owners/{owner_id}/vault/owner-key:
+    put:
+      summary: Set Owner Key Backup
+      description: |-
+        Saves the backup, or replaces it when the owner makes a new recovery code for the same key.
+        A different key never replaces it: that would lose the only copy of the key his secrets need.
+      operationId: set_owner_key_backup_api_owners__owner_id__vault_owner_key_put
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerKeyBackup'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Set Owner Key Backup Api Owners  Owner Id  Vault Owner Key Put
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Vault and family
+    get:
+      summary: Get Owner Key Backup
+      operationId: get_owner_key_backup_api_owners__owner_id__vault_owner_key_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Owner Key Backup Api Owners  Owner Id  Vault Owner Key Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Vault and family
+  /api/owners/{owner_id}/death-report:
+    post:
+      summary: Report Death
+      operationId: report_death_api_owners__owner_id__death_report_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_report_death_api_owners__owner_id__death_report_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Report Death Api Owners  Owner Id  Death Report Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Handover
+  /api/owners/{owner_id}/release/authority:
+    post:
+      summary: Submit Authority
+      operationId: submit_authority_api_owners__owner_id__release_authority_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_submit_authority_api_owners__owner_id__release_authority_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Submit Authority Api Owners  Owner Id  Release Authority Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Handover
+  /api/admin/cases:
+    get:
+      summary: List Cases
+      operationId: list_cases_api_admin_cases_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response List Cases Api Admin Cases Get
+      tags:
+      - Handover
+  /api/admin/cases/{case_id}/confirm-death:
+    post:
+      summary: Confirm Death
+      operationId: confirm_death_api_admin_cases__case_id__confirm_death_post
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Case Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Review'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Confirm Death Api Admin Cases  Case Id  Confirm Death Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Handover
+  /api/admin/cases/{case_id}/confirm-authority:
+    post:
+      summary: Confirm Authority
+      operationId: confirm_authority_api_admin_cases__case_id__confirm_authority_post
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Case Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Review'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Confirm Authority Api Admin Cases  Case Id  Confirm Authority Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Handover
+  /api/owners/{owner_id}/alive:
+    post:
+      summary: Owner Alive
+      description: 'The owner''s device answers the alert: stop everything.'
+      operationId: owner_alive_api_owners__owner_id__alive_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Owner Alive Api Owners  Owner Id  Alive Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Handover
+  /api/owners/{owner_id}/release:
+    get:
+      summary: Release Status
+      operationId: release_status_api_owners__owner_id__release_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Release Status Api Owners  Owner Id  Release Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Handover
+  /api/owners/{owner_id}/guardian/held:
+    get:
+      summary: Guardian Held
+      description: |-
+        The owner's in-app notice (PR-2.7): actions the guardian is holding for a risk reviewer,
+        and ones a reviewer stopped this week. Only the action and a fixed message, nothing else.
+      operationId: guardian_held_api_owners__owner_id__guardian_held_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Guardian Held Api Owners  Owner Id  Guardian Held Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Handover
+  /api/owners/{owner_id}/vault/release-bundle:
+    get:
+      summary: Release Bundle
+      description: |-
+        Only after release: the recipient-wrapped data key plus the encrypted items.
+
+        The recipient's device unwraps and decrypts locally; this server never can.
+      operationId: release_bundle_api_owners__owner_id__vault_release_bundle_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Release Bundle Api Owners  Owner Id  Vault Release Bundle Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Vault and family
+  /api/owners/{owner_id}/ask:
+    post:
+      summary: Ask Question
+      operationId: ask_question_api_owners__owner_id__ask_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Question'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Ask Question Api Owners  Owner Id  Ask Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Handover
+  /api/owners/{owner_id}/settlement:
+    post:
+      summary: Settlement
+      operationId: settlement_api_owners__owner_id__settlement_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Settlement Api Owners  Owner Id  Settlement Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Handover
+  /api/owners/{owner_id}/access-requests:
+    post:
+      summary: Request Access
+      operationId: request_access_api_owners__owner_id__access_requests_post
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Request Access Api Owners  Owner Id  Access Requests Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Handover
+    get:
+      summary: Owner Access Requests
+      operationId: owner_access_requests_api_owners__owner_id__access_requests_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Owner Access Requests Api Owners  Owner Id  Access Requests Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Handover
+  /api/admin/access-requests:
+    get:
+      summary: Team Access Requests
+      operationId: team_access_requests_api_admin_access_requests_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Team Access Requests Api Admin Access Requests Get
+      tags:
+      - Handover
+  /api/access-requests/{request_id}/decision:
+    post:
+      summary: Decide Access
+      operationId: decide_access_api_access_requests__request_id__decision_post
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessDecision'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Decide Access Api Access Requests  Request Id  Decision Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Handover
+  /api/agents/steps:
+    get:
+      summary: My Agent Steps
+      description: |-
+        The agents panel (PR-15.7): the signed-in person's own recent AI steps, a simple trace with no
+        text. The copy comes from the verified sign-in, never from the request.
+      operationId: my_agent_steps_api_agents_steps_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response My Agent Steps Api Agents Steps Get
+      tags:
+      - Your demo copy
+  /api/allowance:
+    get:
+      summary: My Allowance
+      description: |-
+        Today's use against the signed-in person's daily allowance (PR-10.4), so the app can
+        warn near the limit.
+      operationId: my_allowance_api_allowance_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response My Allowance Api Allowance Get
+      tags:
+      - Your demo copy
+  /api/allowance/request:
+    post:
+      summary: Ask For More
+      description: |-
+        Ask for more of today's allowance (PR-10.6). A platform admin, or in a demo the copy's own
+        demo admin, decides in the admin portal; approval raises the allowance until it expires.
+      operationId: ask_for_more_api_allowance_request_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoreRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Ask For More Api Allowance Request Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Your demo copy
+  /api/me:
+    get:
+      summary: Me
+      description: |-
+        Who is signed in, and the owner in their own demo copy (the app calls this right after
+        sign-in, which also creates the copy on first use).
+      operationId: me_api_me_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Me Api Me Get
+      tags:
+      - Your demo copy
+  /api/me/nickname:
+    post:
+      summary: Set Nickname
+      description: |-
+        The optional name for the caller's demo copy, so the Anvaya team can tell copies apart.
+        Shown only to platform admins; never logged.
+      operationId: set_nickname_api_me_nickname_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Nickname'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Set Nickname Api Me Nickname Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Your demo copy
+  /api/platform/me:
+    get:
+      summary: Me
+      operationId: me_api_platform_me_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Actor'
+      tags:
+      - 'Admin portal: settings and audit'
+  /api/platform/overview:
+    get:
+      summary: Get Overview
+      description: fresh=true (the portal's Refresh button) reads billing again, at most once a minute.
+      operationId: get_overview_api_platform_overview_get
+      parameters:
+      - name: fresh
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Fresh
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Overview Api Platform Overview Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: agents and use'
+  /api/platform/agents:
+    get:
+      summary: Get Agents
+      operationId: get_agents_api_platform_agents_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Agents Api Platform Agents Get
+      tags:
+      - 'Admin portal: agents and use'
+  /api/platform/agents/steps:
+    get:
+      summary: Get Agent Steps
+      description: |-
+        Recent AI steps of the signed-in person's own demo copy (PR-14.5), newest first: agent,
+        model, tokens, autonomy and result. Every role sees only its own copy, never anyone else's;
+        the registry table shows the service's totals. No text, only fixed words.
+      operationId: get_agent_steps_api_platform_agents_steps_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Agent Steps Api Platform Agents Steps Get
+      tags:
+      - 'Admin portal: agents and use'
+  /api/platform/agents/live:
+    get:
+      summary: Get Agents Live
+      description: The agents map's live status; the page asks for it every 15 seconds.
+      operationId: get_agents_live_api_platform_agents_live_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Agents Live Api Platform Agents Live Get
+      tags:
+      - 'Admin portal: agents and use'
+  /api/platform/approvals:
+    get:
+      summary: Get Approvals
+      operationId: get_approvals_api_platform_approvals_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Approvals Api Platform Approvals Get
+      tags:
+      - 'Admin portal: people'
+  /api/platform/approvals/{request_id}/decision:
+    post:
+      summary: Decide Approval
+      operationId: decide_approval_api_platform_approvals__request_id__decision_post
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/app__governance__portal__Decision'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Decide Approval Api Platform Approvals  Request Id  Decision Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: people'
+  /api/platform/guardian:
+    get:
+      summary: Get Guardian
+      operationId: get_guardian_api_platform_guardian_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Guardian Api Platform Guardian Get
+      tags:
+      - 'Admin portal: guardian'
+  /api/platform/guardian/conversations:
+    get:
+      summary: Get Conversations
+      description: |-
+        The latest owner turns the guardian decided on (PR-2.12.5), to follow one through its chain.
+        Hashed keys and counts only; a demo admin sees their own copy's.
+      operationId: get_conversations_api_platform_guardian_conversations_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Conversations Api Platform Guardian Conversations Get
+      tags:
+      - 'Admin portal: guardian'
+  /api/platform/guardian/chain/{turn_id}:
+    get:
+      summary: Get Chain
+      description: |-
+        One conversation's audit chain: turn → guardian decision → card → Keep → plan version → next
+        step, by ids and decisions only, never words.
+      operationId: get_chain_api_platform_guardian_chain__turn_id__get
+      parameters:
+      - name: turn_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Turn Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Chain Api Platform Guardian Chain  Turn Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: guardian'
+  /api/platform/guardian/events/{event_id}/chain:
+    get:
+      summary: Get Event Chain
+      description: The chain behind a guardian event about something the owner said.
+      operationId: get_event_chain_api_platform_guardian_events__event_id__chain_get
+      parameters:
+      - name: event_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Event Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Event Chain Api Platform Guardian Events  Event Id  Chain Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: guardian'
+  /api/platform/guardian/{event_id}/decision:
+    post:
+      summary: Decide Guardian
+      operationId: decide_guardian_api_platform_guardian__event_id__decision_post
+      parameters:
+      - name: event_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Event Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuardianDecision'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Decide Guardian Api Platform Guardian  Event Id  Decision Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: guardian'
+  /api/platform/fraud/graph:
+    get:
+      summary: Get Fraud Graph
+      description: The fraud knowledge as nodes and links for the Fraud page's graph view (no owner data in it).
+      operationId: get_fraud_graph_api_platform_fraud_graph_get
+      parameters:
+      - name: guide
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Guide
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Fraud Graph Api Platform Fraud Graph Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: fraud'
+  /api/platform/fraud/history:
+    get:
+      summary: Get Fraud History
+      description: 'The changes to one node of the graph: a guide item, or a research record.'
+      operationId: get_fraud_history_api_platform_fraud_history_get
+      parameters:
+      - name: item
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Item
+      - name: guide
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Guide
+      - name: collection
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Collection
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Fraud History Api Platform Fraud History Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: fraud'
+  /api/platform/fraud:
+    get:
+      summary: Get Fraud
+      operationId: get_fraud_api_platform_fraud_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Fraud Api Platform Fraud Get
+      tags:
+      - 'Admin portal: fraud'
+  /api/platform/fraud/added/{item_id}/remove:
+    post:
+      summary: Remove Added
+      description: Retire something the pipeline added on its own. Two removals in a week pause adding for that guide.
+      operationId: remove_added_api_platform_fraud_added__item_id__remove_post
+      parameters:
+      - name: item_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Item Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddedDecision'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Remove Added Api Platform Fraud Added  Item Id  Remove Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: fraud'
+  /api/platform/fraud/added/{item_id}/keep:
+    post:
+      summary: Keep Added
+      description: 'A spot check found it right: it stays, and is no longer marked for checking.'
+      operationId: keep_added_api_platform_fraud_added__item_id__keep_post
+      parameters:
+      - name: item_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Item Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddedDecision'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Keep Added Api Platform Fraud Added  Item Id  Keep Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: fraud'
+  /api/platform/fraud/guides/{guide_id}/resume-adding:
+    post:
+      summary: Resume Adding
+      description: Let the pipeline add on its own again for this guide, after it paused.
+      operationId: resume_adding_api_platform_fraud_guides__guide_id__resume_adding_post
+      parameters:
+      - name: guide_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Guide Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddedDecision'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Resume Adding Api Platform Fraud Guides  Guide Id  Resume Adding Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: fraud'
+  /api/platform/fraud/scenarios/{scenario_id}/decision:
+    post:
+      summary: Decide Scenario
+      description: |-
+        Approve a confirmed scenario (it becomes validated and joins the guide), or discard any
+        open one (it becomes invalidated, and the dreamer is told it's ruled out).
+      operationId: decide_scenario_api_platform_fraud_scenarios__scenario_id__decision_post
+      parameters:
+      - name: scenario_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Scenario Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScenarioDecision'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Decide Scenario Api Platform Fraud Scenarios  Scenario Id  Decision Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: fraud'
+  /api/platform/fraud/drafts/{draft_id}/decision:
+    post:
+      summary: Decide Draft
+      description: Approve a researched tactic (a new guide version), or discard it.
+      operationId: decide_draft_api_platform_fraud_drafts__draft_id__decision_post
+      parameters:
+      - name: draft_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Draft Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScenarioDecision'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Decide Draft Api Platform Fraud Drafts  Draft Id  Decision Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: fraud'
+  /api/platform/fraud/guides/{guide_id}/research:
+    post:
+      summary: Research Now
+      operationId: research_now_api_platform_fraud_guides__guide_id__research_post
+      parameters:
+      - name: guide_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Guide Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Research Now Api Platform Fraud Guides  Guide Id  Research Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: fraud'
+  /api/platform/fraud/runs/{run_id}/stop:
+    post:
+      summary: Stop Run
+      description: |-
+        Stop a running fraud run to control cost. It stops before its next model call and keeps
+        what it has checked so far.
+      operationId: stop_run_api_platform_fraud_runs__run_id__stop_post
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Stop Run Api Platform Fraud Runs  Run Id  Stop Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: fraud'
+  /api/platform/fraud/guides/{guide_id}/dream:
+    post:
+      summary: Dream Now
+      operationId: dream_now_api_platform_fraud_guides__guide_id__dream_post
+      parameters:
+      - name: guide_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Guide Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Dream Now Api Platform Fraud Guides  Guide Id  Dream Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: fraud'
+  /api/platform/demos:
+    get:
+      summary: Get Demos
+      description: |-
+        Every private demo copy, without names. A visitor's optional nickname is shown only to
+        platform admins; the viewer's own copy is marked.
+      operationId: get_demos_api_platform_demos_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Demos Api Platform Demos Get
+      tags:
+      - 'Admin portal: people'
+  /api/platform/demos/{copy_id}/reset:
+    post:
+      summary: Reset Demo
+      operationId: reset_demo_api_platform_demos__copy_id__reset_post
+      parameters:
+      - name: copy_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Copy Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Reset Demo Api Platform Demos  Copy Id  Reset Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: people'
+  /api/platform/privacy/cue-min-owners:
+    post:
+      summary: Set Cue Min Owners
+      description: |-
+        How many owners must share a gap before it becomes a cue for dreaming (fraud_cues.py).
+        A platform admin's setting, logged; it can be raised freely but never set below the floor.
+      operationId: set_cue_min_owners_api_platform_privacy_cue_min_owners_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CueMinimum'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Set Cue Min Owners Api Platform Privacy Cue Min Owners Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: settings and audit'
+  /api/platform/kill-switch:
+    post:
+      summary: Set Kill Switch
+      operationId: set_kill_switch_api_platform_kill_switch_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KillSwitch'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Set Kill Switch Api Platform Kill Switch Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: settings and audit'
+  /api/platform/audit:
+    get:
+      summary: Get Audit
+      operationId: get_audit_api_platform_audit_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Audit Api Platform Audit Get
+      tags:
+      - 'Admin portal: settings and audit'
+  /api/platform/model-keys:
+    get:
+      summary: Get Model Keys
+      description: 'The Model keys report: usage by whose key answered, and each person''s key and settings.'
+      operationId: get_model_keys_api_platform_model_keys_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Model Keys Api Platform Model Keys Get
+      tags:
+      - 'Admin portal: people'
+  /api/platform/model-keys/default:
+    post:
+      summary: Set Model Keys Default
+      description: The policy for everyone without a setting of their own.
+      operationId: set_model_keys_default_api_platform_model_keys_default_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyPolicy'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Set Model Keys Default Api Platform Model Keys Default Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: people'
+  /api/platform/model-keys/{user_key}/policy:
+    post:
+      summary: Set Model Keys Policy
+      description: |-
+        Turn a person's own key on or off, or limit its kinds. Turning it off stops it being used
+        (ours answers instead); the key stays stored until it's removed.
+      operationId: set_model_keys_policy_api_platform_model_keys__user_key__policy_post
+      parameters:
+      - name: user_key
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyPolicy'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Set Model Keys Policy Api Platform Model Keys  User Key  Policy Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: people'
+  /api/platform/model-keys/{user_key}/test:
+    post:
+      summary: Test Model Key
+      description: Test a person's saved key again. The admin sees the result, never the key.
+      operationId: test_model_key_api_platform_model_keys__user_key__test_post
+      parameters:
+      - name: user_key
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Test Model Key Api Platform Model Keys  User Key  Test Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: people'
+  /api/platform/model-keys/{user_key}/remove:
+    post:
+      summary: Remove Model Key
+      operationId: remove_model_key_api_platform_model_keys__user_key__remove_post
+      parameters:
+      - name: user_key
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Remove Model Key Api Platform Model Keys  User Key  Remove Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: people'
+  /api/platform/guardian/events:
+    get:
+      summary: List Guardian Events
+      description: |-
+        The guardian's interventions, newest first. status "decided" means confirmed or reversed;
+        "reversed" is what a reviewer found was flagged by mistake.
+      operationId: list_guardian_events_api_platform_guardian_events_get
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - open
+            - decided
+            - confirmed
+            - reversed
+            type: string
+          - type: 'null'
+          title: Status
+      - name: response
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Response
+      - name: agent
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 10000
+          minimum: 1
+          default: 1
+          title: Page
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Size
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+          default: ''
+          title: Q
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: From
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: To
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Guardian Events Api Platform Guardian Events Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: guardian'
+  /api/platform/guardian/trails:
+    get:
+      summary: List Guardian Trails
+      description: |-
+        The owner turns the guardian decided on, to follow one through its chain. Hashed keys and
+        counts only; a demo admin sees their own copy's.
+      operationId: list_guardian_trails_api_platform_guardian_trails_get
+      parameters:
+      - name: held
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Held
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 10000
+          minimum: 1
+          default: 1
+          title: Page
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Size
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+          default: ''
+          title: Q
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: From
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: To
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Guardian Trails Api Platform Guardian Trails Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: guardian'
+  /api/platform/fraud/scenarios:
+    get:
+      summary: List Fraud Scenarios
+      description: |-
+        The safeguard coverage map: imagined and researched scenarios, newest first. Faded ones (no
+        source after three runs) show only when review="faded" is asked for.
+      operationId: list_fraud_scenarios_api_platform_fraud_scenarios_get
+      parameters:
+      - name: coverage
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - covered
+            - partly
+            - gap
+            type: string
+          - type: 'null'
+          title: Coverage
+      - name: review
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Review
+      - name: safeguard
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Safeguard
+      - name: guide
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Guide
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 10000
+          minimum: 1
+          default: 1
+          title: Page
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Size
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+          default: ''
+          title: Q
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: From
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: To
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Fraud Scenarios Api Platform Fraud Scenarios Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: fraud'
+  /api/platform/fraud/added:
+    get:
+      summary: List Fraud Added
+      description: 'What the pipeline added to a guide on its own: spot checks first, then newest.'
+      operationId: list_fraud_added_api_platform_fraud_added_get
+      parameters:
+      - name: guide
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Guide
+      - name: kind
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Kind
+      - name: spot_check
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Spot Check
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 10000
+          minimum: 1
+          default: 1
+          title: Page
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Size
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+          default: ''
+          title: Q
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: From
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: To
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Fraud Added Api Platform Fraud Added Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: fraud'
+  /api/platform/fraud/drafts:
+    get:
+      summary: List Fraud Drafts
+      description: Tactics and warning signs waiting for a risk reviewer, newest first.
+      operationId: list_fraud_drafts_api_platform_fraud_drafts_get
+      parameters:
+      - name: guide
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Guide
+      - name: kind
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Kind
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 10000
+          minimum: 1
+          default: 1
+          title: Page
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Size
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+          default: ''
+          title: Q
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: From
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: To
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Fraud Drafts Api Platform Fraud Drafts Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: fraud'
+  /api/platform/fraud/runs:
+    get:
+      summary: List Fraud Runs
+      description: Every research and dreaming run, newest first.
+      operationId: list_fraud_runs_api_platform_fraud_runs_get
+      parameters:
+      - name: kind
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Kind
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: guide
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Guide
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 10000
+          minimum: 1
+          default: 1
+          title: Page
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Size
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+          default: ''
+          title: Q
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: From
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: To
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Fraud Runs Api Platform Fraud Runs Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: fraud'
+  /api/platform/audit/entries:
+    get:
+      summary: List Audit
+      description: Every platform decision, newest first; a demo admin sees only their own.
+      operationId: list_audit_api_platform_audit_entries_get
+      parameters:
+      - name: action
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Action
+      - name: role
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 10000
+          minimum: 1
+          default: 1
+          title: Page
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Size
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+          default: ''
+          title: Q
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: From
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: To
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Audit Api Platform Audit Entries Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: settings and audit'
+  /api/platform/agents/blocked:
+    get:
+      summary: List Blocked
+      description: Calls the gateway refused, newest first; a demo admin sees only their own copy's.
+      operationId: list_blocked_api_platform_agents_blocked_get
+      parameters:
+      - name: agent
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent
+      - name: kind
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Kind
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 10000
+          minimum: 1
+          default: 1
+          title: Page
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Size
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+          default: ''
+          title: Q
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: From
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: To
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Blocked Api Platform Agents Blocked Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: agents and use'
+  /api/platform/approvals/requests:
+    get:
+      summary: List Approvals
+      description: |-
+        Budget requests, newest first; a demo admin sees only their own copy's. status "active" means
+        approved and not expired yet. Search covers the hashed key, kind, tenant and status, not what a
+        person wrote.
+      operationId: list_approvals_api_platform_approvals_requests_get
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - pending
+            - active
+            - approved
+            - rejected
+            type: string
+          - type: 'null'
+          title: Status
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 10000
+          minimum: 1
+          default: 1
+          title: Page
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Size
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+          default: ''
+          title: Q
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: From
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: To
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Approvals Api Platform Approvals Requests Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: people'
+  /api/platform/demos/copies:
+    get:
+      summary: List Demos
+      description: |-
+        Private demo copies, most recently used first, without names. A visitor's nickname is shown,
+        and searchable, only for platform admins; a demo admin sees only their own copy.
+      operationId: list_demos_api_platform_demos_copies_get
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 10000
+          minimum: 1
+          default: 1
+          title: Page
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Size
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+          default: ''
+          title: Q
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: From
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 10
+          - type: 'null'
+          title: To
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Demos Api Platform Demos Copies Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - 'Admin portal: people'
+  /api/model-access:
+    get:
+      summary: Get Access
+      operationId: get_access_api_model_access_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Access Api Model Access Get
+      tags:
+      - Your demo copy
+    put:
+      summary: Save Access
+      description: Test the key again, then save it encrypted. A key that reaches no model isn't saved.
+      operationId: save_access_api_model_access_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Save Access Api Model Access Put
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Your demo copy
+    delete:
+      summary: Remove Access
+      operationId: remove_access_api_model_access_delete
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Remove Access Api Model Access Delete
+      tags:
+      - Your demo copy
+  /api/model-access/test:
+    post:
+      summary: Test Access
+      description: Test a key without saving it.
+      operationId: test_access_api_model_access_test_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Test Access Api Model Access Test Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Your demo copy
+components:
+  schemas:
+    AccessDecision:
+      properties:
+        decision:
+          type: string
+          enum:
+          - approve
+          - decline
+          title: Decision
+        decided_by:
+          type: string
+          enum:
+          - owner
+          - team
+          title: Decided By
+      type: object
+      required:
+      - decision
+      - decided_by
+      title: AccessDecision
+    AccessRequest:
+      properties:
+        name:
+          type: string
+          title: Name
+        relationship:
+          type: string
+          title: Relationship
+        contact:
+          type: string
+          title: Contact
+        note:
+          type: string
+          title: Note
+          default: ''
+      type: object
+      required:
+      - name
+      - relationship
+      - contact
+      title: AccessRequest
+    Actor:
+      properties:
+        email:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Email
+        key:
+          type: string
+          title: Key
+        role:
+          type: string
+          title: Role
+        permissions:
+          items:
+            type: string
+          type: array
+          title: Permissions
+      type: object
+      required:
+      - email
+      - key
+      - role
+      - permissions
+      title: Actor
+    AddedDecision:
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+      type: object
+      required:
+      - reason
+      title: AddedDecision
+    Body_add_document_api_owners__owner_id__documents_post:
+      properties:
+        image:
+          type: string
+          contentMediaType: application/octet-stream
+          title: Image
+      type: object
+      required:
+      - image
+      title: Body_add_document_api_owners__owner_id__documents_post
+    Body_add_wish_api_owners__owner_id__wishes_post:
+      properties:
+        text:
+          type: string
+          title: Text
+      type: object
+      required:
+      - text
+      title: Body_add_wish_api_owners__owner_id__wishes_post
+    Body_capture_audio_api_owners__owner_id__capture_audio_post:
+      properties:
+        audio:
+          type: string
+          contentMediaType: application/octet-stream
+          title: Audio
+      type: object
+      required:
+      - audio
+      title: Body_capture_audio_api_owners__owner_id__capture_audio_post
+    Body_converse_api_owners__owner_id__conversation_post:
+      properties:
+        text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Text
+        file:
+          anyOf:
+          - type: string
+            contentMediaType: application/octet-stream
+          - type: 'null'
+          title: File
+      type: object
+      title: Body_converse_api_owners__owner_id__conversation_post
+    Body_record_legal_document_api_owners__owner_id__legal_documents_post:
+      properties:
+        document_type:
+          type: string
+          title: Document Type
+        location:
+          type: string
+          title: Location
+          default: ''
+      type: object
+      required:
+      - document_type
+      title: Body_record_legal_document_api_owners__owner_id__legal_documents_post
+    Body_report_death_api_owners__owner_id__death_report_post:
+      properties:
+        certificate:
+          type: string
+          contentMediaType: application/octet-stream
+          title: Certificate
+      type: object
+      required:
+      - certificate
+      title: Body_report_death_api_owners__owner_id__death_report_post
+    Body_submit_authority_api_owners__owner_id__release_authority_post:
+      properties:
+        proof:
+          type: string
+          contentMediaType: application/octet-stream
+          title: Proof
+      type: object
+      required:
+      - proof
+      title: Body_submit_authority_api_owners__owner_id__release_authority_post
+    CueMinimum:
+      properties:
+        min_owners:
+          type: integer
+          title: Min Owners
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+      type: object
+      required:
+      - min_owners
+      - reason
+      title: CueMinimum
+    Escrow:
+      properties:
+        recipient_wrapped_key:
+          type: string
+          title: Recipient Wrapped Key
+      type: object
+      required:
+      - recipient_wrapped_key
+      title: Escrow
+    GuardianDecision:
+      properties:
+        decision:
+          type: string
+          enum:
+          - confirm
+          - reverse
+          title: Decision
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+      type: object
+      required:
+      - decision
+      - reason
+      title: GuardianDecision
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    Handoff:
+      properties:
+        partner:
+          type: string
+          title: Partner
+        owner_consent:
+          type: boolean
+          title: Owner Consent
+        needs:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Needs
+      type: object
+      required:
+      - partner
+      - owner_consent
+      - needs
+      title: Handoff
+    Invite:
+      properties:
+        name:
+          type: string
+          title: Name
+        relationship:
+          type: string
+          title: Relationship
+      type: object
+      required:
+      - name
+      - relationship
+      title: Invite
+    KeyBackup:
+      properties:
+        kdf:
+          type: string
+          const: PBKDF2-SHA256
+          title: Kdf
+        iterations:
+          type: integer
+          title: Iterations
+        salt:
+          type: string
+          title: Salt
+        iv:
+          type: string
+          title: Iv
+        ciphertext:
+          type: string
+          title: Ciphertext
+      type: object
+      required:
+      - kdf
+      - iterations
+      - salt
+      - iv
+      - ciphertext
+      title: KeyBackup
+      description: |-
+        A key encrypted on the person's device with a key derived from their recovery code: the
+        recipient's private key, or the owner's data key. Useless to us without that code.
+    KeyIn:
+      properties:
+        kind:
+          type: string
+          title: Kind
+        key:
+          type: string
+          title: Key
+      type: object
+      required:
+      - kind
+      - key
+      title: KeyIn
+    KeyPolicy:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+        kinds:
+          items:
+            type: string
+            enum:
+            - studio
+            - vertex_express
+          type: array
+          title: Kinds
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+      type: object
+      required:
+      - enabled
+      - kinds
+      - reason
+      title: KeyPolicy
+    KillSwitch:
+      properties:
+        state:
+          type: string
+          enum:
+          - 'off'
+          - optional_paused
+          - all_paused
+          title: State
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+      type: object
+      required:
+      - state
+      - reason
+      title: KillSwitch
+    MoreRequest:
+      properties:
+        kind:
+          type: string
+          enum:
+          - daily_allowance
+          - voice_minutes
+          - spoken_replies
+          title: Kind
+        amount:
+          type: integer
+          title: Amount
+        hours:
+          type: integer
+          title: Hours
+          default: 24
+        reason:
+          type: string
+          maxLength: 300
+          minLength: 3
+          title: Reason
+      type: object
+      required:
+      - kind
+      - amount
+      - reason
+      title: MoreRequest
+    Nickname:
+      properties:
+        nickname:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Nickname
+      type: object
+      title: Nickname
+    OwnerKeyBackup:
+      properties:
+        kdf:
+          type: string
+          const: PBKDF2-SHA256
+          title: Kdf
+        iterations:
+          type: integer
+          title: Iterations
+        salt:
+          type: string
+          title: Salt
+        iv:
+          type: string
+          title: Iv
+        ciphertext:
+          type: string
+          title: Ciphertext
+        key_id:
+          type: string
+          pattern: ^[0-9a-f]{32}$
+          title: Key Id
+      type: object
+      required:
+      - kdf
+      - iterations
+      - salt
+      - iv
+      - ciphertext
+      - key_id
+      title: OwnerKeyBackup
+    Prompt:
+      properties:
+        text:
+          type: string
+          title: Text
+        step_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Step Id
+      type: object
+      required:
+      - text
+      title: Prompt
+    Question:
+      properties:
+        question:
+          type: string
+          title: Question
+        session_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Session Id
+      type: object
+      required:
+      - question
+      title: Question
+    Reason:
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+      type: object
+      required:
+      - reason
+      title: Reason
+    Recipient:
+      properties:
+        name:
+          type: string
+          title: Name
+        relationship:
+          type: string
+          title: Relationship
+        public_key_jwk:
+          additionalProperties: true
+          type: object
+          title: Public Key Jwk
+        key_backup:
+          $ref: '#/components/schemas/KeyBackup'
+      type: object
+      required:
+      - name
+      - relationship
+      - public_key_jwk
+      - key_backup
+      title: Recipient
+    RecipientDecision:
+      properties:
+        decision:
+          type: string
+          enum:
+          - approve
+          - decline
+          title: Decision
+      type: object
+      required:
+      - decision
+      title: RecipientDecision
+    Review:
+      properties:
+        reviewer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reviewer
+        override_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Override Reason
+      type: object
+      title: Review
+    ScenarioDecision:
+      properties:
+        decision:
+          type: string
+          enum:
+          - approve
+          - discard
+          title: Decision
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+      type: object
+      required:
+      - decision
+      - reason
+      title: ScenarioDecision
+    Speech:
+      properties:
+        turn_id:
+          type: string
+          title: Turn Id
+      type: object
+      required:
+      - turn_id
+      title: Speech
+    TaskUpdate:
+      properties:
+        status:
+          type: string
+          enum:
+          - done
+          - dismissed
+          title: Status
+      type: object
+      required:
+      - status
+      title: TaskUpdate
+    TurnIds:
+      properties:
+        turn_ids:
+          items:
+            type: string
+          type: array
+          maxItems: 400
+          minItems: 1
+          title: Turn Ids
+      type: object
+      required:
+      - turn_ids
+      title: TurnIds
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    VaultItem:
+      properties:
+        category:
+          type: string
+          title: Category
+        iv:
+          type: string
+          title: Iv
+        ciphertext:
+          type: string
+          title: Ciphertext
+        ai_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ai Label
+      type: object
+      required:
+      - category
+      - iv
+      - ciphertext
+      title: VaultItem
+    app__governance__portal__Decision:
+      properties:
+        decision:
+          type: string
+          enum:
+          - approve
+          - reject
+          title: Decision
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+        hours:
+          anyOf:
+          - type: integer
+            maximum: 168.0
+            minimum: 1.0
+          - type: 'null'
+          title: Hours
+      type: object
+      required:
+      - decision
+      - reason
+      title: Decision
+    app__main__Decision:
+      properties:
+        collection:
+          type: string
+          enum:
+          - moments
+          - inventory
+          - people
+          title: Collection
+        decision:
+          type: string
+          enum:
+          - approve
+          - reject
+          title: Decision
+        edits:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Edits
+        replace:
+          type: boolean
+          title: Replace
+          default: false
+        voice_confirmed:
+          type: boolean
+          title: Voice Confirmed
+          default: false
+      type: object
+      required:
+      - collection
+      - decision
+      title: Decision
+  securitySchemes:
+    firebase:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Firebase ID token from Google sign-in.
+    scheduler:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Google-signed ID token of the Cloud Scheduler service account.

@@ -226,7 +226,7 @@ sequenceDiagram
 
 ## 9. Quality and testing
 
-- **749 automated tests** (`agents/tests/`) run in about 15 seconds, with no cloud and a stubbed Gemini.
+- **786 automated tests** (`agents/tests/`) run in about 15 seconds, with no cloud and a stubbed Gemini.
 - Tests enforce the rules above. Some examples:
   - every Gemini call goes through the gateway;
   - the guardian never imports the vault;
@@ -234,6 +234,7 @@ sequenceDiagram
   - the portal never returns conversation text;
   - the release keeps two reviewers and the waiting period.
 - **CI** runs the linters (ruff, Biome), the tests and the web build on every pull request.
+- **API description.** [docs/openapi.yaml](openapi.yaml) is the OpenAPI 3.1 description of every route, grouped, with how each one signs in and the live-call protocol. FastAPI builds it from the code (`agents/app/openapi_spec.py`), and a test fails if the file is out of date.
 - **Supply chain.** Every dependency is the latest stable release, with a permissive licence. A test checks the inventory and the licences.
 - **Checked by hand:** the vault and recovery round trip, live calls, and real Gemini runs.
 
