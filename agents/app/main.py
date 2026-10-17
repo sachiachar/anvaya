@@ -470,11 +470,9 @@ def decide(doc_id: str, body: Decision) -> dict:
     if body.decision == "reject":
         store.delete(body.collection, doc_id)
         return {"id": doc_id, "status": "rejected"}
-    # The voice check: a card from an exchange whose voice didn't match the owner's voiceprint waits
-    # until the owner confirms it was them. Checked before anything is saved.
+    # The voice check marked this card (the call didn't sound like the owner's voiceprint). The
+    # guardian decides at Keep below: it waits until the owner confirms on the card it was them.
     held_by_voice = bool(doc.get("voice_mismatch"))
-    if held_by_voice and not body.voice_confirmed:
-        raise HTTPException(409, "This didn't sound like your voice. Confirm it was you to keep it.")
     # Edits change what a card says, never what it is, where it came from, or the voice check's hold.
     safe_edits = {k: v for k, v in (body.edits or {}).items()
                   if k not in ("id", "owner_id", "status", "updates", "looks_like", "recording", "document",
@@ -488,13 +486,19 @@ def decide(doc_id: str, body: Decision) -> dict:
             raise HTTPException(409, "There's nothing kept of the same kind for this card to replace.")
         replaces = kept["id"]
     # Keeping asks the guardian first (PR-2.7.4): a card that passes on a secret or pays because
-    # someone asked is never kept. It reads the card as it would be kept, edits included.
+    # someone asked is never kept, and a card the voice check held waits for the owner's
+    # confirmation. It reads the card as it would be kept, edits included.
     # Each field on its own, so a "never" in one field can't clear an instruction in another.
     card = {**doc, **safe_edits}
     problem = next((p for k, v in card.items() if k not in NOT_WORDS and isinstance(v, str)
                     and (p := step_guard.reply_problem(v))), None)
-    decision = guardian.decide("keep_card", CARDS, {"problem": problem}, refs={"card": doc_id})
+    decision = guardian.decide("keep_card", CARDS,
+                               {"problem": problem, "voice_mismatch": held_by_voice,
+                                "voice_confirmed": body.voice_confirmed},
+                               refs={"card": doc_id}, once=f"gev_keep_{doc_id}")
     if not decision.goes_ahead:
+        if {f.detector for f in decision.findings} == {"voice_rule"}:
+            raise HTTPException(409, "This didn't sound like your voice. Confirm it was you to keep it.")
         raise HTTPException(409, "This can't be kept: it passes on a secret or a payment someone asked for. "
                                  "Passwords and PINs belong in your vault.")
     if safe_edits:

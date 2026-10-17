@@ -169,6 +169,16 @@ def risky_card(facts: dict) -> Finding | None:
     return None
 
 
+def unconfirmed_voice(facts: dict) -> Finding | None:
+    """The voice check held this card: the call didn't sound like the owner (voiceprint.py). The
+    guardian keeps it from being kept until the owner confirms on the card that it was them."""
+    if facts.get("voice_mismatch") and not facts.get("voice_confirmed"):
+        return Finding("voice_rule", "medium",
+                       "A card from a call that didn't sound like the owner waits for the owner to confirm it was them",
+                       floor="deflect")
+    return None
+
+
 def recipient_change(facts: dict) -> Finding | None:
     """Changing who receives the vault: a second change within a day is held for a reviewer;
     replacing the recipient of a vault that's already sealed gets a reviewer's look."""
@@ -253,7 +263,7 @@ DETECTORS: dict[str, list[Detector]] = {
     "model_call": [daily_limit],
     "review_confirmation": [review_override],
     "certificate_check": [warning_signs],
-    "keep_card": [risky_card],
+    "keep_card": [risky_card, unconfirmed_voice],
     "recipient_change": [recipient_change],
     "release": [release_risk],
     "family_question": [family_secret, family_rules],

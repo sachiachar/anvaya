@@ -87,6 +87,22 @@ def test_keep_waits_until_the_owner_confirms(client, monkeypatch):  # noqa: F811
     assert decision["refs"]["voice"] == "confirmed_by_owner" and decision["refs"]["card"] == held["id"]
 
 
+def test_the_guardian_holds_the_card_until_the_owner_confirms(client, monkeypatch):  # noqa: F811
+    answer(monkeypatch, "mismatch")
+    exchange(monkeypatch, "one")
+    held = card()
+    keep(held)
+    keep(held)  # asking twice is still one intervention
+    refusals = [a for a in store.list("guardian_actions")
+                if a["action"] == "keep_card" and a["refs"].get("card") == held["id"]]
+    assert refusals and all(a["response"] == "deflect" and a["detectors"] == ["voice_rule"] for a in refusals)
+    events = [e for e in store.list("guardian_events") if e["id"] == f"gev_keep_{held['id']}"]
+    assert len(events) == 1 and "confirm it was them" in events[0]["reason"]
+    assert keep(held, voice_confirmed=True).status_code == 200
+    allowed = max((a for a in store.list("guardian_actions") if a["action"] == "keep_card"), key=lambda a: a["at"])
+    assert allowed["response"] == "continue" and allowed["detectors"] == []
+
+
 def test_discarding_a_held_card_needs_no_confirmation(client, monkeypatch):  # noqa: F811
     answer(monkeypatch, "mismatch")
     exchange(monkeypatch, "one")

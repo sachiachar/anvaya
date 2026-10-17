@@ -210,9 +210,10 @@ def another_voice(owner_id: str, turn_id: str, agent: str, card_docs: list[tuple
 
 def voice_mismatch(owner_id: str, turn_id: str, agent: str, card_docs: list[tuple[str, dict]]) -> str:
     """The voice check: the start of the owner's side of an exchange didn't sound like their
-    voiceprint (voiceprint.py). The guardian records it for the team, and each card from that
-    exchange is held: Keep waits until the owner confirms it was them. Nothing about the voice is
-    kept. Returns the guardian action id."""
+    voiceprint (voiceprint.py). The guardian records it for the team, and marks each card from that
+    exchange. At Keep, the guardian's voice rule (guardian.unconfirmed_voice) holds a marked card
+    until the owner confirms on it that it was them. Nothing about the voice is kept. Returns the
+    guardian action id."""
     decision = guardian.decide("owner_statement", agent, {"voice_mismatch": True},
                                refs={"turn": turn_id, "voice": "mismatch"}, once=f"gev_voicecheck_{turn_id}")
     for collection, doc in card_docs:
