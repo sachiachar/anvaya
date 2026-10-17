@@ -59,11 +59,13 @@ Errors come as `{"detail": "..."}`.
 | 503 | A cloud service isn't set up or can't be reached |
 
 ## The live call (WebSocket)
-`GET /api/owners/{owner_id}/live?token=<Firebase ID token>`, upgraded to a WebSocket. Browsers can't
-send headers on a WebSocket, so the token comes in the query.
+`GET /api/owners/{owner_id}/live?acting_as=vikram`, upgraded to a WebSocket. Browsers can't send headers
+on a WebSocket, and a token in the URL would be kept in request logs. So with sign-in on, the **first
+message** carries the token. Without it within 10 seconds, the call closes with code 4401.
 
 | Direction | Frame | Content |
 | --- | --- | --- |
+| app → server | text, first | `{"type": "auth", "token": "<Firebase ID token>"}` |
 | app → server | binary | 16 kHz mono 16-bit PCM from the microphone |
 | app → server | text | `{"type": "end"}` to hang up |
 | server → app | binary | 24 kHz mono 16-bit PCM, Saathi's voice |

@@ -108,7 +108,8 @@ def test_no_route_by_id_reaches_another_copy(client, copies):
 def test_the_live_call_only_opens_your_own_copy(client, copies):
     a, _ = copies
     with pytest.raises(WebSocketDisconnect) as closed:
-        with client.websocket_connect(f"/api/owners/{a}/live?token=judge-b") as ws:
+        with client.websocket_connect(f"/api/owners/{a}/live") as ws:
+            ws.send_json({"type": "auth", "token": "judge-b"})
             ws.receive_text()
     assert closed.value.code == 4404
 

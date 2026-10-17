@@ -288,6 +288,28 @@ REQUEST_LIMITS = {"daily_allowance": 300, "voice_minutes": 60, "spoken_replies":
 REQUEST_MAX_HOURS = 72
 
 
+# A demo admin approves their own copy's requests (PR-12.9). With open sign-in, many copies granting
+# themselves more could use up the shared daily ceiling and stop the demo for everyone. So a copy's
+# own admin may approve at most SELF_GRANTS_PER_DAY grants in any 24 hours, and none once the
+# measure a grant raises is past the ceiling's optional_pause_at today. Real approvers aren't limited.
+SELF_GRANTS_PER_DAY = 2
+
+
+def self_grant_refusal(copy_id: str, kind: str, now: float | None = None) -> str | None:
+    """Why a demo admin can't approve this grant for their own copy now, or None if they can."""
+    now = time.time() if now is None else now
+    recent = [r for r in store.list("budget_requests", copy_id=copy_id, status="approved")
+              if r.get("decided_at", 0) > now - 86400]
+    if len(recent) >= SELF_GRANTS_PER_DAY:
+        return (f"Your demo copy has had {SELF_GRANTS_PER_DAY} extra grants in the last 24 hours. "
+                "Try again later, or reject this request.")
+    metric = "voice_minutes" if GRANT_METRIC.get(kind, ("tokens",))[0] == "voice_minutes" else "tokens"
+    if (service_status().get(metric) or {}).get("state", "ok") != "ok":
+        return ("The demo is busy today, so extra allowance can't be granted until the shared daily limit "
+                "resets at midnight UTC.")
+    return None
+
+
 class RequestRefused(ValueError):
     """A request for more that isn't allowed (too much, too long, or one already waiting)."""
 

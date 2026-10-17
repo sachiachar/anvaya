@@ -267,6 +267,10 @@ def decide_approval(request_id: str, body: Decision, who: Actor = Depends(need("
     # (PR-12.9); for real roles the rule always holds.
     if req["user_key"] == who.key and who.role != "demo_admin":
         raise HTTPException(403, "You can't approve your own request.")
+    if who.role == "demo_admin" and body.decision == "approve":
+        refusal = core.self_grant_refusal(who.key, req["kind"])
+        if refusal:
+            raise HTTPException(409, refusal)
     now = time.time()
     fields = {"status": "approved" if body.decision == "approve" else "rejected", "decided_at": now,
               "decided_by": who.email or "local", "decision_reason": body.reason}
