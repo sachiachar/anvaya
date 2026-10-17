@@ -31,7 +31,6 @@ Built for the **AI Builder Cup 2026** · Track: **BFSI** · Google Gemini + Goog
 | [Concept](docs/concept.md) | The idea in plain language (start here) |
 | [Pitch: individuals](docs/pitch-individuals.md) | Why a person and their family would use Anvaya |
 | [Pitch: banks and insurers](docs/pitch-institutions.md) | Why an institution would offer Anvaya to its customers |
-| [Business model](docs/business-model.md) | Revenue, costs, margins and the assumptions behind them |
 | [Architecture](docs/architecture.md) | How it's built: the loops, the guardian, data, security and design decisions |
 | [Release notes](docs/release-notes.md) | What's built, and the known limitations |
 | [Defined limits](docs/limits.md) | Every limit we set: call length (about 15 minutes), daily allowances, agent caps, the handover and the fraud module |
@@ -65,7 +64,8 @@ Sources and dates are in [docs/concept.md](docs/concept.md#sources).
 
 | Service | What it does in Anvaya |
 | --- | --- |
-| **Gemini 3.1 Flash-Lite** (fallback: Gemini 3.5 Flash-Lite) | Reads each conversation, writes Saathi's replies, extracts cards, checks certificates, plans next steps, drafts letters, and runs fraud research and dreaming |
+| **Gemini 3.1 Flash-Lite** (fallback: Gemini 3.5 Flash-Lite) | Reads each conversation, writes Saathi's replies, extracts cards, checks certificates, plans next steps and drafts letters |
+| **Gemini 3.8 Flash** | Fraud research and dreaming, every hour |
 | **Gemini Live** (`gemini-3.8-live`) | Hands-free voice calls. Saathi reads the plan's current step through tools during the call. |
 | **Gemini TTS** | Saathi's spoken replies to typed messages |
 | **Google ADK** | The family's assistant: answers only from what the owner kept, with sources |

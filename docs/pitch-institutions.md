@@ -1,6 +1,6 @@
 # Anvaya, for banks and insurers
 
-*Team Saathi · BFSI track · Revision 6, 17 October 2026 · the full picture is in [concept.md](concept.md); the pitch to individuals is in [pitch-individuals.md](pitch-individuals.md); costs and margins are in [business-model.md](business-model.md); how it is built is in [architecture.md](architecture.md)*
+*Team Saathi · BFSI track · Revision 6, 17 October 2026 · the full picture is in [concept.md](concept.md); the pitch to individuals is in [pitch-individuals.md](pitch-individuals.md); how it is built is in [architecture.md](architecture.md)*
 
 > **Where this stands.** Anvaya runs today as a service people use directly. They talk with Saathi, keep a book for their family, lock their secrets in a vault on their own phone, and hand everything over through careful checks. A guardian watches every step. Everything in this document that connects Anvaya to a bank or insurer, such as pre-filled accounts, claim files, rule-change prompts and your own dashboard, is **a design we will build with our first institutional partners**. This document explains why an institution would offer Anvaya to its customers.
 
@@ -405,7 +405,7 @@ We are looking for one bank and one insurer to build the institutional side with
 [^jp-mynumber]: Digital Agency of Japan, [My Number FAQ on the deposit-account system](https://www.digital.go.jp/en/policies/mynumber_faq_09).
 [^sg-cpf]: CPF Board, [*What happens to my CPF savings if I did not make a CPF nomination*](https://www.cpf.gov.sg/service/article/what-happens-to-my-cpf-savings-if-i-did-not-make-a-cpf-nomination), and [*Making a CPF nomination*](https://www.cpf.gov.sg/member/account-services/providing-for-your-loved-ones/making-a-cpf-nomination).
 [^my-act]: Unclaimed Moneys (Amendment) Act 2024, as summarised by [Skrine](https://www.skrine.com/insights/alerts/july-2024/unclaimed-moneys-amendment-act-2024-comes-into-ope); see also the [Accountant General's Department](https://www.anm.gov.my/en/public/unclaimed-money).
-[^pricing]: Indicative; see [business-model.md](business-model.md).
+[^pricing]: Indicative, to be agreed with each institution.
 [^in-bank]: Written reply by the Minister of State for Finance, Pankaj Chaudhary, in Parliament, as reported in [*Unclaimed bank deposits in RBI's DEA Fund reach ₹72,454 crore*](https://www.freepressjournal.in/business/unclaimed-bank-deposits-in-rbis-dea-fund-reach-72454-crore-government-promotes-udgam-portal-multiple-nominations), Free Press Journal (PTI). Public sector banks ₹60,571 crore, private banks ₹9,608 crore, foreign banks ₹2,275 crore.
 [^in-ins]: Ministry of Finance, [*RBI, IRDAI and SEBI intensify measures to help citizens reclaim unclaimed deposits*](https://www.pib.gov.in/PressReleasePage.aspx?PRID=2244475), Press Information Bureau, 24 March 2026 (written reply in the Rajya Sabha).
 [^jp]: Supreme Court of Japan figures reported in [*行き場なく国庫に納められた遺産は1292億円*](https://www.bloomberg.com/jp/news/articles/2025-12-08/T6Q1AWKGIFQM00), Bloomberg, 8 December 2025. See also the Japan Research Institute, [*相続人がいないため国庫帰属となる相続財産は約1,300億円*](https://www.jri.co.jp/page.jsp?id=112109).

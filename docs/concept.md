@@ -1,8 +1,8 @@
 # Anvaya
 
-*Team Saathi · BFSI track · Revision 6, 12 October 2026*
+*Team Saathi · BFSI track · Revision 7, 17 October 2026*
 
-*The full picture. The focused pitches are [pitch-individuals.md](pitch-individuals.md) and [pitch-institutions.md](pitch-institutions.md); costs and margins are in [business-model.md](business-model.md); how it is built is in [architecture.md](architecture.md); what is available in each version is in [release-notes.md](release-notes.md).*
+*The full picture. The focused pitches are [pitch-individuals.md](pitch-individuals.md) and [pitch-institutions.md](pitch-institutions.md); how it is built is in [architecture.md](architecture.md); what is available in each version is in [release-notes.md](release-notes.md).*
 
 *Anvaya (अन्वय) is Sanskrit for lineage and succession: the thread that connects one generation to the next. Its companion, Saathi, takes the everyday word for "companion" in each language.*
 
@@ -25,7 +25,7 @@ The person who knew every answer is the one person they can no longer ask.
 
 ## Anvaya, in one sentence
 
-**Anvaya is a family succession service that anyone can download, and that banks and insurers can offer their customers: people talk with Anvaya's warm companion, Saathi, about their accounts, nominees and wishes while they are here; trusted partners help close the gaps; and when the time comes, the right family member receives a safe, fraud-checked handover and claims that are ready to process.**
+**Anvaya is a family succession service that anyone can download, and that banks and insurers can offer their customers: people talk with Anvaya's warm companion, Saathi, about their accounts, nominees and wishes while they are here; trusted partners help close the gaps; and when the time comes, the right family member receives a safe, fraud-checked handover. With a bank or insurer, the institution would also receive claims that are ready to process.**
 
 ## What is lost when nobody knows
 
@@ -78,7 +78,7 @@ Regulators across Asia are making the family's claim faster, simpler and measure
 - **Singapore:** without a CPF nomination, savings go to the Public Trustee, after a fee and up to six months to identify the family.[^sg]
 - **Malaysia:** since August 2024, unclaimed money goes to government revenue after 10 years instead of 15.[^my-act]
 
-A complete, pre-checked claim file is exactly what these rules reward. The detail is in [pitch-institutions.md](pitch-institutions.md#why-now).
+A complete, pre-checked claim file is exactly what these rules reward. Building it with institutions is our next step. The detail is in [pitch-institutions.md](pitch-institutions.md#why-now).
 
 ## Our answer: a conversation, not a form
 
@@ -86,7 +86,7 @@ Anvaya makes getting your affairs in order as easy as **talking to someone you t
 
 1. **Talk with Saathi.** No forms. You talk with a warm companion the way you would with an old family friend, and Saathi quietly gathers everything your family will one day need. Only what you choose to keep becomes part of the handover.
 2. **Close the gaps with trusted partners.** When something is missing, such as a will, a nominee or a safe place for original papers, Saathi points you to vetted partners in a **marketplace**, and you choose.
-3. **A careful, fraud-resistant handover.** When the time comes, automated checks and two human reviewers confirm the official certificate and the family member's authority. The family gets their answers, and the bank or insurer receives a claim that has already been checked.
+3. **A careful, fraud-resistant handover.** When the time comes, automated checks and two human reviewers confirm the official certificate and the family member's authority. The family gets their answers. With a bank or insurer, the institution would receive a claim that has already been checked.
 
 ```mermaid
 flowchart LR
@@ -95,13 +95,19 @@ flowchart LR
     C --> D["Handover<br/>Family + ready-to-process claims"]
 ```
 
+## A true friend
+
+Most of us have one friend we call when something is hard to say out loud. You tell him, *"I want my daughter to have the flat."* He doesn't lecture you, and he doesn't take sides. He says, *"You'll need a will. Let me find you a few good lawyers who don't overcharge. You pick one."* A month later, he asks, *"Is the will done?"* He remembers what you told him, and keeps your confidences. And one day, he tells your daughter everything you wanted her to know, in your words.
+
+Not everyone has a friend like that. **Saathi is that friend, for everyone:** it listens first, never takes sides or sells, follows up, remembers what you said as you said it, keeps your confidences, and is there for your family when the time comes.
+
 ## Who it is for
 
 | Who | What they receive |
 | --- | --- |
 | **The customer** (for example, Vikram), whether they download it themselves or find it through their bank | A gentle, private way to put their affairs in order, by voice, in their own language |
 | **The family** (for example, Priya) | Answers in their loved one's own words, a secure vault, a claims checklist and draft letters |
-| **Banks and insurers** | More nominees on file, fewer unclaimed balances, faster claims, less fraud, and a relationship with the next generation |
+| **Banks and insurers** (with our first partners) | More nominees on file, fewer unclaimed balances, faster claims, less fraud, and a relationship with the next generation |
 | **Partners** (lawyers, will writers, safekeeping services) | Customers who need them, at the moment they need them, with a clear summary |
 | **The Anvaya review team** | Every document pre-checked, so reviewers spend their time on decisions |
 
@@ -116,21 +122,22 @@ flowchart LR
 - **Saathi suggests what to keep.** Small cards appear: a story, a piece of advice, a bank account, a family member. You tap **Keep** or **Not now**.
 - **Your words, as you said them.** Each card says only what you said. A detail nobody said stays empty, and Saathi asks about it later instead of guessing.
 - **Checked before it is offered.** Everything new you say passes the guardian (see below) before it becomes a card. A password someone asked you for, or a payment someone else wants, never becomes part of what you keep.
-- **Another voice is noticed.** If someone else joins the conversation, Saathi warmly asks who is there. What was said then is marked, so you decide calmly what to keep. Saathi never tries to tell who it is, and keeps no voiceprint.
+- **Another voice is noticed.** If someone else joins the conversation, Saathi warmly asks who is there. What was said then is marked, so you decide calmly what to keep. Saathi never tries to tell who it is, and keeps no voiceprint of anyone else.
+- **Saathi is learning your voice (being tested).** If you choose, Saathi learns your voice from three short sentences. Today it marks words that don't sound like you, so you can check them before you keep them. Once it is fully live, nobody else will be able to keep anything in your name. Only numbers that describe your voice are kept, never the recording.
 - **A book for your family.** Everything you keep becomes a book, with chapters for stories and advice, money matters, wishes and people. Each page shows the day you kept it.
-- **Keep your real voice.** For any story, you can choose to keep the recording of you telling it, so your family can one day hear it from you. Each recording is kept only if you say so.
-- **Voice letters.** Record a message for a particular person or moment, such as "for Priya's wedding" or "for Ajay when he turns 18". It stays sealed until the handover, and then reaches only the person you chose.
+- **Keep your real voice** (coming next). For any story, you can choose to keep the recording of you telling it, so your family can one day hear it from you. Each recording is kept only if you say so.
+- **Voice letters** (coming next). Record a message for a particular person or moment, such as "for Priya's wedding" or "for Ajay when he turns 18". It stays sealed until the handover, and then reaches only the person you chose.
 - **Next steps.** Saathi notices what your family would still be missing, such as "no nominee on this policy" or "no will for the flat", and offers simple next steps, each with a button.
 - **Gentle questions about what matters most.** Saathi knows how the pieces fit together: each policy should have a nominee, each property its papers and the person it's meant for. When the moment is right, it asks about the most important missing piece, one at a time. "Skip" is always respected, and never asked again. The cover of your book shows how ready it is, as a score out of 100, with the pages still to write.
-- **A secure vault.** Passwords and account details are locked on your own phone. Nobody else can read them: not Anvaya, not your bank, not Saathi.
+- **A secure vault.** Passwords and account details are locked on your own phone. Nobody else can read them: not Anvaya, not your bank, not Saathi. You can see your own secrets on your phone with **Show**, and a recovery code that only you hold brings your vault back on a new phone.
 - **You choose who receives the vault**, usually a son, daughter or spouse. They accept in their own app, and you confirm a matching code.
 
 ### 2. Close the gaps: the partner marketplace
 
 - Partners appear **only when a next step needs one**. "No will for the flat" shows will-writing partners; "originals in a cupboard" shows safekeeping options.
-- You **compare and choose**. Saathi explains what each partner does and what it costs, but never recommends one over another.
+- You **compare and choose**. Saathi shows a few vetted partners, usually three, with the same facts for each and prices up front, in a neutral order. It explains what each partner does and what it costs, but never recommends one over another.
 - With your **consent**, Saathi sends the partner a short, pre-filled summary, so they don't start from zero. The vault is never shared.
-- Your own bank or insurer appears first for its own products. Nominee updates go through **the institution's own journey**: Saathi takes you there, but never changes the institution's records itself.
+- Your own bank or insurer can appear among the options, clearly labelled as its own, never placed first. Nominee updates go through **the institution's own journey**: Saathi takes you there, but never changes the institution's records itself.
 
 ### 3. When the time comes: careful verification
 
@@ -144,10 +151,10 @@ flowchart LR
 - The person you chose **unlocks the vault on their own phone**.
 - Your family can **ask Saathi questions**, such as "What insurance did Papa have?". Saathi answers only from what you actually recorded, shows where each answer came from, and says so honestly when something was never recorded. Each source shows what kind of item it is, such as a policy or a story, and your own words appear as a quote.
 - Your family can **ask freely**. Only two kinds of question are turned away: one for a vault secret, and one that tries to steer Saathi. If they mention someone asking for a fee, the answer adds one helpful line, such as "banks don't ask for fees on a call".
-- When a story was kept with your voice, Saathi offers to play it: *"Would you like to hear him tell it?"* What plays is **your real recording**, never an imitation.
-- Each **voice letter** reaches the person it was meant for.
+- When a story was kept with your voice (coming next), Saathi offers to play it: *"Would you like to hear him tell it?"* What plays is **your real recording**, never an imitation.
+- Each **voice letter** reaches the person it was meant for (coming next).
 - Saathi prepares a **checklist and draft claim letters** for each bank and insurer.
-- A participating bank or insurer receives a **complete, pre-checked claim file**: the verified documents, the review record and the nominee details for its own products. Anvaya doesn't certify legal heirship; the institution's own staff verify and make the final decision.
+- A participating bank or insurer would receive a **complete, pre-checked claim file** (a design we will build with our first partners): the verified documents, the review record and the nominee details for its own products. Anvaya doesn't certify legal heirship; the institution's own staff verify and make the final decision.
 - Partners help the family with what comes next, such as a succession certificate or transferring property.
 
 ## The partner marketplace
@@ -164,7 +171,7 @@ flowchart LR
 
 **The promises every partner makes**
 
-- **Neutral.** No partner can pay to be shown first or to be recommended by Saathi. The one exception is the institution offering Anvaya, whose own products come first and are clearly labelled as its own.
+- **Neutral.** No partner can pay to be shown first or to be recommended by Saathi. The institution offering Anvaya can show its own products among the options, clearly labelled as its own, never placed first.
 - **Clear prices.** Fees are shown before you choose.
 - **Vetted.** Only licensed or checked providers are listed.
 - **Consent first.** A partner hears about you only after you agree, and receives only the summary they need.
@@ -182,17 +189,23 @@ The marketplace doesn't replace Anvaya's own vault. The vault keeps secrets such
 
 ## Why banks and insurers will want to offer it
 
+*The institution side is a design we will build with our first partners. The service people use runs today.*
+
+**One customer becomes generations.** Vikram's memories are kept where his money already is, in his bank's app. They pass to the people he chose. His bank is ready on day one, and Priya stays. She starts her own book, and adds her memories to his. One customer becomes a family, and a family becomes generations. The family owns the thread; the institution hosts it, and sees counts, never names.
+
 | What the institution wants | How Anvaya delivers it |
 | --- | --- |
 | More complete nominations | Saathi notices missing or outdated nominees and takes the customer into the institution's own nominee journey |
 | Faster settlement | Complete, pre-checked files, so the settlement clock (15 days in India) starts sooner and finishes on time |
 | Fewer rejected or reopened claims | Documents and authority are checked before the file reaches the institution |
 | Fewer unclaimed balances | Every account the customer mentions lands on the family's checklist |
-| Less fraud, at every step | A guardian watches the whole journey: forgery checks, two independent reviewers, owner alerts, and protection against pressure, cloned voices and insider collusion |
+| Less fraud, at every step | A guardian watches the whole journey: forgery checks, two independent reviewers and in-app alerts to the owner today, with more protection built with partners |
 | Keeping the next generation | The heir's first real experience of the institution is a kind and helpful one |
 | Engaged customers | A warm, genuinely useful reason to open the app, in the customer's own language |
 
-Institutions can offer Anvaya as a branded app, embed it inside their own app, and receive claim files straight into their claims system, without touching their core systems. We propose a six-month pilot with measured outcomes; see [pitch-institutions.md](pitch-institutions.md#the-pilot-we-propose).
+**After the handover: money well used.** Saathi would stay with the family as the money is received, protected, settled and used as the customer wished. Saathi guides, licensed people advise, and the family decides. For the institution, deposits stay. This is part of the design.
+
+Institutions could offer Anvaya as a branded app, embed it inside their own app, and receive claim files straight into their claims system, without touching their core systems. We propose a six-month pilot with measured outcomes; see [pitch-institutions.md](pitch-institutions.md#the-pilot-we-propose).
 
 ## Two ways in, one Anvaya
 
@@ -202,8 +215,8 @@ People can reach Anvaya in two ways. It is the same service, the same Saathi and
 | --- | --- | --- |
 | How they find it | App store, word of mouth, or a partner such as a will writer | Inside the institution's app, or under its brand |
 | Who pays | The customer, with a yearly plan | The institution, as a licence |
-| Institutions covered | All of them: Saathi records accounts at any bank or insurer | All of them, with the offering institution's own products shown first |
-| Claims | Checklist and draft letters for every institution | The same, plus a ready-to-process claim packet for the offering institution |
+| Institutions covered | All of them: Saathi records accounts at any bank or insurer | All of them, with the offering institution's own products labelled as its own |
+| Claims | Checklist and draft letters for every institution | The same, plus a ready-to-process claim file for the offering institution (to build with partners) |
 
 Each way strengthens the other. People who come directly show institutions that customers want this; institutions bring customers in large numbers. An account recorded through the direct app is just as useful to the family, and becomes a pre-checked claim the day that institution joins.
 
@@ -219,8 +232,10 @@ Nobody opens a succession app on a quiet Tuesday. So Anvaya meets people at the 
 | Opening an account, a fixed deposit maturing, a home loan | Bank | A short step inside a journey the customer is already on |
 | Marriage, a new child or grandchild, turning 50 or 60, retirement | Either | "Your family has grown. Let's make sure they're looked after." |
 | Tax-filing season | Either | "While your papers are out, let's note where everything is." |
+| A rule change that affects the customer | Either | "You can now name up to 4 nominees. Your account has 1." |
+| An heir who has just received a book | Either | "Start your own book, for the people who will one day need it." |
 
-Banks and insurers see most of these moments first, which is why offering Anvaya through them matters so much. People who come directly are reached through the same moments: partners such as will writers, word of mouth after a family's handover, and reminders they choose themselves. Prompts and notifications are not yet built; the pilot will measure which moments work best.
+Banks and insurers see most of these moments first, which is why offering Anvaya through them matters so much. People who come directly are reached through the same moments: partners such as will writers, word of mouth after a family's handover, and reminders they choose themselves. Prompts and notifications are not yet built; today, alerts appear only in the app. The pilot will measure which moments work best.
 
 ## How Anvaya earns
 
@@ -235,13 +250,11 @@ Four revenue streams, each paid by the people who benefit most. A grieving famil
 
 **Families never pay for the handover**, however their loved one came to Anvaya, and it comes with a generous allowance of questions, checklists and letters. Asking a grieving family to pay to unlock what their parent left them would break the trust everything here depends on.
 
-For costs, margins and the assumptions behind them, see [business-model.md](business-model.md).
-
 **Why the model compounds**
 
 - **Recurring by nature.** Putting your affairs in order is never finished: new accounts, new policies, new grandchildren. Plans and licences renew year after year.
 - **Institutions bring customers at scale.** One licence can reach millions of customers without the cost of winning them one at a time.
-- **Every handover introduces the next generation.** The son or daughter who receives a vault has just seen exactly why Anvaya matters, and is the most natural next customer.
+- **One customer becomes generations.** The son or daughter who receives a book has just seen exactly why Anvaya matters. Priya receives her father's book, then starts her own for her daughter.
 - **The marketplace grows with every gap.** Each missing will or nominee Saathi finds is a real need, met by a partner, at the moment it matters.
 - **Trust is the moat.** A vault locked on the phone, two-person verification and a neutral marketplace are slow to build and hard to copy.
 
@@ -256,11 +269,13 @@ For costs, margins and the assumptions behind them, see [business-model.md](busi
 >
 > He also says the flat in Mysore should go to his wife, Meena. Saathi notes there is no will, and **Next steps** shows three will-writing partners with their prices. Vikram picks one and agrees to share a summary.
 >
-> Years later, Vikram leaves us, suddenly, as he always feared he might. His daughter **Priya** is not ready; nobody ever is. But she is not lost. She uploads the certificate, the checks find nothing suspicious, and two reviewers confirm. She asks *"What insurance did Papa have?"* and gets the LIC policy, the nominee and a draft claim letter, all in her father's own words. His bank, which offers Anvaya, receives a claim packet that is already checked; for every other institution, Priya has a checklist and a draft letter.
+> Years later, Vikram leaves us, suddenly, as he always feared he might. His daughter **Priya** is not ready; nobody ever is. But she is not lost. She uploads the certificate, the checks find nothing suspicious, and two reviewers confirm. She asks *"What insurance did Papa have?"* and gets the LIC policy, the nominee and a draft claim letter, all in her father's own words. If his bank offers Anvaya, it receives a claim file that is already checked; for every other institution, Priya has a checklist and a draft letter.
 >
 > Then she asks about his first job. Saathi tells her about the textile mill and asks, *"Would you like to hear him tell it?"* And there is Vikram, in his own voice, recorded one evening years before, talking about the salary he gave to his mother.
 >
 > He had left one more thing: a voice letter, *"For Priya, on her wedding day"*.
+>
+> For years, Saathi had been Vikram's friend, the one he told everything to. Now it was there for Priya.
 
 ## What makes Anvaya different
 
@@ -292,12 +307,13 @@ For costs, margins and the assumptions behind them, see [business-model.md](busi
 | Data | Where it lives | Who can read it |
 | --- | --- | --- |
 | Passwords and secrets (the vault) | Encrypted on the customer's phone | Only the customer, and after a verified handover, the one person they chose |
-| What the customer kept: accounts, nominees, family, wishes, stories | In an open, standard format (Google Cloud's Open Knowledge Format), in the customer's own folder, in-country where required (India regions for Indian institutions) | The customer; after a verified handover, the chosen family member |
-| The conversation itself | Account and card numbers hidden before storage; kept only while useful; never handed over; deleted on request | Only the customer, and Anvaya's service so Saathi can follow along |
+| What the customer kept: accounts, nominees, family, wishes, stories | In an open, standard format (Google Cloud's Open Knowledge Format), in the customer's own folder, with account and policy numbers shortened to their last 4 digits. The prototype runs in Singapore; for Indian institutions, data would be kept in India | The customer; after a verified handover, the chosen family member |
+| The conversation itself | Kept only while useful; never handed over; deleted on request | Only the customer, and Anvaya's service so Saathi can follow along |
 | Voice recordings the customer chose to keep | Encrypted cloud storage | Released only to the verified recipient |
-| Claim files | Sent to each participating institution | That institution's claims team, for its own products only |
+| Claim files (to build with partners) | Sent to each participating institution | That institution's claims team, for its own products only |
 
-- **Each customer's data has its own key,** so it can be erased completely. Each bank or insurer can have its own store, encrypted with its own key, in the right region.
+- **Each person sees only their own part, today.** The family can't read the owner's conversations, cards or vault before the handover. Other websites can't frame our pages, and the service won't start without sign-in and its key service.
+- **Pilot design:** a key per customer, so their data can be erased completely, and a store per bank or insurer, encrypted with its own key, in the right region.
 - **Institutions see only their own products.** Accounts held elsewhere go on the family's checklist, never to another institution, unless the customer agrees.
 - **Built for regulated partners.** In India, Anvaya is designed to be engaged under the RBI's rules on outsourcing technology services, with audit rights, and to meet the DPDP Act's consent requirements.
 - **Honest about where we are.** Anvaya is not yet certified. An independent penetration test comes before any live customer data, and ISO 27001 and SOC 2 are on the roadmap.
@@ -309,15 +325,15 @@ Fraud can enter anywhere in the journey, not only with a forged certificate at t
 
 | Where fraud can enter | What the guardian does |
 | --- | --- |
-| Someone else on the owner's phone, or a cloned voice | Voice alone never authorises an important action; it needs confirmation on the owner's own device, plus a spoken random phrase for high-risk requests |
-| Pressure from someone close to the owner | The change is held, and Saathi checks with the owner privately, later; the owner stays in charge |
-| A sudden change of recipient or nominee | A cooling-off delay and a separate confirmation; blocked during an open case |
+| Someone else speaking as the owner | Voice alone never authorises an important action: it needs the owner's own screen. An optional voice check is being tested: today it marks words that don't sound like the owner. Once fully live, it will stop anyone else keeping things in the owner's name |
+| Pressure from someone close to the owner (coming next) | The change is held, and Saathi checks with the owner privately, later; the owner stays in charge |
+| A sudden change of recipient | Blocked during an open case; a second change within a day waits for our team. A cooling-off delay for new devices and nominee changes comes next |
 | Someone else joining the owner's conversation | Saathi asks who is there, what was said then is marked before the owner decides to keep it, and our team gets a quiet note |
 | A secret passed on, or a payment someone else asked for | Everything new the owner says passes the guardian first, so it never becomes part of what is kept |
-| A forged certificate or false claimant | Checks tuned to each document type and country, kept current by a fraud reference that grows every hour; fixed rules; two independent reviewers |
-| A false report of passing | The owner is told straight away, with a one-tap cancel link |
+| A forged certificate or false claimant | Checks for known signs of forgery, from a reference guide with cited sources, kept current by a fraud reference that grows every hour; two independent reviewers |
+| A false report of passing | The owner is told in the app straight away, with a one-tap cancel |
 | A family member probing for too much | Questions about what the owner kept are answered freely; a request for a vault secret, or words that try to steer Saathi, are turned away; every question is kept for audit |
-| An insider | Random case assignment, exclusion of reviewers linked to a case, and checks on unusual reviewer patterns |
+| An insider (coming next) | Random case assignment, exclusion of reviewers linked to a case, and checks on unusual reviewer patterns |
 
 The guardian can **continue, add a check, reduce what Saathi may do on its own, pause for a reviewer, or block**. It never approves or rejects anything itself: people decide, and every intervention is explained, logged and reversible. It also red-teams itself, regularly imagining new ways around each safeguard and showing which safeguard catches each one.
 
@@ -337,10 +353,10 @@ Every part of Saathi that acts on its own is an **agent with a name, one job, an
 - **Identified and limited.** Each agent is registered with its role, its permitted tools and models, and its limits. Anything else is refused and recorded.
 - **Clear about how much it may do on its own.** Each card, next step and certificate check shows a label: **Assist** prepares the facts for a person to decide, **Propose** suggests and the owner decides, and **Act** acts on its own within set limits. People decide everything that matters.
 - **Fair for everyone.** Each person has a daily allowance, so no one can use up the service for others. **Safety always comes first:** cancelling a false report and checking certificates keep working even when an allowance runs out.
-- **No runaway costs.** Limits on each request, budgets per agent, customer and bank, alerts, an automatic switch that pauses optional features, and a hard ceiling at Google Cloud.
-- **More only with approval.** Extra allowance is a purchase for direct customers, the bank's decision for its customers, and needs two people for anything larger. Every grant is time-limited and logged.
-- **Visible.** A governance dashboard for our team, and one for each bank showing its own customers: use against budget, which agents act on its customers, approvals, fraud flags and outcomes.
-- **Measured.** The quality of each automated step is measured on a test set, and the results are published with each release.
+- **No runaway costs.** Limits on each request, budgets per agent, per customer and for the whole service, an automatic switch that pauses optional features first, and a daily ceiling for the whole service.
+- **More only with approval.** Extra allowance needs a person's approval, and every grant is time-limited and logged. With institutions, the bank would decide for its customers, and anything larger would need two people.
+- **Visible.** A governance portal for our team, with long lists a page at a time and a Guardian page in plain words. Each bank's own view of its customers is part of the pilot.
+- **Measured.** The quality of three automated steps was measured on a synthetic test set on 9 October 2026, and the results are published.
 
 ## What Saathi does, and what stays with people
 
@@ -360,9 +376,9 @@ Saathi is not a set of screens. It is a companion with clear limits on what it m
 
 ## Where we are today
 
-| Live now | Coming in the prototype release (18 October 2026) | Later (finale and bank pilot) |
+| Live now | Coming next | With our first institutional partners |
 | --- | --- | --- |
-| Voice and typed conversation, photos and documents; one conversation plan, with a tone for each step; Keep cards that say only what was said; next steps; the family book with a readiness score; the vault; two-reviewer verification and waiting period; the family's questions with sources; claims checklist and letters; one mocked legal partner; a private demo copy for each person, with a first-visit tour and specimen documents; the guardian's core checks (two real reviewers, owner alert with cancel, a check on everything new before it is kept, another voice noticed, fixed checks); a fraud reference that grows every hour, in the open format, shown as a map; one conversation traceable from start to finish; owner-only access to the conversation with numbers hidden; kept knowledge in the open format with gentle gap questions; governed agents with allowances, autonomy labels and a governance view; published quality measures; sign-in that can open the demo to every judge, each with their own copy | The bank's claim file and view; accounts discovered and their readiness checked at the source (simulated Account Aggregator flow and real statement upload) | Playback of real recordings and voice letters; live Account Aggregator connection through a licensing bank; signs of pressure with a private check-in; cooling-off for recipient changes; cloned-voice signals; insider-pattern checks; a key per owner and per-bank stores; export; bank budgets and audit export; trigger-moment prompts; single sign-on and in-app embedding; India data residency; the full partner catalogue |
+| Voice and typed conversation, photos and documents; one conversation plan, with a tone for each step; Keep cards that say only what was said; next steps; the family book with a readiness score; the vault, with **Show** and a recovery code; two-reviewer verification and waiting period; the family's questions with sources; claims checklist and letters; one sample legal partner; a private demo copy for each person, with a first-visit tour and specimen documents; the guardian's core checks (owner alert in the app with cancel, a check on everything new before it is kept, another voice noticed, the voice check being tested); a fraud reference that grows every hour, in the open format, shown as a map; one conversation traceable from start to finish; each person seeing only their own part, with numbers shortened in what is kept; governed agents with allowances, autonomy labels and an admin portal; published quality measures; open sign-in, so every judge has their own copy | The voice check fully live; playback of real recordings and voice letters; alerts by notification, SMS and email; the full choice of partners with prices; a pause and a check for big changes and new phones; holding a change under pressure, with a private check-in; reviewers assigned at random and insider-pattern checks | Anvaya inside a bank's app; pre-filling from the institution's records; the claim file and bank view; rule-change prompts; readiness checked at the source (statement upload, then Account Aggregator); helping families use the money after the handover; a key per owner and per-bank stores; bank budgets and audit export; trigger-moment prompts; single sign-on and in-app embedding; India data residency |
 
 See [release-notes.md](release-notes.md) and the [release plan](https://github.com/sachiachar/anvaya/milestone/1).
 
