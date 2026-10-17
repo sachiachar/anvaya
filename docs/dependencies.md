@@ -118,13 +118,13 @@ All of these are Google's proprietary managed services. We use them under the Go
 | **Cloud Scheduler** | Calls the hourly fraud cycle (research, then dreaming) as its own service account, `fraud-scheduler`, with an ID token the API checks. The run happens inside that call, so Cloud Run keeps the CPU on. The release workflow keeps the job (`fraud-foresight-hourly`); "Run now" in the admin portal asks it to run at once | `agents/app/scheduler.py`, the release workflow, `infra/setup-github-actions.sh` |
 | **Cloud Billing Budget API** | A monthly budget alert by email at 50%, 90% and 100% of spend, and at a forecast of 100%: a backstop to the daily service ceiling (PR-15.1). A person sets it up once | `infra/budget-alert.sh` |
 | **Cloud KMS** | Two keys: `vault-escrow` wraps the vault escrow blob; `model-keys` encrypts the Gemini keys people add themselves (PR-10.10), with the person's user key bound in | `agents/app/escrow.py`, `agents/app/governance/keys.py` |
-| **Secret Manager** | Holds the Gemini API key for Cloud Run | `infra/deploy.sh` |
+| **Secret Manager** | Holds the Gemini API key (`gemini-api-key`) and the Exa key (`exa-api-key`) for Cloud Run | `infra/deploy.sh`, `.github/workflows/deploy.yml` |
 | **Cloud Build, Artifact Registry** | Build and store the API container on each deploy | `gcloud run deploy --source` |
 | **IAM, Workload Identity Federation** (IAM Credentials, STS) | Least-privilege service accounts; GitHub Actions deploys without stored keys | `infra/setup-github-actions.sh` |
 | **Firebase Hosting** | Serves the app (`anvaya-saathi`), the admin portal (`anvaya-admin`) and the old address's redirect | `firebase.json` |
 | **Firebase Authentication** | Google sign-in; the server checks the token and the allowlist | `web/src/auth.ts`, `agents/app/auth.py` |
 | **Firebase Rules** | Publishes `firestore.rules` | `.github/workflows/deploy.yml` |
-| Vertex AI API | The platform doesn't use it: the prototype release calls the Gemini API with a key, and a test checks this. Only a person's own Vertex AI express-mode key (PR-10.10) reaches it, for the calls they cause, billed to them | `agents/app/gemini.py` (`make_client`), `infra/deploy.sh` |
+| Vertex AI API | The platform doesn't use it: the prototype release calls the Gemini API with a key, and a test checks this. Our project doesn't enable it, and the agents' service account has no Vertex AI role. Only a person's own Vertex AI express-mode key (PR-10.10) reaches it, in their own project, for the calls they cause, billed to them | `agents/app/gemini.py` (`make_client`) |
 
 ## Outside services
 
@@ -132,7 +132,7 @@ These are services from other companies. Each one needs the product owner's agre
 
 | Service | Purpose | What's sent | Key | Where in the code |
 | --- | --- | --- | --- | --- |
-| **Exa** (exa.ai), search API | Web search for the fraud research agent: finds pages that report fraud tactics, so a scenario or tactic can be checked against a quoted source. Replaced Google Search grounding on 3 October 2026, whose quota the free tier didn't cover. Paid per search, with free starting credit. | Fraud research queries only: a document type, a country, a claimed tactic. Never owner data (a test checks this). | `EXA_API_KEY`: the GitHub secret of that name (environment "production"), set on Cloud Run with each API deploy | `agents/app/web_search.py` |
+| **Exa** (exa.ai), search API | Web search for the fraud research agent: finds pages that report fraud tactics, so a scenario or tactic can be checked against a quoted source. Replaced Google Search grounding on 3 October 2026, whose quota the free tier didn't cover. Paid per search, with free starting credit. | Fraud research queries only: a document type, a country, a claimed tactic. Never owner data (a test checks this). | `EXA_API_KEY`: on Cloud Run, from the Secret Manager secret `exa-api-key` | `agents/app/web_search.py` |
 | **Speaker model** (`spkrec-wasm` on Akamai Functions), a team member's demo deployment | The voice check (voice fingerprinting): turns a recording into a speaker embedding. It runs SpeechBrain's `spkrec-ecapa-voxceleb` (ECAPA-TDNN, Apache-2.0), quantised to int8, as WebAssembly. Agreed by the product owner for the demo. | Up to 5 seconds of the owner's speech as a WAV file, with no name or ID. The service may keep what it computes from it. | None: the demo deployment has no secret. `VOICE_MODEL_URL` sets its address (on Cloud Run, from the repository variable of the same name, by the deploy); empty turns the check off | `agents/app/voiceprint.py` |
 
 **Data use.** On the Gemini API's free tier, Google may use prompts and responses to improve its products. On the paid tier, it doesn't. Keep billing on for any environment that handles more than synthetic demo data.

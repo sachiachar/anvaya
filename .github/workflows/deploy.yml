@@ -157,7 +157,7 @@ jobs:
         run: '[ -n "$ALLOWED_EMAILS" ] || [ "$OPEN_SIGN_IN" = "true" ] || { echo "Set ALLOWED_EMAILS, or OPEN_SIGN_IN=true, in environment production"; exit 1; }'
 
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.0
       - name: Tests
         working-directory: agents
         run: uv run --group dev pytest -q
@@ -178,9 +178,6 @@ jobs:
           # The Cloud Billing export the portal reads actual spend from, as project.dataset.
           # A repository variable, not a secret. Empty: the portal says billing isn't available yet.
           BILLING_EXPORT_TABLE: ${{ vars.BILLING_EXPORT_TABLE }}
-          # Exa web search for the fraud research agent (agents/app/web_search.py). A secret in
-          # environment "production". Empty: fraud research says web search isn't set up yet.
-          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
           # The KMS key that encrypts model keys people add themselves (PR-10.10; agents/app/governance/keys.py).
           # A repository variable, not a secret. Empty: people can't save their own key; everything else works.
           MODEL_KEYS_KMS_KEY_NAME: ${{ vars.MODEL_KEYS_KMS_KEY_NAME }}
@@ -193,10 +190,13 @@ jobs:
           VOICE_MODEL_URL: ${{ vars.VOICE_MODEL_URL }}
         # --cpu-boost: extra CPU while an instance starts and for 10 seconds after, so cold starts are
         # shorter. The extra CPU is billed only for those seconds.
+        # The Exa key for fraud research web search (agents/app/web_search.py) comes from Secret Manager
+        # (exa-api-key, made by infra/deploy.sh), so it never shows as plain text in the service's settings.
         run: |
           gcloud run deploy life-after-agents --source agents \
             --project "${{ vars.GCP_PROJECT_ID }}" --region "${{ vars.GCP_REGION }}" --quiet --cpu-boost \
-            --update-env-vars "^;^ALLOWED_EMAILS=${ALLOWED_EMAILS};OPEN_SIGN_IN=${OPEN_SIGN_IN:-false};PLATFORM_ROLES=${PLATFORM_ROLES};BILLING_EXPORT_TABLE=${BILLING_EXPORT_TABLE};EXA_API_KEY=${EXA_API_KEY};MODEL_KEYS_KMS_KEY_NAME=${MODEL_KEYS_KMS_KEY_NAME};FRAUD_SCHEDULER_JOB=${FRAUD_SCHEDULER_JOB};FRAUD_SCHEDULER_SA=${FRAUD_SCHEDULER_SA};VOICE_MODEL_URL=${VOICE_MODEL_URL}"
+            --update-secrets "EXA_API_KEY=exa-api-key:latest" \
+            --update-env-vars "^;^ALLOWED_EMAILS=${ALLOWED_EMAILS};OPEN_SIGN_IN=${OPEN_SIGN_IN:-false};PLATFORM_ROLES=${PLATFORM_ROLES};BILLING_EXPORT_TABLE=${BILLING_EXPORT_TABLE};MODEL_KEYS_KMS_KEY_NAME=${MODEL_KEYS_KMS_KEY_NAME};FRAUD_SCHEDULER_JOB=${FRAUD_SCHEDULER_JOB};FRAUD_SCHEDULER_SA=${FRAUD_SCHEDULER_SA};VOICE_MODEL_URL=${VOICE_MODEL_URL}"
       # The hourly fraud cycle: a Cloud Scheduler job that calls the API every hour, as the fraud
       # cycle's own account, with an ID token the API checks (agents/app/scheduler.py). The run happens
       # inside that call, so Cloud Run keeps the CPU on; the job waits up to 30 minutes. Created on the
