@@ -32,7 +32,7 @@ The linters look for bugs, not style, and there's no formatter, so don't reforma
 
 ## Git and GitHub rules
 
-- **Never commit or push to `main`, force-push, or skip git hooks (`--no-verify`).** Every push to `main` deploys to production (see `.github/workflows/deploy.yml`).
+- **Never commit or push to `main`, force-push, or skip git hooks (`--no-verify`).** Production is released from `main` twice a day, at 13:00 and 19:00 IST, with everything merged since the last release (see `.github/workflows/deploy.yml`). So whatever reaches `main` goes live within hours.
 - Start each piece of work from the latest `main`: `git fetch origin && git switch -c feat/short-name origin/main`. Branch names are `feat/…`, `fix/…`, `docs/…` or `chore/…`.
 - Keep a pull request to one change. Split unrelated changes into separate PRs.
 - Commit only the files your change needs. Leave other people's uncommitted work alone: don't move, delete, stash or commit it.
@@ -70,7 +70,7 @@ These protect users and the budget. Tests enforce several of them, so don't weak
 
 Don't run these yourself; ask the person you're working with:
 
-- deploying: `gcloud run deploy`, `firebase deploy`, `infra/*.sh`. Deploys happen when a person merges to `main`, or through Actions → Deploy;
+- deploying: `gcloud run deploy`, `firebase deploy`, `infra/*.sh`. Releases happen on the schedule (13:00 and 19:00 IST), or when a person runs Actions → Deploy;
 - changing GitHub settings, secrets or environments (`ALLOWED_EMAILS`, `PLATFORM_ROLES`);
 - changing cloud resources (IAM, KMS, buckets, Firestore data);
 - adding a new dependency or Google service: ask first, then follow "Dependencies and versions" below.
@@ -104,7 +104,7 @@ gh api repos/<owner>/<action>/releases/latest --jq .tag_name   # a GitHub Action
 
 Update docs in the same PR as the code:
 
-- `docs/release-notes.md` for anything a user or judge would notice (Claude Code users can run `/release-notes` to draft the entry);
+- `docs/release-notes.md` in **every PR that changes what people use**: the app, the API, the admin portal, the agents' rules, hosting or the Firestore rules. Add the entry under "Not yet released" (Claude Code users can run `/release-notes` to draft it). The "Release notes" check fails without one. Only a change nobody can notice, such as a refactor or a test, takes the `no release note` label, and the PR says why. Each scheduled release then publishes a GitHub Release with the PRs and the release-notes lines it took live;
 - `docs/architecture.md` when the design, security model or tests change;
 - `docs/openapi.yaml` when any API route changes (rule 10 above);
 - `README.md` when setup or commands change.

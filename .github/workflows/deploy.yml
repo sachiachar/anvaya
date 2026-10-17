@@ -1,10 +1,12 @@
-# Deploys what changed on main since each part last deployed successfully:
+# Releases main twice a day, at 13:00 and 19:00 IST, not on every merge: the merges since the
+# last release go out together. Each release deploys what changed since each part last
+# deployed successfully:
 #   agents/**                                  -> tests, then the API to Cloud Run
 #   web/**, firebase.json, firestore.rules     -> the web app and the Firestore rules
-# Each part compares against the commit of its own last successful deploy, not just
-# the previous push, so a release that was cancelled (a newer merge arrived while it
-# waited) or skipped never loses changes. Docs-only changes deploy nothing. "Run workflow" (manual) deploys everything,
-# or only the allowlist.
+# Each part compares against the commit of its own last successful deploy, so a release that
+# failed, was cancelled or was skipped never loses changes. A release with no changes, or only
+# docs, deploys nothing. "Run workflow" (manual) releases now: what changed (the default, for an
+# urgent fix), everything, or only the allowlist.
 #
 # Who may use the demo lives in GitHub: environment "production" -> secret
 # ALLOWED_EMAILS (emails and/or @domains, comma-separated), and variable OPEN_SIGN_IN
@@ -20,15 +22,17 @@
 name: Deploy
 
 on:
-  push:
-    branches: [main]
+  schedule:
+    # 07:30 and 13:30 UTC = 13:00 and 19:00 IST. Scheduled runs use main. GitHub may start them
+    # a few minutes late when it is busy.
+    - cron: "30 7,13 * * *"
   workflow_dispatch:
     inputs:
       target:
         description: What to deploy
         type: choice
-        options: [all, allowlist]
-        default: all
+        options: [changed, all, allowlist]
+        default: changed
 
 concurrency:
   group: deploy-production
@@ -43,21 +47,21 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      # Manual runs follow the chosen target; pushes follow what changed.
-      api: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'all' || github.event_name == 'push' && steps.api.outputs.changed == 'true' }}
-      web: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'all' || github.event_name == 'push' && steps.web.outputs.changed == 'true' }}
+      # "all" deploys both; a scheduled run or "changed" follows what changed; "allowlist" deploys neither.
+      api: ${{ inputs.target == 'all' || steps.api.outputs.changed == 'true' }}
+      web: ${{ inputs.target == 'all' || steps.web.outputs.changed == 'true' }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # compare against older commits
       - name: Find each part's last successful deploy
-        if: github.event_name == 'push'
+        if: github.event_name == 'schedule' || inputs.target == 'changed'
         id: last
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           # Each part's last deploy is its most recently *finished* successful job among the
-          # recent runs on main (pushed or manual), so re-running an old run counts as the
+          # recent runs on main (scheduled, manual or from before), so re-running an old run counts as the
           # latest deploy of that older commit.
           runs=$(gh api "repos/${{ github.repository }}/actions/workflows/deploy.yml/runs?branch=main&per_page=50" \
             --jq '.workflow_runs[] | select(.id != ${{ github.run_id }}) | "\(.id) \(.head_sha)"')
@@ -71,14 +75,14 @@ jobs:
             echo "$part=$sha" >> "$GITHUB_OUTPUT"
           done
       - name: Did the API change since then?
-        if: github.event_name == 'push'
+        if: github.event_name == 'schedule' || inputs.target == 'changed'
         id: api
         run: |
           base="${{ steps.last.outputs.api }}"
           if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null; then echo "changed=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           if git diff --quiet "$base" HEAD -- agents; then echo "changed=false"; else echo "changed=true"; fi >> "$GITHUB_OUTPUT"
       - name: Did the web app or Firestore rules change since then?
-        if: github.event_name == 'push'
+        if: github.event_name == 'schedule' || inputs.target == 'changed'
         id: web
         run: |
           base="${{ steps.last.outputs.web }}"
@@ -296,3 +300,43 @@ jobs:
       # Always both, so a successful "web" job means the site and the rules match this commit.
       - name: Deploy to Firebase
         run: npx --yes firebase-tools@15.31.0 deploy --project "${{ vars.GCP_PROJECT_ID }}" --only hosting,firestore:rules --non-interactive
+
+  release:
+    # After a release that deployed something, a GitHub Release records what went live: the pull
+    # requests merged and the lines added to docs/release-notes.md since the last release. It
+    # doesn't sign in to Google, so it needs no environment. It may write releases and tags only:
+    # main stays closed to everything but reviewed pull requests.
+    needs: [changes, access, api, web]
+    if: >-
+      always() && (needs.changes.outputs.api == 'true' || needs.changes.outputs.web == 'true')
+      && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # the commits and tags since the last release
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PARTS: ${{ needs.changes.outputs.api == 'true' && 'the API' || '' }}${{ needs.changes.outputs.api == 'true' && needs.changes.outputs.web == 'true' && ' and ' || '' }}${{ needs.changes.outputs.web == 'true' && 'the web app' || '' }}
+        run: |
+          when=$(TZ=Asia/Kolkata date '+%-d %b %Y, %H:%M IST')
+          last=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')
+          # The first release starts from the commits of the last day.
+          base=${last:-$(git rev-list -n 1 --before="24 hours ago" HEAD)}
+          {
+            echo "Released from main at \`$(git rev-parse --short HEAD)\`, $when. Deployed: $PARTS."
+            echo
+            echo "## Pull requests"
+            prs=$(git log --first-parent --format=%s "$base..HEAD" | grep -oE '#[0-9]+' | tr -d '#' | awk '!seen[$0]++' |
+              while read -r n; do gh pr view "$n" --json number,title --jq '"- \(.title) (#\(.number))"'; done)
+            echo "${prs:-None.}"
+            echo
+            echo "## Release notes added"
+            added=$(git diff "$base" HEAD -- docs/release-notes.md | grep -E '^\+[^+]' | sed 's/^+//' || true)
+            echo "${added:-None.}"
+          } > notes.md
+          cat notes.md
+          gh release create "release-$(date -u +%Y%m%d-%H%M)" --target "$GITHUB_SHA" --title "Release $when" --notes-file notes.md
