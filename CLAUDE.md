@@ -7,5 +7,5 @@
   - It reads the whole command text. Put `git push` and `gh pr create --base main` in **separate** commands, and write files that mention blocked commands with the Write tool, not a heredoc.
 - **Shared settings** are in `.claude/settings.json`: allowed, ask-first and blocked commands. Put personal settings in `.claude/settings.local.json` and personal notes in `CLAUDE.local.md`; git ignores both.
 - **Plan before large changes** (plan mode, or `/paul:plan`). For anything that touches the vault, the handover or governance, write the plan out and wait for a yes.
-- **Before opening a PR**, run `/code-review` on the branch. For changes to auth, the vault or the handover, also run `/security-review`. Run `/release-notes` for every PR that changes what people use (AGENTS.md, "Docs and writing").
+- **Before opening a PR**, run `/code-review` on the branch. For changes to auth, the vault or the handover, also run `/security-review`. Run `/release-notes` for every PR that changes what people use: it writes the PR's own file in `docs/release-notes/next/` (AGENTS.md, "Docs and writing").
 - **Use `gh` for GitHub work:** `gh pr create --fill`, then edit the description so it follows the template.

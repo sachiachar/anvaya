@@ -303,7 +303,7 @@ jobs:
 
   release:
     # After a release that deployed something, a GitHub Release records what went live: the pull
-    # requests merged and the lines added to docs/release-notes.md since the last release. It
+    # requests merged and their release-note files (docs/release-notes/next/) since the last release. It
     # doesn't sign in to Google, so it needs no environment. It may write releases and tags only:
     # main stays closed to everything but reviewed pull requests.
     needs: [changes, access, api, web]
@@ -335,7 +335,10 @@ jobs:
             echo "${prs:-None.}"
             echo
             echo "## Release notes added"
-            added=$(git diff "$base" HEAD -- docs/release-notes.md | grep -E '^\+[^+]' | sed 's/^+//' || true)
+            # Each PR's own file in docs/release-notes/next/. Lines folded into docs/release-notes.md
+            # later aren't listed again: an earlier release already listed them.
+            files=$(git diff --name-only --diff-filter=AM "$base" HEAD -- 'docs/release-notes/next/*.md' | grep -v '/README.md$' || true)
+            added=$(for f in $files; do cat "$f"; echo; done)
             echo "${added:-None.}"
           } > notes.md
           cat notes.md

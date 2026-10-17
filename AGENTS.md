@@ -104,7 +104,7 @@ gh api repos/<owner>/<action>/releases/latest --jq .tag_name   # a GitHub Action
 
 Update docs in the same PR as the code:
 
-- `docs/release-notes.md` in **every PR that changes what people use**: the app, the API, the admin portal, the agents' rules, hosting or the Firestore rules. Add the entry under "Not yet released" (Claude Code users can run `/release-notes` to draft it). The "Release notes" check fails without one. Only a change nobody can notice, such as a refactor or a test, takes the `no release note` label, and the PR says why. Each scheduled release then publishes a GitHub Release with the PRs and the release-notes lines it took live;
+- a release note in **every PR that changes what people use**: the app, the API, the admin portal, the agents' rules, hosting or the Firestore rules. Add it as **your own file** in `docs/release-notes/next/`, named after your branch (see its README). Don't edit `docs/release-notes.md` itself: every PR inserting lines there conflicts with the next one. Claude Code users can run `/release-notes` to write the file. The "Release notes" check fails without one, and checks its shape. Only a change nobody can notice, such as a refactor or a test, takes the `no release note` label, and the PR says why. Each scheduled release publishes a GitHub Release with the PRs and the notes it took live. When asked, fold the files into `docs/release-notes.md` in a PR with `python3 .github/scripts/fold_release_notes.py`;
 - `docs/architecture.md` when the design, security model or tests change;
 - `docs/openapi.yaml` when any API route changes (rule 10 above);
 - `README.md` when setup or commands change.
