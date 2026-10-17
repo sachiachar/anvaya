@@ -52,6 +52,16 @@ def retry_for(agent: str, attempts: int | None = None) -> types.HttpRetryOptions
                                   http_status_codes=TRANSIENT_CODES)
 
 
+def tokens(usage) -> tuple[int, int]:
+    """A model call's tokens for the usage ledger: (in, out). Thinking counts as output, as Gemini
+    bills it. A live call reports its reply as response_token_count, any other call as
+    candidates_token_count. No usage counts as none. Every model call counts its tokens here."""
+    if usage is None:
+        return 0, 0
+    reply = getattr(usage, "candidates_token_count", None) or getattr(usage, "response_token_count", None) or 0
+    return usage.prompt_token_count or 0, reply + (getattr(usage, "thoughts_token_count", None) or 0)
+
+
 @lru_cache(maxsize=1)
 def client() -> genai.Client:
     # Reads GOOGLE_API_KEY from the environment (the Gemini API key path; not Vertex AI).
@@ -192,9 +202,7 @@ async def generate_json(
                 raise ModelBusy(f"{model} and {fallback} are busy or out of quota ({e.code}, {e2.code}); "
                                 "try again in a few minutes.") from e2
             raise
-    usage = response.usage_metadata
-    t_in = (usage.prompt_token_count or 0) if usage else 0
-    t_out = ((usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)) if usage else 0
+    t_in, t_out = tokens(response.usage_metadata)
     governance.record_usage(agent, used, "direct", tokens_in=t_in, tokens_out=t_out, key_source=source)
 
     if isinstance(response.parsed, schema):

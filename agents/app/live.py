@@ -33,7 +33,7 @@ from pydantic import ValidationError
 
 from . import gaps, grounding, guardian_inputs, loops, planner, proposals, voiceprint
 from .config import settings
-from .gemini import client_for
+from .gemini import client_for, tokens
 from .governance import core as governance
 from .governance import keys
 from .store import new_id, store
@@ -304,10 +304,8 @@ async def _to_browser(ws: WebSocket, session, owner: dict, expand,
             received += 1
             if usage := message.usage_metadata:
                 # Usage is per reply, not a running total. Keep the latest for this reply, so a reply
-                # that reports more than once is still counted once. Thinking counts as output, as
-                # in gemini.py.
-                reply_tokens[reply] = (usage.prompt_token_count or 0,
-                                      (usage.response_token_count or 0) + (usage.thoughts_token_count or 0))
+                # that reports more than once is still counted once.
+                reply_tokens[reply] = tokens(usage)
             if (call := getattr(message, "tool_call", None)) and call.function_calls and plan_state is not None:
                 responses = [types.FunctionResponse(id=fc.id, name=fc.name, response=await asyncio.to_thread(
                     _plan_tool, owner["id"], fc.name, dict(fc.args or {}), plan_state)) for fc in call.function_calls]

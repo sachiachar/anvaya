@@ -30,7 +30,7 @@ from google.adk.utils.context_utils import Aclosing
 from google.genai import errors, types
 
 from . import knowledge
-from .gemini import client_for, no_429, retry_for
+from .gemini import client_for, no_429, retry_for, tokens
 from .store import new_id, store
 from .governance import core as governance
 from .governance import keys
@@ -129,12 +129,10 @@ def gateway_check(callback_context, llm_request: LlmRequest) -> LlmResponse | No
 
 def gateway_record(callback_context, llm_response: LlmResponse) -> LlmResponse | None:
     """After every model call: record its tokens in the usage ledger."""
-    usage = llm_response.usage_metadata
     meta = getattr(llm_response, "custom_metadata", None) or {}
     # The model that answered: the fallback, when the first one failed.
     model = meta.get("model") or callback_context.state.get("temp:model") or governance.primary_model(AGENT)
-    t_in = (usage.prompt_token_count or 0) if usage else 0
-    t_out = ((usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)) if usage else 0
+    t_in, t_out = tokens(llm_response.usage_metadata)
     source = meta.get("key_source", keys.PLATFORM)
     governance.record_usage(AGENT, model, "direct", tokens_in=t_in, tokens_out=t_out,
                             error=bool(llm_response.error_code), key_source=source)

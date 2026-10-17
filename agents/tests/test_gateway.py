@@ -196,3 +196,37 @@ def test_agents_map_counts_only_the_last_30_days_of_blocked_calls():
     finally:
         store.delete("gateway_blocked", "blk_old")
         store.delete("gateway_blocked", "blk_new")
+
+
+def test_tokens_count_thinking_as_output_for_every_kind_of_call():
+    from app import gemini
+
+    call = SimpleNamespace(prompt_token_count=100, candidates_token_count=20, thoughts_token_count=30)
+    live_reply = SimpleNamespace(prompt_token_count=100, response_token_count=20, thoughts_token_count=30)
+    assert gemini.tokens(call) == gemini.tokens(live_reply) == (100, 50)
+    assert gemini.tokens(SimpleNamespace(prompt_token_count=None, candidates_token_count=None)) == (0, 0)
+    assert gemini.tokens(None) == (0, 0)
+
+
+def test_a_spoken_reply_that_thinks_records_its_thinking(monkeypatch):
+    audio = SimpleNamespace(data=b"RIFF....WAVE", mime_type="audio/wav")
+    response = SimpleNamespace(
+        candidates=[SimpleNamespace(content=SimpleNamespace(parts=[SimpleNamespace(inline_data=audio)]))],
+        usage_metadata=SimpleNamespace(prompt_token_count=12, candidates_token_count=250, thoughts_token_count=40))
+
+    class FakeModels:
+        async def generate_content(self, **_):
+            return response
+
+    monkeypatch.setattr(speech, "_client", lambda: SimpleNamespace(aio=SimpleNamespace(models=FakeModels())))
+    before = (store.get("usage_days", core._today()) or {"agents": {}})["agents"].get("saathi.speech", {}).get("tokens_out", 0)
+    asyncio.run(speech.speak("Hello"))
+    assert store.get("usage_days", core._today())["agents"]["saathi.speech"]["tokens_out"] == before + 290
+
+
+def test_only_gemini_py_reads_the_token_counts():
+    """One place counts a call's tokens (gemini.tokens), so no call can leave thinking out."""
+    fields = re.compile(r"(candidates|response|thoughts|prompt)_token_count")
+    for path in APP.rglob("*.py"):
+        if path.name != "gemini.py":
+            assert not fields.search(path.read_text()), f"{path.name} counts tokens itself: use gemini.tokens"
