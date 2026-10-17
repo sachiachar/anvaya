@@ -73,7 +73,7 @@ Before he leaves, Vikram records a wish: *"A monthly income for Meena; the rest 
 - Everything new the customer says passes a guardian before it can be kept. A password someone asked for, or a payment someone else wants, never becomes a record.
 - Each certificate is checked for known signs of forgery. Two different reviewers decide, and overriding a check needs a written reason.
 - The customer is told first, with a one-tap cancel, and a waiting period follows.
-- Another voice on a call is noticed. A voice alone never authorises anything important, and a voice check for the owner is being tested.
+- Another voice on a call is noticed. A voice alone never authorises anything important. A voice check for the owner is being tested: a card that doesn't sound like the owner waits until they confirm on it that it was them.
 - A fraud reference grows every hour. A new tactic is added only when two independent sources confirm it, and a reviewer can remove anything.
 - The vault is encrypted on the customer's phone. Not Anvaya, not you, can read it. Each person sees only their own part.
 - Every agent is registered, with only the models and tools it is allowed, and within a budget. Every decision is logged, and our team can follow one conversation end to end, by decisions only, never words.

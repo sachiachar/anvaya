@@ -44,7 +44,7 @@ flowchart LR
 A **guardian** watches the whole journey, not only the end:
 
 - Everything new passes the guardian before it can be kept. A password someone asked for, or a payment someone else wants, is never kept.
-- Another voice on a call is noticed. A voice alone can't change anything important, and a voice check for the owner is being tested.
+- Another voice on a call is noticed. A voice alone can't change anything important. A voice check for the owner is being tested: a card that doesn't sound like the owner waits until they confirm on it that it was them.
 - The owner hears first about any report of their passing, and can cancel.
 - A fraud reference grows every hour. A new trick is added only when two independent sources confirm it, and a person can remove anything.
 - People decide every outcome. Every decision is logged, and our team can follow one conversation end to end, by decisions only, never words.
