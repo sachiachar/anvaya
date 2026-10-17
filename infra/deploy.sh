@@ -79,10 +79,24 @@ fi
 gcloud secrets add-iam-policy-binding gemini-api-key --member "serviceAccount:$SA" \
   --role roles/secretmanager.secretAccessor >/dev/null
 
+echo "== Exa key (web search for fraud research) in Secret Manager"
+# Optional: without it, fraud research says web search isn't set up yet. The release workflow
+# expects the secret, so create it before the first release.
+SECRETS="GOOGLE_API_KEY=gemini-api-key:latest"
+if ! gcloud secrets describe exa-api-key >/dev/null 2>&1; then
+  EXA=$(grep -sE '^EXA_API_KEY=' agents/.env | cut -d= -f2- || true)
+  [ -z "$EXA" ] || printf '%s' "$EXA" | gcloud secrets create exa-api-key --data-file=- --replication-policy=automatic
+fi
+if gcloud secrets describe exa-api-key >/dev/null 2>&1; then
+  gcloud secrets add-iam-policy-binding exa-api-key --member "serviceAccount:$SA" \
+    --role roles/secretmanager.secretAccessor >/dev/null
+  SECRETS="$SECRETS,EXA_API_KEY=exa-api-key:latest"
+fi
+
 echo "== Deploy agents to Cloud Run"
 gcloud run deploy "$SERVICE" --source agents --region "$REGION" --service-account "$SA" \
   --allow-unauthenticated --memory 1Gi --timeout 3600 --cpu-boost \
-  --set-secrets "GOOGLE_API_KEY=gemini-api-key:latest" \
+  --set-secrets "$SECRETS" \
   --set-env-vars "^;^GOOGLE_GENAI_USE_VERTEXAI=false;STORE=firestore;MEDIA_BUCKET=$BUCKET;KMS_KEY_NAME=$KMS_KEY_NAME;MODEL_KEYS_KMS_KEY_NAME=$MODEL_KEYS_KMS_KEY_NAME;RELEASE_WAIT_SECONDS=60;AUTH_REQUIRED=true;FIREBASE_PROJECT_ID=$PROJECT_ID;ALLOWED_EMAILS=$ALLOWED_EMAILS;OPEN_SIGN_IN=$OPEN_SIGN_IN;BILLING_EXPORT_TABLE=$BILLING_EXPORT_TABLE"
 
 echo "== Build and deploy the web app to Firebase Hosting"
