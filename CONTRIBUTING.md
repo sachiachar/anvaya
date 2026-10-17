@@ -14,7 +14,7 @@ Then follow "Run locally" in the [README](README.md).
 
 ```mermaid
 flowchart LR
-    branch["Branch from main"] --> change["Change and tests"] --> checks["Local checks"] --> pr["Pull request"] --> ci["CI"] --> review["Review"] --> merge["Squash and merge"] --> deploy["Deploy"]
+    branch["Branch from main"] --> change["Change and tests"] --> checks["Local checks"] --> pr["Pull request"] --> ci["CI"] --> review["Review"] --> merge["Squash and merge"] --> deploy["Next release<br/>13:00 or 19:00 IST"]
 ```
 
 1. **Start from the latest `main`:** `git fetch origin && git switch -c feat/short-name origin/main` (or `fix/…`, `chore/…`, `docs/…`).
@@ -28,7 +28,7 @@ flowchart LR
 5. **CI runs the same checks** on every PR. Fix all failures before you ask for review.
 6. **Another person reviews.** Changes to the paths in [.github/CODEOWNERS](.github/CODEOWNERS) need the owner's review. These paths are the vault, the handover, sign-in, governance, the admin portal, `firestore.rules`, hosting, deploys and the agent rules.
 7. **Squash and merge.** The PR title becomes the commit on `main`. Write it in the commit style below. Then delete the branch.
-8. **Merging deploys.** Every merge to `main` deploys what changed to production ([deploy.yml](.github/workflows/deploy.yml)). Docs-only changes deploy nothing. Merge only when the change is ready to go live. Then check the Deploy run in Actions. Never push to `main` directly. Never deploy by hand, except through Actions → Deploy.
+8. **Merged changes go live at the next release.** Production is released from `main` twice a day, at 13:00 and 19:00 IST ([deploy.yml](.github/workflows/deploy.yml)). Each release deploys everything merged since the last one. A release with no changes, or only docs, deploys nothing. Merge only when the change is ready to go live. After the release, check the Deploy run in Actions. For an urgent fix, release now: Actions → Deploy → Run workflow ("changed"). Never push to `main` directly. Never deploy by hand, except through Actions → Deploy.
 
 To keep an open branch up to date, run `git pull --rebase origin main` on your own branch. Never rebase a branch someone else is also pushing to.
 

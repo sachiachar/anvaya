@@ -34,17 +34,17 @@ if printf '%s' "$cmd" | grep -Eq '\bgit\b.*--no-verify'; then
   block "don't skip the git hooks."
 fi
 if printf '%s' "$cmd" | grep -Eq '\bgit\b.*\bcommit\b' && [ "$branch" = "main" ]; then
-  block "you're on main, and every push to main deploys to production. Create a branch first (git switch -c feat/short-name)."
+  block "you're on main, and main is released to production twice a day. Create a branch first (git switch -c feat/short-name)."
 fi
 if printf '%s' "$cmd" | grep -Eq '\bgit\b.*\bpush\b'; then
   if [ "$branch" = "main" ] || printf '%s' "$cmd" | grep -Eq '(\s|:)main(\s|$)'; then
-    block "pushing to main deploys to production. Push a branch and open a pull request."
+    block "main is released to production twice a day: changes reach it only through a reviewed pull request. Push a branch and open one."
   fi
   if printf '%s' "$cmd" | grep -Eq '(\s)(-f|--force)(\s|$)'; then
     block "no force pushes. If you must rewrite your own branch, ask the person you're working with."
   fi
 fi
 if printf '%s' "$cmd" | grep -Eq '\b(gcloud run deploy|gcloud run services update|firebase deploy)\b|infra/(deploy|setup-github-actions)\.sh'; then
-  block "deploys are done by a person (merge to main, or Actions → Deploy)."
+  block "deploys happen on the release schedule, or when a person runs Actions → Deploy."
 fi
 exit 0

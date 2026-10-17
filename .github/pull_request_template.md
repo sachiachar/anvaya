@@ -12,7 +12,8 @@
 
 - [ ] Touches the vault, handover, sign-in, governance, `firestore.rules` or deploy (owner review needed)
 - [ ] Adds or upgrades a dependency (latest stable, licence checked, `docs/dependencies.md` updated), environment variable or registry entry (say which)
-- [ ] Docs updated: release notes, architecture, README (or not needed)
+- [ ] Release notes: an entry under "Not yet released", or the `no release note` label because nobody can notice this change (say why)
+- [ ] Other docs updated: architecture, README, `docs/openapi.yaml` (or not needed)
 
 ## Coding agent
 
