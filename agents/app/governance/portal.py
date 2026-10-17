@@ -280,7 +280,11 @@ def decide_approval(request_id: str, body: Decision, who: Actor = Depends(need("
 @router.get("/guardian")
 def get_guardian(who: Actor = Depends(actor)) -> dict:
     ensure_current()
-    events = sorted((e for e in store.list("guardian_events") if _sees_event(who, e)), key=lambda e: -e["at"])
+    # "holds": the event keeps an action waiting (a change or a release), so the reviewer's answer
+    # finishes or cancels it. Without one, the answer is only recorded.
+    holding = {h["event_id"] for h in store.list("guardian_holds", status="held")}
+    events = sorted(({**e, "holds": e["id"] in holding} for e in store.list("guardian_events") if _sees_event(who, e)),
+                    key=lambda e: -e["at"])
     if who.role == "demo_admin":
         events = _hide_deciders(events, who)
     decided = [e for e in events if e["status"] != "open"]

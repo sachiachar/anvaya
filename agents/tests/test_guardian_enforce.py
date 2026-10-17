@@ -238,3 +238,21 @@ def test_the_policy_file_cant_loosen_the_owners_rules(client, monkeypatch):
     assert guardian.decide("recipient_change", "person:owner", {"replaces_sealed": True}).response == "add_check"
     assert guardian.decide("release", "activation.checker", {"signs_found": 1}).response == "pause"
     assert guardian.decide("family_question", "handover.assistant", {"asks_secret": True}).response == "block"
+
+
+def test_the_portal_says_which_events_hold_something(client):
+    """The Guardian page words its question by this: "No" releases a held action, or only records a false alarm."""
+    from app import guardian_inputs
+
+    invite(client, "Priya")
+    invite(client, "Ajay")
+    invite(client, "Ravi")  # held: a second change within a day
+    guardian_inputs.voice_mismatch(OWNER, "turn_voice_1", "saathi.voice", [])  # recorded, nothing held
+
+    def holds() -> dict[str, bool]:
+        return {e["id"]: e["holds"] for e in client.get("/api/platform/guardian").json()["events"]}
+
+    [change] = [e for e in store.list("guardian_events") if e["response"] == "pause"]
+    assert holds() == {change["id"]: True, "gev_voicecheck_turn_voice_1": False}
+    decide(client, change["id"], "confirm")
+    assert holds()[change["id"]] is False  # decided: nothing waits on it any more
