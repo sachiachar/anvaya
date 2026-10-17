@@ -124,7 +124,7 @@ All of these are Google's proprietary managed services. We use them under the Go
 | **Firebase Hosting** | Serves the app (`anvaya-saathi`), the admin portal (`anvaya-admin`) and the old address's redirect | `firebase.json` |
 | **Firebase Authentication** | Google sign-in; the server checks the token and the allowlist | `web/src/auth.ts`, `agents/app/auth.py` |
 | **Firebase Rules** | Publishes `firestore.rules` | `.github/workflows/deploy.yml` |
-| Vertex AI API | The platform doesn't use it: the prototype release calls the Gemini API with a key, and a test checks this. Only a person's own Vertex AI express-mode key (PR-10.10) reaches it, for the calls they cause, billed to them | `agents/app/gemini.py` (`make_client`), `infra/deploy.sh` |
+| Vertex AI API | The platform doesn't use it: the prototype release calls the Gemini API with a key, and a test checks this. Our project doesn't enable it, and the agents' service account has no Vertex AI role. Only a person's own Vertex AI express-mode key (PR-10.10) reaches it, in their own project, for the calls they cause, billed to them | `agents/app/gemini.py` (`make_client`) |
 
 ## Outside services
 

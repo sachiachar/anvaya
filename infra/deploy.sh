@@ -26,15 +26,16 @@ BILLING_EXPORT_TABLE="${BILLING_EXPORT_TABLE:-}"
 gcloud config set project "$PROJECT_ID"
 
 echo "== Enable APIs"
-gcloud services enable run.googleapis.com aiplatform.googleapis.com firestore.googleapis.com \
+# No Vertex AI: Gemini runs through the API key in Secret Manager (below). A person's own Vertex AI
+# express-mode key (PR-10.10) calls their own project, not this one.
+gcloud services enable run.googleapis.com firestore.googleapis.com \
   cloudkms.googleapis.com storage.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
 
 echo "== Service account (least privilege)"
 gcloud iam service-accounts describe "$SA" >/dev/null 2>&1 || \
   gcloud iam service-accounts create life-after-agents --display-name "Anvaya agents"
-for role in roles/aiplatform.user roles/datastore.user; do
-  gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "serviceAccount:$SA" --role "$role" --condition=None >/dev/null
-done
+gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "serviceAccount:$SA" --role roles/datastore.user \
+  --condition=None >/dev/null
 
 echo "== Firestore (native mode)"
 gcloud firestore databases describe --database="(default)" >/dev/null 2>&1 || \
