@@ -19,8 +19,9 @@ from .. import (audit_chain, demo, fraud_bundle, fraud_cues, fraud_graph, fraud_
 from ..config import settings
 from ..fraud_bundle import records
 from ..store import store
-from . import billing, core, guardian, keys
+from . import billing, core, guardian, keys, paging
 from .core import Actor, actor, audit, need, platform_settings, registry, small
+from .paging import PageQuery, page_query
 from .seed import ensure_current
 
 log = logging.getLogger(__name__)
@@ -703,3 +704,165 @@ def remove_model_key(user_key: str, body: Reason, who: Actor = Depends(need("man
     audit(who, "model_keys.remove", user_key, body.reason)
     keys.remove(user_key)
     return {"access": None}
+
+
+# ---- Paged lists: one page at a time, with search and filters ------------------------------
+#
+# Each route scopes the rows to the viewer first, exactly as the route above it does, then filters,
+# searches and pages them (paging.py). Totals and the counts for each filter come from the scoped
+# rows only, so a demo admin never learns how many records anyone else has. The routes above stay
+# as they are until the portal's screens move to these.
+
+GuardianStatus = Literal["open", "decided", "confirmed", "reversed"]
+
+
+@router.get("/guardian/events")
+def list_guardian_events(status: GuardianStatus | None = None, response: str | None = None,
+                         agent: str | None = None, pq: PageQuery = Depends(page_query),
+                         who: Actor = Depends(actor)) -> dict:
+    """The guardian's interventions, newest first. status "decided" means confirmed or reversed;
+    "reversed" is what a reviewer found was flagged by mistake."""
+    ensure_current()
+    scoped = sorted((e for e in store.list("guardian_events") if _sees_event(who, e)), key=lambda e: -e["at"])
+    if who.role == "demo_admin":
+        scoped = _hide_deciders(scoped, who)
+    rows = paging.where(scoped, response=response, agent=agent,
+                        status=None if status is None else
+                        (lambda e: e["status"] != "open") if status == "decided" else status)
+    rows = paging.search(paging.dated(rows, pq), pq.q, ("reason", "agent", "response", "case_key", "user_key"))
+    return paging.page(rows, pq) | {
+        "counts": {"waiting": sum(e["status"] == "open" for e in scoped),
+                   "decided": sum(e["status"] != "open" for e in scoped),
+                   "mistake": sum(e["status"] == "reversed" for e in scoped)},
+        "choices": {"response": paging.counts(scoped, "response"), "agent": paging.counts(scoped, "agent")}}
+
+
+@router.get("/guardian/trails")
+def list_guardian_trails(held: bool | None = None, pq: PageQuery = Depends(page_query),
+                         who: Actor = Depends(actor)) -> dict:
+    """The owner turns the guardian decided on, to follow one through its chain. Hashed keys and
+    counts only; a demo admin sees their own copy's."""
+    rows = audit_chain.recent(who.key if who.role == "demo_admin" else None, limit=None)
+    rows = paging.where(rows, held=None if held is None else (lambda r: (r["held"] > 0) == held))
+    return paging.page(paging.search(paging.dated(rows, pq), pq.q, ("user_key", "turn")), pq)
+
+
+Coverage = Literal["covered", "partly", "gap"]
+
+
+@router.get("/fraud/scenarios")
+def list_fraud_scenarios(coverage: Coverage | None = None, review: str | None = None, safeguard: str | None = None,
+                         guide: str | None = None, pq: PageQuery = Depends(page_query),
+                         _: Actor = Depends(actor)) -> dict:
+    """The safeguard coverage map: imagined and researched scenarios, newest first. Faded ones (no
+    source after three runs) show only when review="faded" is asked for."""
+    ensure_current()
+    scoped = sorted(records.list("fraud_scenarios"), key=lambda s: -s["at"])
+    live = [s for s in scoped if s.get("review") != "faded"]
+    rows = paging.where(scoped if review == "faded" else live, coverage=coverage, review=review,
+                        safeguard=safeguard, guide_key=guide)
+    rows = paging.search(paging.dated(rows, pq), pq.q,
+                         ("scenario", "claim", "steps", "variant", "safeguard", "caught_by", "coverage_reason"))
+    return paging.page(rows, pq) | {
+        "choices": {"coverage": paging.counts(live, "coverage"), "review": paging.counts(scoped, "review"),
+                    "safeguard": paging.counts(live, "safeguard"), "guide": paging.counts(live, "guide_key")}}
+
+
+@router.get("/fraud/added")
+def list_fraud_added(guide: str | None = None, kind: str | None = None, spot_check: bool | None = None,
+                     pq: PageQuery = Depends(page_query), _: Actor = Depends(actor)) -> dict:
+    """What the pipeline added to a guide on its own: spot checks first, then newest."""
+    scoped = sorted(records.list("fraud_auto", status="active"), key=lambda a: (not a["spot_check"], -a["at"]))
+    rows = paging.where(scoped, guide_key=guide, kind=kind, spot_check=spot_check)
+    rows = paging.search(paging.dated(rows, pq), pq.q, ("name", "kind", "guide_key"))
+    return paging.page(rows, pq) | {
+        "choices": {"guide": paging.counts(scoped, "guide_key"), "kind": paging.counts(scoped, "kind")}}
+
+
+@router.get("/fraud/drafts")
+def list_fraud_drafts(guide: str | None = None, kind: str | None = None, pq: PageQuery = Depends(page_query),
+                      _: Actor = Depends(actor)) -> dict:
+    """Tactics and warning signs waiting for a risk reviewer, newest first."""
+    scoped = sorted(records.list("fraud_drafts", review="pending"), key=lambda d: -d["at"])
+    rows = paging.where(scoped, guide_key=guide, kind=kind)
+    rows = paging.search(paging.dated(rows, pq), pq.q, ("tactic", "claim", "steps", "sign", "kind"))
+    return paging.page(rows, pq) | {
+        "choices": {"guide": paging.counts(scoped, "guide_key"), "kind": paging.counts(scoped, "kind")}}
+
+
+@router.get("/fraud/runs")
+def list_fraud_runs(kind: str | None = None, status: str | None = None, guide: str | None = None,
+                    pq: PageQuery = Depends(page_query), _: Actor = Depends(actor)) -> dict:
+    """Every research and dreaming run, newest first."""
+    fraud_pipeline.expire_stale()
+    scoped = sorted(store.list("fraud_runs"), key=lambda r: -r["started_at"])
+    rows = paging.where(scoped, kind=kind, status=status, guide_key=guide)
+    rows = paging.search(paging.dated(rows, pq, key="started_at"), pq.q, ("kind", "status", "guide_key", "result"))
+    return paging.page(rows, pq) | {
+        "choices": {"kind": paging.counts(scoped, "kind"), "status": paging.counts(scoped, "status"),
+                    "guide": paging.counts(scoped, "guide_key")}}
+
+
+@router.get("/audit/entries")
+def list_audit(action: str | None = None, role: str | None = None, pq: PageQuery = Depends(page_query),
+               who: Actor = Depends(actor)) -> dict:
+    """Every platform decision, newest first; a demo admin sees only their own."""
+    scoped = sorted(store.list("platform_audit"), key=lambda e: -e["at"])
+    if who.role == "demo_admin":
+        scoped = [e for e in scoped if e.get("actor_key") == who.key]
+    rows = paging.where(scoped, action=action, role=role)
+    rows = paging.search(paging.dated(rows, pq), pq.q, ("action", "target", "role", "actor_key"))
+    return paging.page(rows, pq) | {
+        "choices": {"action": paging.counts(scoped, "action"), "role": paging.counts(scoped, "role")}}
+
+
+@router.get("/agents/blocked")
+def list_blocked(agent: str | None = None, kind: str | None = None, pq: PageQuery = Depends(page_query),
+                 who: Actor = Depends(actor)) -> dict:
+    """Calls the gateway refused, newest first; a demo admin sees only their own copy's."""
+    scoped = store.list("gateway_blocked")
+    if who.role == "demo_admin":
+        scoped = [b for b in scoped if b.get("user_key") == who.key]
+    scoped = sorted(scoped, key=lambda b: -b["at"])
+    rows = paging.where(scoped, agent=agent, kind=kind)
+    rows = paging.search(paging.dated(rows, pq), pq.q, ("agent", "kind", "attempted", "reason"))
+    return paging.page(rows, pq) | {
+        "choices": {"agent": paging.counts(scoped, "agent"), "kind": paging.counts(scoped, "kind")}}
+
+
+@router.get("/approvals/requests")
+def list_approvals(status: str | None = None, pq: PageQuery = Depends(page_query),
+                   who: Actor = Depends(actor)) -> dict:
+    """Budget requests, newest first; a demo admin sees only their own copy's. Search covers the
+    copy's key, the agent and the status, not what a person wrote."""
+    scoped = sorted(store.list("budget_requests"), key=lambda r: -r["at"])
+    if who.role == "demo_admin":
+        scoped = _hide_deciders([r for r in scoped if r.get("copy_id") == who.key], who)
+    rows = paging.where(scoped, status=status)
+    rows = paging.search(paging.dated(rows, pq), pq.q, ("copy_id", "agent", "status"))
+    return paging.page(rows, pq) | {"choices": {"status": paging.counts(scoped, "status")}}
+
+
+@router.get("/demos/copies")
+def list_demos(status: str | None = None, pq: PageQuery = Depends(page_query), who: Actor = Depends(actor)) -> dict:
+    """Private demo copies, most recently used first, without names. A visitor's nickname is shown,
+    and searchable, only for platform admins; a demo admin sees only their own copy."""
+    ensure_current()
+    scoped = store.list("demo_copies")
+    if who.role == "demo_admin":
+        scoped = [d for d in scoped if d["id"] == who.key]
+    scoped = sorted(scoped, key=lambda d: -d.get("last_used_at", 0))
+    rows = paging.where(scoped, status=status)
+    fields = ("id", "user_key", "status") + (("nickname",) if who.role == "platform_admin" else ())
+    rows = paging.search(paging.dated(rows, pq, key="last_used_at"), pq.q, fields)
+    result = paging.page(rows, pq)
+    shown = []
+    for d in result["items"]:
+        row = {k: d.get(k) for k in ("id", "user_key", "created_at", "last_used_at", "status", "reset_at")}
+        row |= {"allowance_used": _allowance_used(d["id"]), "is_you": d["id"] == who.key}
+        if who.role == "platform_admin":
+            row["nickname"] = d.get("nickname")
+        shown.append(row)
+    return result | {"items": shown, "cleanup_after_days": 30, "nicknames_visible": who.role == "platform_admin",
+                     "choices": {"status": paging.counts(scoped, "status")}}
+
