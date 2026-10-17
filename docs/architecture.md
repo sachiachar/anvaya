@@ -42,7 +42,7 @@ flowchart LR
 | Part | Stack |
 | --- | --- |
 | Web app | React 19, TypeScript, Vite. Installable, mobile first. Holds all vault cryptography (Web Crypto), the microphone and the playback. |
-| Admin portal | A separate site for the platform team: agents, guardian, fraud, usage, model keys, audit. Charts and graphs use Apache ECharts. |
+| Admin portal | A separate site for the platform team: agents, guardian, fraud, usage, model keys, audit. Charts and graphs use Apache ECharts. Long lists come one page at a time, with search and filters, from the server (`governance/paging.py`); each list is scoped to the viewer before it is counted, so a demo admin's totals never include anyone else's records. |
 | Agents service | Python 3.14, FastAPI on Cloud Run. Runs the Gemini steps, the live-call relay, the Google ADK handover agent, the guardian and the gateway. |
 | Models | Gemini through the Gemini API: `gemini-3.1-flash-lite` for most steps (with a fallback), `gemini-3.8-live` for voice calls, Gemini TTS for spoken replies. Each agent's models are set in `agents/registry.yaml`, never in an environment variable. |
 

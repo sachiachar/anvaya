@@ -126,6 +126,14 @@ Every Gemini call passes one gateway. A request larger than its input limit is r
 | Hourly use for the charts | 14 days | `core.HOURS_KEPT_DAYS` |
 | History of each kept item | Every change keeps its own record; the catalog lists the last 2,000 | `knowledge.MAX_EVENTS` |
 
+## Admin portal lists
+
+| Limit | Value | Set in |
+| --- | --- | --- |
+| Rows on one page | 20 by default; at most 100 | `paging.DEFAULT_SIZE`, `MAX_SIZE` |
+| A search | At most 100 characters. It matches every word, in any case, in the words the portal already shows; never conversation text | `paging.MAX_QUERY`, `paging.search` |
+| Dates | Whole days in UTC, from the start of the "from" day to the end of the "to" day | `paging.page_query` |
+
 ## Anonymous user keys
 
 The admin portal and the logs show each person as a short key, never a name or email. The key is a hash of the person's sign-in ID and a salt.

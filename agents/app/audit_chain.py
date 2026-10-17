@@ -93,9 +93,10 @@ def for_event(event_id: str) -> dict | None:
     return for_turn(turn) if turn else None
 
 
-def recent(user_key: str | None = None) -> list[dict]:
+def recent(user_key: str | None = None, limit: int | None = RECENT) -> list[dict]:
     """The latest owner turns the guardian decided on, newest first: when, whose (a hashed key), and
-    how many decisions and how many held back. A demo admin sees only their own copy's."""
+    how many decisions and how many held back. A demo admin sees only their own copy's. The portal's
+    paged list asks for every turn (limit=None) and pages them itself."""
     turns: dict[str, dict] = {}
     for a in store.list("guardian_actions", action="owner_statement"):
         if user_key and a.get("user_key") != user_key:
@@ -107,4 +108,4 @@ def recent(user_key: str | None = None) -> list[dict]:
         row["decisions"] += 1
         row["held"] += a["response"] in ("deflect", "block")
         row["at"] = max(row["at"], a["at"])
-    return sorted(turns.values(), key=lambda r: -r["at"])[:RECENT]
+    return sorted(turns.values(), key=lambda r: -r["at"])[:limit]  # limit=None: every turn, for paging
