@@ -4,142 +4,88 @@
 
 <p align="center"><strong>Your stories, your wishes, and everything your family will need.</strong></p>
 
-**When a loved one leaves us suddenly, the family often can't find the money they left behind.** Anvaya is an app with a warm AI companion, **Saathi**. While they're here, people talk to Saathi about their stories, money matters, family and wishes. When the time comes, Anvaya hands everything over safely to the right person.
+**When someone leaves us suddenly, their family often can't find the money they left behind.** In India alone, ₹72,454 crore sits unclaimed in bank deposits. Anvaya gives everyone a warm AI companion, **Saathi**. People talk to Saathi about their accounts, nominees, wishes and stories. When the time comes, Anvaya hands everything over, safely, to the person they chose.
 
-Built for the **AI Builder Cup 2026** · Track: **BFSI** · Google Gemini + Google Cloud.
+**AI Builder Cup 2026** · BFSI track · built on **Gemini** and **Google Cloud** · all demo data is synthetic.
 
-> All demo data is synthetic. No real person's data is used anywhere.
-
-## For judges: start here
+## Try it
 
 | | |
 | --- | --- |
-| **Try the app** | **https://anvaya-saathi.web.app**. Sign in with any Google account: no invitation is needed. Each account gets its own private demo copy, closed to everyone else. |
-| **First visit** | A short **"Start here" tour** opens on its own. Its five steps go from Vikram's first conversation to Priya's questions, with a button for each step. "Demo → Show the tour" opens it again. |
-| **Play every person** | The row of names under the header switches who is acting: **Vikram** (the owner), **Priya** (his daughter), **Anjali** and **Rahul** (our two reviewers), and **Admin**. The server checks each person's role on every action. |
-| **No documents needed** | The tour and Priya's upload steps offer **specimen certificates**. The checks flag them, so you see the checks at work. |
-| **See the system** | **https://anvaya-admin.web.app**, the admin portal, with the same Google account. The **Agents** page shows every AI loop live, around the guardian. It also has the guardian's events, the fraud knowledge graph, usage and the audit log. Long lists come a page at a time, with search and filters. |
-| **Your role in the portal** | You are the platform admin of your own demo copy. You approve or reject its requests for more allowance. You see only your own copy's records. Everything else, such as the guardian's decisions, the kill switch and settings, is read-only for you. |
-| **The voice check** | Optional. As Vikram, open Settings (the gear) and read three short sentences. On a call, what doesn't sound like his voice waits until he says it was him. Only numbers that describe the voice are kept, never the recording. |
-| **Your own Gemini key** | Optional. "Demo → Your own model key". Without one, the demo uses ours, within a daily allowance. |
-| **Source code** | **https://github.com/sachiachar/anvaya**, public. Changes reach `main` only through a reviewed pull request that passes the checks. |
+| **The app** | **https://anvaya-saathi.web.app**: sign in with any Google account. You get your own private demo copy. |
+| **The admin portal** | **https://anvaya-admin.web.app**: same account. See every agent live, the guardian and the fraud knowledge graph. |
+| **Start here** | A five-step tour opens on your first visit. Switch people with the row of names: **Vikram** (owner), **Priya** (daughter), **Anjali** and **Rahul** (reviewers), **Admin**. |
 
-**Documents**
+**A five-minute walkthrough**
 
-| Document | What it covers |
+1. **Vikram** talks to Saathi about his family, his first job and an LIC policy. He taps **Keep**, then opens **Kept** to see his book and its readiness score.
+2. **Vikram** chooses Priya to receive his vault. Priya accepts, the codes match, and he seals it.
+3. **Priya** uploads the specimen certificate. **Anjali**, then **Rahul**, confirm it.
+4. After the waiting period, **Priya** opens the vault and asks *"What insurance did Papa have?"*
+5. In the **admin portal**, the Agents page shows the loops that just ran.
+
+## One smart agent, four pillars
+
+| | What it does | See it |
+| --- | --- | --- |
+| **Smart agent** | Saathi talks by voice or text in your language, plans the conversation, finds the gap that matters most, and asks once. Nothing is kept until you tap **Keep**. | The app, as Vikram |
+| **Fraud prevention** | A guardian checks every step. Every certificate is checked for known signs of forgery. Every hour, the service researches new frauds and imagines new attacks on its own safeguards. | Portal: Guardian and Fraud pages |
+| **Quick closure** | Two different reviewers, a waiting period with one-tap cancel, then the vault, the family's answers with sources, a checklist and a draft letter for each institution. | The app, as Priya, Anjali and Rahul |
+| **Customer retention** | Each heir starts their own book. Inside a bank's app, one customer becomes generations. The bank side is a design for our first partners. | [Pitch: banks and insurers](docs/pitch-institutions.md) |
+
+## What's new here
+
+- **A companion, not a form.** One conversation plan decides what to talk about, and in what tone. Saathi waits on wishes until you're ready.
+- **A guardian over every loop.** Every AI step is a loop with a set autonomy level. The guardian can add a check, steer to a safer route, pause or block, and people decide.
+- **Fraud foresight.** A "dreaming" agent imagines new attacks on our safeguards every hour. A new tactic is added only when two independent sources confirm it.
+- **A vault even we can't open.** Secrets are encrypted on the phone, for one chosen person.
+- **Open memory.** What people keep is stored in an open, portable format, with a history of every change.
+
+## How it uses Gemini and Google Cloud
+
+| | |
 | --- | --- |
-| [Concept](docs/concept.md) | The idea in plain language (start here) |
-| [Pitch: individuals](docs/pitch-individuals.md) | Why a person and their family would use Anvaya |
-| [Pitch: banks and insurers](docs/pitch-institutions.md) | Why an institution would offer Anvaya to its customers |
-| [Architecture](docs/architecture.md) | How it's built: the loops, the guardian, data, security and design decisions |
-| [Release notes](docs/release-notes.md) | What's built, and the known limitations |
-| [Defined limits](docs/limits.md) | Every limit we set: call length (about 15 minutes), daily allowances, agent caps, the handover and the fraud module |
-| [API specification](docs/openapi.yaml) | Every route of the API in OpenAPI 3.1: groups, sign-in, paged lists, errors and the live call |
-| [Libraries and services](docs/dependencies.md) | Every library, version and licence, and the Google services used |
+| **Gemini 3.1 Flash-Lite** | Saathi's replies, cards, certificate checks, next steps and letters |
+| **Gemini Live** | Hands-free voice calls in the owner's language |
+| **Gemini 3.8 Flash** | Hourly fraud research, and "dreaming" up new attacks on our safeguards |
+| **Gemini TTS, Google ADK** | Spoken replies; the family's assistant, which answers only from what was kept, with sources |
+| **Google Cloud** | Cloud Run, Firebase, Firestore, Cloud Storage, Cloud KMS, Secret Manager, Cloud Scheduler |
 
-## The problem
-
-- **India:** ₹72,454 crore in unclaimed bank deposits (January 2026), plus ₹8,974 crore in unclaimed insurance (February 2026).
-- **Japan:** a record ¥129.2 billion in estates went to the national treasury in financial year 2024 because no heir came forward.
-- **South Korea:** more than ₩10 trillion in unclaimed insurance money (2026).
-- **Malaysia:** RM13.3 billion in unclaimed money (April 2025).
-- **Australia:** A$21.2 billion in lost and unclaimed superannuation (June 2026).
-- **Singapore:** 2 in 5 CPF members lost before 65 had no nominee (2023).
-- Most people never write down their accounts, policies, passwords or wishes.
-
-Sources and dates are in [docs/concept.md](docs/concept.md#sources).
-
-## What Saathi does
-
-1. **Talk.** Tap the microphone and talk as in a phone call (Gemini Live). You can also type, or share a photo of a document. Saathi follows a plan: it knows what to talk about next, who starts, and the right tone. Sad or tired? The plan changes.
-2. **Keep.** Saathi offers cards: stories, advice, wishes, accounts, family. Each card holds only what was said. Nothing is saved until the owner taps **Keep**.
-3. **The family book.** Everything kept becomes a book for the family, with the date each page was kept, a readiness score and the pages still to write.
-4. **The vault.** The phone encrypts passwords and secrets. The owner chooses one person to receive them. Nobody at Anvaya, and no AI, can read them.
-5. **A careful handover.** Gemini checks the certificate sign by sign against a fraud reference guide. Two different reviewers confirm. A waiting period lets the owner cancel.
-6. **For the family.** The chosen person opens the vault on their phone. They ask about anything that was kept, and every answer shows its sources. They also get a claims checklist with draft letters.
-
-**AI-first, with people in control.** Every feature is a loop with a set autonomy level: it acts within limits, proposes, or only assists. Anything saved or shared waits for a person's yes. The AI only assists with death and legal checks; people decide.
-
-## How we use Gemini and Google Cloud
-
-| Service | What it does in Anvaya |
-| --- | --- |
-| **Gemini 3.1 Flash-Lite** (fallback: Gemini 3.5 Flash-Lite) | Reads each conversation, writes Saathi's replies, extracts cards, checks certificates, plans next steps and drafts letters |
-| **Gemini 3.8 Flash** | Fraud research and dreaming, every hour |
-| **Gemini Live** (`gemini-3.8-live`) | Hands-free voice calls. Saathi reads the plan's current step through tools during the call. |
-| **Gemini TTS** | Saathi's spoken replies to typed messages |
-| **Google ADK** | The family's assistant: answers only from what the owner kept, with sources |
-| **Cloud Run** | The agents service (Python, FastAPI) |
-| **Firebase Hosting and Authentication** | The app and the admin portal; Google sign-in |
-| **Cloud Storage** | Each owner's kept knowledge, and the platform's fraud knowledge, in the open OKF format |
-| **Firestore** | Workflow only: pending cards, cases, guardian records, plans |
-| **Cloud KMS** | The outer layer of the vault key, and people's own Gemini keys |
-| **Cloud Scheduler** | The hourly fraud research and dreaming |
-| **Cloud Billing export to BigQuery** | Real spend for the admin portal |
-
-Fraud research also uses **Exa** web search, for public fraud reports only.
-
-## Trust and safety
-
-- **One guardian for every loop.** Everything new the owner says, and every family question, passes the guardian first. Fixed rules and a fraud reference decide: continue, add a check, deflect to a safer route, pause for a reviewer, or block. It never approves a case; people decide. [More](docs/architecture.md#41-the-guardian)
-- **A fraud reference that grows every hour.** A research agent and a "dreaming" agent, which red-teams our safeguards, add what 2 independent websites confirm. The same fraud is never added twice. A reviewer can remove anything they added. The portal shows the reference as a connected graph.
-- **Governed agents.** 15 agents are registered, each with one policy for its models, tools and limits. Every Gemini call passes one gateway, with daily allowances, a service-wide ceiling and a kill switch. [More](docs/architecture.md#8-governance-and-cost-control)
-- **Auditable.** A reviewer can follow one conversation turn to the guardian's decision, the card, the Keep and the plan change, by ids only. The admin portal never shows conversation text or names.
-- **Private by design.** The vault is encrypted on the phone. Each judge's demo copy is closed to everyone else. [More](docs/architecture.md#6-security-and-privacy)
-
-## Architecture
-
-The admin portal's Agents page is the system view: every loop around the guardian, with its autonomy and the gates where a person decides.
+**People decide.** Nothing is kept without the owner's **Keep**, and nothing is released without two reviewers and a waiting period. 15 registered agents work within budgets, and every Gemini call passes one gateway.
 
 ![The admin portal's Agents page: every loop around the guardian](docs/assets/admin-agents-map.png)
 
-```mermaid
-flowchart LR
-    subgraph phone ["Phone"]
-        app["Web app<br/>Firebase Hosting"]
-        crypto["Vault encryption<br/>on the device"]
-    end
-    app --- crypto
-    app -->|"HTTPS and live call"| api["Cloud Run<br/>FastAPI + ADK agents"]
-    portal["Admin portal"] --> api
-    sched["Cloud Scheduler"] -->|"hourly fraud cycle"| api
-    api --> gemini["Gemini: chat, Live, TTS"]
-    api --> firestore[("Firestore<br/>workflow")]
-    api --> storage[("Cloud Storage<br/>OKF bundles")]
-    api --> kms["Cloud KMS"]
-```
+## In numbers
 
-Details: [docs/architecture.md](docs/architecture.md).
+| | |
+| --- | --- |
+| Forged certificates flagged | 7 of 7 |
+| Family answers citing the right source | 14 of 14, with 0 made-up sources |
+| True details kept on cards | 23 of 23 |
+| Automated tests | 803, with no cloud needed |
 
-## Measured quality
+Measured on a small synthetic test set, 9 October 2026. Details and limitations: [agents/evals/results/](agents/evals/results/).
 
-Three Gemini steps are measured against real Gemini on a small synthetic test set (`agents/evals/`). It checks our own steps; it is not a full benchmark. Latest results, 9 October 2026, `gemini-3.1-flash-lite`:
+## Find your way around
 
-| Step | Measure | Result |
-| --- | --- | --- |
-| Certificate check (15 made-up certificates) | Forgeries flagged | 7 of 7 |
-| | The right warning sign named | 6 of 7 |
-| | Genuine certificates passed | 2 of 6 |
-| | Wrong person or wrong kind of document caught | 2 of 2 |
-| Priya's questions (20 questions) | Right source cited | 14 of 14 |
-| | "Never recorded" when nothing was kept | 4 of 6 |
-| | Made-up sources | 0 |
-| Cards (15 exchanges with traps) | Cases with a detail nobody said | 1 of 15 |
-| | True details kept | 23 of 23 |
+| Read | What it covers |
+| --- | --- |
+| [Concept](docs/concept.md) | The idea, in a few minutes (start here) |
+| [Pitch: individuals](docs/pitch-individuals.md) | Why a person and their family would use Anvaya |
+| [Pitch: banks and insurers](docs/pitch-institutions.md) | Why an institution would offer it |
+| [Architecture](docs/architecture.md) | How it is built, and how it stays safe |
+| [Release notes](docs/release-notes.md) | What runs today, and the known limitations |
 
-**Main limitation:** genuine certificates are often flagged for a closer look, because the model raises free-text concerns. A reviewer always decides, so this costs reviewer time but never releases anything. Full results: [agents/evals/results/](agents/evals/results/).
+| Code | What is there |
+| --- | --- |
+| [`agents/app/`](agents/app/) | The API and every agent (Python, FastAPI, Gemini) |
+| [`agents/app/governance/`](agents/app/governance/) | The guardian, the gateway and the admin API |
+| [`agents/registry.yaml`](agents/registry.yaml), [`policies.yaml`](agents/policies.yaml) | Each agent, its models, and what it may do |
+| [`web/src/`](web/src/) | The app (React, TypeScript), with the vault's encryption on the phone |
+| [`web/src/admin/`](web/src/admin/) | The admin portal |
+| [`agents/tests/`](agents/tests/), [`agents/evals/`](agents/evals/) | Automated tests, and the quality measures |
 
-**Automated tests:** 783 tests run in about 15 seconds, with no cloud and Gemini stubbed. They enforce the rules in code: every Gemini call goes through the gateway, the guardian never reads the vault, two demo copies never reach each other, and the portal never returns conversation text.
-
-## Demo walkthrough
-
-The "Start here" tour in the app walks these steps.
-
-1. **Vikram → Talk:** tap **Talk to Saathi**. Talk about family, a first job, and an LIC policy ("make Ajay the nominee"). Tap **End call**. Saathi sums it up and marks everything to keep. Tap **Keep**. Open **Kept** to see the book, its readiness score and the pages still to write.
-2. **Vikram → Family:** choose Priya and invite her. **Priya:** accept and keep the recovery code. **Vikram:** check that the codes match, then seal. **Vault:** lock a secret, then make and keep Vikram's own recovery code.
-3. **Priya:** start the handover with the specimen certificate. **Anjali**, then **Rahul**: two different reviewers confirm. To go against a "not valid" check, a reviewer must write a reason.
-4. After the waiting period, **Priya** opens the vault. She asks "What insurance did Papa have?" and prepares the claim letters.
-5. **Admin:** open the admin portal. The Agents page shows the loops that just ran. The Guardian page lists each time the guardian stepped in, and can follow one conversation step by step.
+More: [limits](docs/limits.md), [API specification](docs/openapi.yaml), [libraries and services](docs/dependencies.md).
 
 ## Run it yourself
 
@@ -151,6 +97,4 @@ uv sync && AUTH_REQUIRED=false uv run --env-file .env uvicorn app.main:app --por
 cd ../web && npm install && npm run dev    # http://localhost:5173 (admin: /admin.html)
 ```
 
-Tests, with no cloud credentials: `cd agents && uv run --group dev pytest -q`.
-
-After changing a route, write the API specification again: `cd agents && uv run python -m app.openapi_spec`. A test fails until `docs/openapi.yaml` matches the code.
+Tests: `cd agents && uv run --group dev pytest -q`. Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
