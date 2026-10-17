@@ -31,7 +31,7 @@ Not everyone has a friend like that. **Anvaya gives everyone that friend: Saathi
 - **You hear first.** If anyone reports your passing, you are told straight away, and one tap stops everything.
 - **Nothing risky is kept.** A password someone asked you for, or a payment someone else wants, never enters your book.
 - **Your voice alone can't change anything important.** Changes need your own screen. Saathi is also learning your voice (being tested). When the voice on a call doesn't sound like yours, that card waits, and you confirm on the card that it was you before it is kept. So nobody else can keep anything in your name.
-- **Another voice is noticed.** If someone joins your conversation, Saathi warmly asks who is there, and you decide calmly what to keep.
+- **Another voice is noticed.** If someone joins your conversation, Saathi warmly asks who is there. A wish, a money matter or a person said then waits until you confirm on the card that it's what you want.
 - **Our checks keep learning.** Every hour, we look for new tricks. What two independent sources confirm is added, and our team can remove anything.
 
 ## Vikram's story

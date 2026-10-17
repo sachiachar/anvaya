@@ -120,6 +120,9 @@ export type Proposal = (Moment | InventoryItem | Person) & {
   looks_like?: { id: string; title: string };
   /** Another voice was heard when this was said (PR-2.13.2): how many voices, never whose. */
   another_voice?: boolean;
+  /** A wish, money or people card said while another voice was heard: it waits until the owner
+   *  confirms on the card that it's what they want (the guardian's voice rule). */
+  another_voice_hold?: boolean;
   /** The voice check: this didn't sound like the owner's voice, so Keep waits until they say it was them. */
   voice_mismatch?: boolean;
   /** How much the helper that made it may do on its own, from its policy (PR-15.7). */

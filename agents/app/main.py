@@ -458,7 +458,8 @@ class Decision(BaseModel):
     edits: dict | None = None
     # "Replace it" on a card that looks like a kept item: keep it as that item's new version.
     replace: bool = False
-    # "Yes, this was me" on a card the voice check held: the owner confirms the voice was theirs.
+    # The owner's confirmation on a held card: "Yes, this was me" (the voice check), or "Yes, this
+    # is what I want" (a wish, money or people card said while someone else was in the room).
     voice_confirmed: bool = False
 
 
@@ -473,10 +474,11 @@ def decide(doc_id: str, body: Decision) -> dict:
     # The voice check marked this card (the call didn't sound like the owner's voiceprint). The
     # guardian decides at Keep below: it waits until the owner confirms on the card it was them.
     held_by_voice = bool(doc.get("voice_mismatch"))
+    held_with_others = bool(doc.get("another_voice_hold"))  # guardian_inputs.another_voice
     # Edits change what a card says, never what it is, where it came from, or the voice check's hold.
     safe_edits = {k: v for k, v in (body.edits or {}).items()
                   if k not in ("id", "owner_id", "status", "updates", "looks_like", "recording", "document",
-                               "voice_mismatch", "voice_confirmed")}
+                               "voice_mismatch", "voice_confirmed", "another_voice", "another_voice_hold")}
     replaces = None
     if body.replace:  # checked before any edit is saved, so a refused Replace changes nothing
         target = (doc.get("looks_like") or {}).get("id")
@@ -494,11 +496,12 @@ def decide(doc_id: str, body: Decision) -> dict:
                     and (p := step_guard.reply_problem(v))), None)
     decision = guardian.decide("keep_card", CARDS,
                                {"problem": problem, "voice_mismatch": held_by_voice,
-                                "voice_confirmed": body.voice_confirmed},
+                                "another_voice_hold": held_with_others, "voice_confirmed": body.voice_confirmed},
                                refs={"card": doc_id}, once=f"gev_keep_{doc_id}")
     if not decision.goes_ahead:
         if {f.detector for f in decision.findings} == {"voice_rule"}:
-            raise HTTPException(409, "This didn't sound like your voice. Confirm it was you to keep it.")
+            raise HTTPException(409, "This didn't sound like your voice. Confirm it was you to keep it." if held_by_voice
+                                else "Someone else was there when this was said. Confirm it's what you want to keep it.")
         raise HTTPException(409, "This can't be kept: it passes on a secret or a payment someone asked for. "
                                  "Passwords and PINs belong in your vault.")
     if safe_edits:
@@ -507,7 +510,7 @@ def decide(doc_id: str, body: Decision) -> dict:
         doc = store.update(body.collection, doc_id, {"updates": replaces})
     # The voice check's hold belongs to the card, not to what's kept: the Keep decision's audit refs
     # record that the owner confirmed, and later versions of the item don't inherit the mark.
-    doc = {k: v for k, v in doc.items() if k not in ("voice_mismatch", "voice_confirmed")}
+    doc = {k: v for k, v in doc.items() if k not in ("voice_mismatch", "voice_confirmed", "another_voice_hold")}
     try:
         kept = proposals.approve(body.collection, doc)
     except knowledge.Removed as e:
@@ -516,7 +519,7 @@ def decide(doc_id: str, body: Decision) -> dict:
     # that allowed the card and the item it became.
     store.update("guardian_actions", decision.action_id, {"refs": {"card": doc_id, "kept": kept["id"],
                  **({"statement": doc["guardian_action"]} if doc.get("guardian_action") else {}),
-                 **({"voice": "confirmed_by_owner"} if held_by_voice else {})}})
+                 **({"voice": "confirmed_by_owner"} if held_by_voice or held_with_others else {})}})
     planner.refresh(doc["owner_id"], {"kind": "keep", "ref": doc_id})  # a kept item can finish a step
     return kept
 

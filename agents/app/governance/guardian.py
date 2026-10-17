@@ -170,11 +170,18 @@ def risky_card(facts: dict) -> Finding | None:
 
 
 def unconfirmed_voice(facts: dict) -> Finding | None:
-    """The voice check held this card: the call didn't sound like the owner (voiceprint.py). The
-    guardian keeps it from being kept until the owner confirms on the card that it was them."""
-    if facts.get("voice_mismatch") and not facts.get("voice_confirmed"):
+    """A card held for the owner's own confirmation, which the guardian keeps from being kept until
+    the owner confirms on the card: the call didn't sound like the owner (the voice check), or a
+    wish, money or people card was said while someone else was in the room (another_voice_hold)."""
+    if facts.get("voice_confirmed"):
+        return None
+    if facts.get("voice_mismatch"):
         return Finding("voice_rule", "medium",
                        "A card from a call that didn't sound like the owner waits for the owner to confirm it was them",
+                       floor="deflect")
+    if facts.get("another_voice_hold"):
+        return Finding("voice_rule", "medium",
+                       "A wish, money or people card said while another voice was heard waits for the owner to confirm it",
                        floor="deflect")
     return None
 

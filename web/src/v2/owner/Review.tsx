@@ -2,15 +2,17 @@
 // up, all marked to keep. The owner removes only what they don't want, then keeps the rest with
 // one tap (one word for it everywhere, PR-14.7), or discards the whole conversation. Keeping here is
 // the owner's own decision (AGENTS.md rule 3); leaving without choosing keeps nothing, and the
-// items wait for next time. What the voice check held (it didn't sound like the owner) is kept only
-// once the owner ticks "Yes, this was me" on it; until then it waits, and the server refuses it too.
+// items wait for next time. What the guardian held is kept only once the owner confirms on the card:
+// "Yes, this was me" when it didn't sound like the owner (the voice check), or "Yes, this is what I
+// want" for a wish, money or people card said while someone else was there. Until then it waits,
+// and the server refuses it too.
 import { useState } from "react";
 import type { Proposal } from "../../api";
 import { Check, Close } from "../icons";
 import AutonomyTag from "../Autonomy";
 import { canReplace, describe } from "./items";
 
-/** wait: held by the voice check and not confirmed, so neither kept nor removed. */
+/** wait: held for the owner's confirmation and not confirmed, so neither kept nor removed. */
 export type ReviewChoice = { p: Proposal; save: boolean; replace: boolean; wait: boolean; voiceConfirmed: boolean };
 
 export default function Review({ items, summary, summaryState, meta, note = null, busy, error, onSave, onLater, onDiscard }: {
@@ -23,9 +25,10 @@ export default function Review({ items, summary, summaryState, meta, note = null
   // earlier one: nothing kept is replaced without the owner's own choice.
   const [update, setUpdate] = useState<ReadonlySet<string>>(new Set());
   const [confirmDiscard, setConfirmDiscard] = useState(false);
-  // "Yes, this was me", one item at a time: a call can hold the owner's words and someone else's.
+  // The owner's confirmation, one item at a time: a call can hold the owner's words and someone else's.
   const [itWasMe, setItWasMe] = useState<ReadonlySet<string>>(new Set());
-  const waits = (p: Proposal) => Boolean(p.voice_mismatch) && !itWasMe.has(p.id);
+  const held = (p: Proposal) => Boolean(p.voice_mismatch || p.another_voice_hold);
+  const waits = (p: Proposal) => held(p) && !itWasMe.has(p.id);
   const waiting = items.filter((p) => !removed.has(p.id) && waits(p)).length;
   const toggle = (set: ReadonlySet<string>, id: string) => {
     const next = new Set(set);
@@ -35,7 +38,7 @@ export default function Review({ items, summary, summaryState, meta, note = null
   const saving = items.filter((p) => !removed.has(p.id) && !waits(p)).length;
   const choices = (): ReviewChoice[] =>
     items.map((p) => ({ p, save: !removed.has(p.id) && !waits(p), replace: canReplace(p) && update.has(p.id),
-      wait: !removed.has(p.id) && waits(p), voiceConfirmed: Boolean(p.voice_mismatch) && itWasMe.has(p.id) }));
+      wait: !removed.has(p.id) && waits(p), voiceConfirmed: held(p) && itWasMe.has(p.id) }));
 
   return (
     <section className="v2-review" aria-labelledby="review-title">
@@ -75,7 +78,18 @@ export default function Review({ items, summary, summaryState, meta, note = null
                         </label>
                       </div>
                     )}
-                    {!off && p.another_voice && !p.voice_mismatch && (
+                    {!off && p.another_voice_hold && !p.voice_mismatch && (
+                      <div className="v2-review-held">
+                        <p>{itWasMe.has(p.id) ? "Someone else was there when this was said. You confirmed it's what you want, so it will be kept."
+                          : "Someone else was there when this was said, so it waits until you confirm it's what you want. If it isn't, remove it."}</p>
+                        <label>
+                          <input type="checkbox" checked={itWasMe.has(p.id)} disabled={busy}
+                            onChange={() => setItWasMe((s) => toggle(s, p.id))} />
+                          Yes, this is what I want
+                        </label>
+                      </div>
+                    )}
+                    {!off && p.another_voice && !p.another_voice_hold && !p.voice_mismatch && (
                       <p className="v2-review-voice">Another voice was heard when this was said. Keep it only if it's what you want.</p>
                     )}
                     {!off && canReplace(p) && p.looks_like && (
