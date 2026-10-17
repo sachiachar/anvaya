@@ -252,9 +252,6 @@ a.v2-switch { text-decoration: none; }
 /* ---- Panels ----------------------------------------------------------------------------------- */
 .v2-panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; display: grid; gap: 12px; }
 .v2-panel h2 { font-size: var(--step-2); }
-.v2-soon { display: grid; gap: 14px; justify-items: start; padding: 28px 22px; border-radius: var(--radius); background: var(--surface); border: 1px dashed var(--line); }
-.v2-soon h2 { font-size: var(--step-2); }
-
 /* ---- Owner alert: someone reported the owner has passed away ------------------------------------ */
 .v2-alert { background: var(--step-soft); border: 1.5px solid var(--step); border-radius: var(--radius); padding: 18px 20px; display: grid; gap: 10px; }
 .v2-alert h2 { font-size: var(--step-1); color: var(--ink); }
@@ -661,6 +658,11 @@ a.v2-switch { text-decoration: none; }
 .v2-secrets li svg { width: 20px; height: 20px; color: var(--gold-ink); }
 .v2-secret-name { font-weight: 500; overflow-wrap: anywhere; }
 .v2-secret-kind { font-size: 0.8rem; color: var(--muted); }
+/* The owner's own secret, shown on his phone (PR-14.9). */
+.v2-secret-text { display: grid; gap: 2px; min-width: 0; }
+.v2-secrets li .v2-secret-value { justify-self: start; margin-top: 4px; background: var(--sunk); color: var(--ink); }
+.v2-secret-cant { font-size: var(--step--1); color: var(--danger); }
+.v2-key-note { padding: 10px 12px; border-radius: 10px; background: var(--step-soft); color: var(--ink-2); font-size: var(--step--1); }
 fieldset.v2-chips { border: 0; margin: 0; padding: 0; min-width: 0; }
 
 /* ==== Family journey and our team's review ============================================================ */

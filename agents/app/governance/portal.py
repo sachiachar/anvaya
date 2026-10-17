@@ -87,7 +87,8 @@ def overview(*, fresh: bool = False, who: Actor | None = None) -> dict:
 
 def agents_view() -> list[dict]:
     days = _days()
-    blocked = store.list("gateway_blocked")
+    since = time.time() - 30 * 86400  # the last 30 days, as in the overview's blocked_30d
+    blocked = [b for b in store.list("gateway_blocked") if b["at"] > since]
     out = []
     for a in registry():
         rules = core.policy(a["id"]) or {}

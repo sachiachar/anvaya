@@ -130,10 +130,12 @@ def gateway_check(callback_context, llm_request: LlmRequest) -> LlmResponse | No
 def gateway_record(callback_context, llm_response: LlmResponse) -> LlmResponse | None:
     """After every model call: record its tokens in the usage ledger."""
     usage = llm_response.usage_metadata
-    model = callback_context.state.get("temp:model") or governance.primary_model(AGENT)
+    meta = getattr(llm_response, "custom_metadata", None) or {}
+    # The model that answered: the fallback, when the first one failed.
+    model = meta.get("model") or callback_context.state.get("temp:model") or governance.primary_model(AGENT)
     t_in = (usage.prompt_token_count or 0) if usage else 0
     t_out = ((usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)) if usage else 0
-    source = (getattr(llm_response, "custom_metadata", None) or {}).get("key_source", keys.PLATFORM)
+    source = meta.get("key_source", keys.PLATFORM)
     governance.record_usage(AGENT, model, "direct", tokens_in=t_in, tokens_out=t_out,
                             error=bool(llm_response.error_code), key_source=source)
     return None
@@ -184,12 +186,27 @@ def instruction(ctx) -> str:
             f"you need with read_concept, and use list_accounts for accounts.\n\n" + _index_text(owner_id, name))
 
 
+def tool_check(tool, args, tool_context) -> dict | None:
+    """Before every tool the agent uses: the gateway refuses one its policy doesn't grant. The
+    refusal is recorded, and the model is told, so it answers without it instead of the question failing."""
+    # The model chooses the name: one that isn't a real tool is recorded as a fixed word, never its text.
+    name = tool.name if tool.name in TOOL_NAMES else "(unknown tool)"
+    try:
+        governance.check_tool(AGENT, name)
+    except governance.Refused:
+        return {"error": f"The tool {tool.name} isn't available. Answer without it."}
+    return None
+
+
 class KeyedGemini(Gemini):
     """A Gemini model that uses the asking person's own key first, and ours only as failover
     (PR-10.10). The client is chosen on each call, never fixed when the Runner is built, so one
     shared Runner serves everyone with their own key."""
 
     async def generate_content_async(self, llm_request: LlmRequest, stream: bool = False):
+        # FallbackModel calls each model in turn, after gateway_check has seen only the first:
+        # every model it tries is checked here (registry, policy, kill switch).
+        governance.check_call(AGENT, self.model)
         links = keys.chain()
         for i, (source, kind, key) in enumerate(links):
             last = i == len(links) - 1
@@ -211,7 +228,8 @@ class KeyedGemini(Gemini):
                     async with Aclosing(model.generate_content_async(llm_request, stream)) as responses:
                         async for response in responses:
                             yielded = True
-                            response.custom_metadata = {**(response.custom_metadata or {}), "key_source": source}
+                            response.custom_metadata = {**(response.custom_metadata or {}), "key_source": source,
+                                                        "model": self.model}
                             yield response
             except errors.APIError as e:
                 # Once part of a reply has gone out, it's this key's turn: never splice two keys.
@@ -222,6 +240,9 @@ class KeyedGemini(Gemini):
                 continue
             keys.worked(source)
             return
+
+
+TOOL_NAMES = {f.__name__ for f in (read_bundle_index, read_concept, list_accounts)}
 
 
 def build_agent() -> LlmAgent:
@@ -235,6 +256,7 @@ def build_agent() -> LlmAgent:
         description="Answers the family's questions from the owner's own words and records.",
         instruction=instruction,
         tools=[read_bundle_index, read_concept, list_accounts],
+        before_tool_callback=tool_check,
         before_model_callback=gateway_check,
         after_model_callback=gateway_record,
     )

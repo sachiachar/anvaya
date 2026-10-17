@@ -3,7 +3,7 @@
 #
 # What each agent MAY DO (its role and autonomy, allowed models and tools, limits and budget
 # pool) is in policies.yaml, reviewed separately. Design: docs/architecture.md §8.
-# Both files are checked against a strict schema when the API starts (governance/core.py), and
+# Both files are checked against a strict schema when the API starts (governance/files.py), and
 # each agent here must have exactly one policy there.
 #
 # The platform admin portal (PR-12) shows both files. The gateway (PR-10.1) refuses a call

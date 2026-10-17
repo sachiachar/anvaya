@@ -2,7 +2,7 @@
 # Reviewed like code. Design: docs/architecture.md (the guardian core).
 #
 # Risk levels, from lowest: none, low, medium, high (a detector returns one, with a reason).
-# Responses, from mildest: continue, add_check, reduce_autonomy, pause, block.
+# Responses, from mildest: continue, add_check, reduce_autonomy, deflect, pause, block.
 #   continue         the action goes ahead
 #   add_check        it goes ahead, and a risk reviewer looks at it afterwards
 #   reduce_autonomy  it goes ahead with less freedom (for example, an answer without tools)

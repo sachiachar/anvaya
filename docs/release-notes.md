@@ -23,6 +23,10 @@
 - With nothing listed, Kept no longer says "Saathi hasn't looked for gaps yet", because the common gaps are always checked. It says "Nothing listed right now. Saathi can look more closely.", and only once both lists have loaded. If part of the list fails to load, it says so, even when other pages are listed.
 - **Family:** choosing who receives the vault is four clear steps (choose, they accept, the codes match, seal), and requests to see his stories wait for his Allow or Decline.
 - **Vault:** it says plainly whether it's sealed and for whom. New secrets are locked on the phone before they leave it, and the list shows only what each secret is, never its locked text.
+- **Vikram can show his own secrets:** each secret on the Vault tab has Show. It opens on his phone, with his key there, and shows the secret and its label, a private label too. It hides itself after 30 seconds, on Hide, or when he leaves the tab. Nothing is sent to the server.
+- **Vikram's vault opens on any phone:** his key is kept in the cloud, locked with a recovery code that only he has. After his first secret, the Vault tab asks him to make the code and save it. On a new phone or a cleared browser, he enters the code once, and Show and Lock work again. Anvaya can't open the backup without the code.
+- The app no longer makes a second key by mistake. On a phone without his key, Lock and Seal wait for the recovery code. Before, Lock made a new key there, and Priya couldn't open what it locked.
+- The Vault tab can make a new recovery code, and can forget the key on a shared phone. The Demo menu has "Simulate a lost or new phone" for Vikram too.
 - **Priya, in the new design:** one stage at a time. She accepts the vault on her own phone and keeps a recovery code, matches the code with Vikram, and can set up a new phone with the code. After she ticks that she's saved the recovery code, she now goes on to the code to match, instead of seeing Accept again: the live site no longer keeps an old "not yet" answer for 10 minutes. "When the time comes" explains the steps before asking for the certificate. The handover is a tracker in plain words, with the waiting period counting down. After release she opens the vault on her phone, asks about Vikram, and prepares the claim letters (each with Copy).
 - Answers to Priya's questions about Vikram now read as plain sentences. Before, they showed codes such as "[m_1a2b3c4d5e6f]" for each fact. What each answer comes from is still listed under it. If Saathi points to something Vikram never kept, the answer says "(source not found)" there.
 - **Where each answer came from, as chips:** under each answer to Priya, every kept item it used shows as a chip, with what kind of item it is ("Account or policy", "Story or wish", "Family"). So a policy and the story Vikram told about it no longer look like the same thing twice. When Saathi quotes Vikram's own words, they show as a quote, not after a ">" sign.
@@ -162,6 +166,10 @@
 - Roles in the portal (platform admin, budget approver, risk reviewer, viewer) are checked on the server. Anyone else who signs in can only view.
 - The portal never shows conversation text or names. People appear as anonymous keys, and counts under 5 are hidden.
 - Every call to Gemini is checked against the register of agents: the agent must be registered and the model allowed. Refused calls are recorded, and each call's tokens are counted.
+- The family's assistant is now held to its policy everywhere. It may use only the tools its policy lists. When its first model is busy, the fallback model gets the same checks, and its tokens are counted under its own name.
+- The Agents page counts blocked calls over the last 30 days, like the use beside them. Before, it counted every blocked call ever made.
+- When Saathi can't pick up the cards from part of a call, the server log says only what failed, never what was said.
+- The admin portal's site no longer serves the app's other pages, such as the talking-face trial and the demo documents.
 - A kill switch in the portal pauses voice and spoken replies first, then everything except certificate checks and the guardian.
 - Limits for each agent:
   - oversized requests are refused before anything is spent;

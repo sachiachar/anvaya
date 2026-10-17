@@ -1,10 +1,11 @@
 """Gaps and conflicts drive the conversation (PR-7.10).
 
 Fixed rules, not the model, find what's missing in the owner's kept knowledge, and rank it by
-how much it would hurt the family. Saathi gets the top two that are due and raises at most one,
-gently, when the moment fits; Gemini only words the question. Code remembers which gap was asked and how
-it was answered, so a question comes back only as a reminder, after a wait (see `due`). "Skip"
-marks a gap as intentionally unknown, and it's never raised again.
+how much it would hurt the family. The conversation planner takes the gaps that are due as steps
+(planner.py), and Saathi raises them gently, when the moment fits; Gemini only words the question.
+Code remembers which gap was asked and how it was answered, so a question comes back only as a
+reminder, after a wait (see `due`). "Skip" marks a gap as intentionally unknown, and it's never
+raised again.
 
     nominee      an account or policy with no nominee or beneficiary
     conflict     a wish gives an account to someone other than its nominee
@@ -305,12 +306,6 @@ def forget_turns(owner_id: str, turn_ids: set[str]) -> None:
     owner = store.get("owners", owner_id) or {}
     if (owner.get("last_said") or {}).get("turn_id") in turn_ids:
         store.update("owners", owner_id, {"last_said": None})
-
-
-def last_gap(owner_id: str, last_said: dict | None) -> dict | None:
-    """The gap Saathi's last message asked about, if it's still open, for judging the answer."""
-    key = (recent(last_said) or {}).get("gap")
-    return next(({"key": g["key"], "text": g["text"]} for g in find(owner_id) if g["key"] == key), None)
 
 
 def skip(owner_id: str, key: str) -> dict:

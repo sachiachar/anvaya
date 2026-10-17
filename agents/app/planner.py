@@ -42,7 +42,6 @@ VERSIONS_KEPT_DAYS = 30         # each version's expire_at; a Firestore TTL poli
 OUTCOMES = ("answered", "unsure", "not_now", "declined")
 Opens = Literal["saathi", "owner"]
 Tone = Literal["warm", "gentle", "light", "clear", "reassuring", "patient"]
-DONE_KINDS = ("person", "story", "advice", "practical", "wish", "inventory")
 MOODS = ("calm", "happy", "sad", "anxious", "tired", "upset")
 
 # How Saathi speaks in each tone: the words it's given with the step.
@@ -331,14 +330,6 @@ def voice_heard(owner_id: str, ref: str, now: float | None = None) -> dict:
         return plan
     return refresh(owner_id, {"kind": "voice", "ref": ref, "voice": "another"}, add=[_voice_step(owner_id, ref, now)],
                    now=now)
-
-
-def after_statements(owner_id: str, turn_id: str, decisions: list[tuple[str, str, str | None]]) -> dict | None:
-    """The guardian's decisions on one turn alone: a deflected statement adds its safe-route step
-    first. `decisions` are (action id, response, safe route). None when nothing was held back."""
-    if not any(response in ("deflect", "block") for _, response, _ in decisions):
-        return None
-    return after_turn(owner_id, turn_id, decisions)
 
 
 def step_outcome(owner_id: str, step_id: str, outcome: str) -> dict:

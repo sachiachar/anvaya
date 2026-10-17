@@ -80,7 +80,7 @@ def forget_cache() -> None:
 
 
 def clear() -> None:
-    """Remove the whole bundle (tests, and a demo reset of the platform's fraud knowledge)."""
+    """Remove the whole bundle (tests only, through fraud_guides.clear_saved)."""
     for name in media.names(OWNER, f"{ROOT}/"):
         media.delete(OWNER, name)
     for name in (CATALOG, RECORDS):

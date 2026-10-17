@@ -1,4 +1,4 @@
-"""A tiny document store with two backends: in-memory (local demo, tests) and Firestore.
+"""A tiny document store with three backends: in-memory (tests), a local file (the local demo) and Firestore.
 
 Every record is a dict with an "id" and, where relevant, an "owner_id".
 """

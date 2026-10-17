@@ -63,6 +63,15 @@ flowchart LR
 | Handover assistant | `executor_agent.py` (Google ADK) | Answers the family from the kept bundle, with real sources. Only after release. |
 | Fraud foresight | `fraud_pipeline.py`, `fraud_bundle.py` | Hourly research and "dreaming" that grow the fraud reference. See section 4.1. |
 | Audit chain | `audit_chain.py` | Follows one conversation turn to its decisions, by ids only. |
+| Step guard | `step_guard.py`, `step_types.py` | Never pursues a next step that could be part of a fraud: typed steps, flags worked out in code. |
+| Next steps | `tasks.py` | The owner's list from the readiness loop: at most 5 open, merged, and never back once done or dismissed. |
+| Knowledge map | `knowledge_map.py` | The kept knowledge as a graph for the demo. Read-only. |
+| Spoken replies | `speech.py` | Gemini text-to-speech in Saathi's own voice. Never imitates anyone. |
+| Own model key | `model_access.py`, `governance/keys.py` | A visitor's own Gemini key, used first for the calls they cause; the platform key is the failover. |
+| Fraud guides | `fraud_guides.py`, `fraud_graph.py`, `fraud_cues.py` | The reference guides, their graph for the portal, and anonymous gap counts that seed dreaming. |
+| Web search | `web_search.py` | Exa search for fraud research. Gemini only reads what came back. |
+| Hourly fraud cycle | `scheduler.py` | Cloud Scheduler runs the fraud cycle once an hour; "Run now" runs the same job. |
+| Spend | `governance/billing.py` | Dollar figures from the Cloud Billing export to BigQuery only. |
 
 ## 4. AI-first loops
 
@@ -140,7 +149,8 @@ flowchart LR
 | An insider or the AI reads the vault | No server part can open the inner layer. No agent has a vault tool. |
 | Someone makes themselves the recipient | The owner invites. Both phones show a key code, worked out from the key itself, and the owner confirms it. |
 | A false report that someone is no longer here | The certificate check flags warning signs; two different reviewers; a reason to go against "not valid"; a waiting period; the owner can cancel. |
-| A lost phone | The recipient's key is backed up under a 125-bit recovery code that Anvaya never sees. |
+| A lost phone | The owner's key and the recipient's key are each backed up under that person's 125-bit recovery code, which Anvaya never sees. |
+| A second owner key, made by mistake | The app makes an owner key only when none exists on the device, in the cloud, or behind locked secrets or a seal. |
 | One visitor reaching another's demo | Each Google account gets its own copy, chosen from the verified sign-in. Any other copy's data answers 404. |
 | Someone acting outside their role | The server checks the acting person on every action. One reviewer can't confirm both steps. |
 | Personal data in the admin portal or logs | Users appear only as hashed keys. No conversation text or names. |
@@ -184,10 +194,31 @@ stateDiagram-v2
 
 On release, Cloud KMS removes the outer layer. The recipient's phone decrypts the vault locally.
 
+**Vault keys**
+
+```mermaid
+sequenceDiagram
+    participant A as Owner's phone
+    participant API as Agents service
+    participant B as Owner's new phone
+    A->>A: make the data key, lock secrets with it
+    A->>A: lock the data key with his recovery code
+    A->>API: key backup (useless without the code)
+    B->>API: ask for the key backup (owner only)
+    API-->>B: key backup
+    B->>B: enter the recovery code, unlock the data key
+    B->>B: show and lock secrets with the same key
+```
+
+- The device keeps a copy of the key while in use. "Forget the key on this phone" removes it, and the code brings it back.
+- The owner's key backup never goes to the recipient, the release bundle or the admin portal. Tests check this.
+- If the owner loses his code and every device, he can't open his secrets any more. A sealed vault still opens for the recipient after release.
+
 ## 8. Governance and cost control
 
 - **Registry and policies.** 15 agents are registered in `agents/registry.yaml`. Each has one policy in `agents/policies.yaml`: autonomy, allowed models and tools, and limits. A broken file stops the service at start-up.
 - **The gateway denies by default.** An unregistered agent, or a model or tool its policy doesn't list, is refused and recorded.
+  - The ADK handover agent is checked at three points: before each model call (`gateway_check`), for each model the fallback chain tries (`KeyedGemini`), and before each tool (`tool_check`).
 - **Budgets.** Each person has a daily allowance. The whole service has a daily ceiling. Optional agents stop first. Safety checks (certificate checks, the guardian) never stop.
 - **Own model key.** A visitor may add their own Gemini key. Their calls use it first. The platform key is only the failover.
 - **Visibility.** The portal shows each agent's use, live status and recent steps, the guardian's events and the audit chain. It never shows conversation text.
@@ -195,7 +226,7 @@ On release, Cloud KMS removes the outer layer. The recipient's phone decrypts th
 
 ## 9. Quality and testing
 
-- **721 automated tests** (`agents/tests/`) run in about 6 seconds, with no cloud and a stubbed Gemini.
+- **749 automated tests** (`agents/tests/`) run in about 15 seconds, with no cloud and a stubbed Gemini.
 - Tests enforce the rules above. Some examples:
   - every Gemini call goes through the gateway;
   - the guardian never imports the vault;

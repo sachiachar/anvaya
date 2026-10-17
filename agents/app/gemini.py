@@ -44,9 +44,6 @@ class CutOff(RuntimeError):
     toward that limit, which is why each agent's policy can set its thinking level."""
 
 
-THINKING_LEVELS = {"minimal", "low", "medium", "high"}
-
-
 def retry_for(agent: str, attempts: int | None = None) -> types.HttpRetryOptions:
     """Retry options for one agent: its max_retries after the first attempt."""
     if attempts is None:
@@ -57,8 +54,7 @@ def retry_for(agent: str, attempts: int | None = None) -> types.HttpRetryOptions
 
 @lru_cache(maxsize=1)
 def client() -> genai.Client:
-    # Reads GOOGLE_GENAI_USE_VERTEXAI / GOOGLE_CLOUD_PROJECT / GOOGLE_CLOUD_LOCATION
-    # (or GOOGLE_API_KEY) from the environment.
+    # Reads GOOGLE_API_KEY from the environment (the Gemini API key path; not Vertex AI).
     return genai.Client(http_options=types.HttpOptions(retry_options=RETRY))
 
 
@@ -155,7 +151,7 @@ async def generate_json(
         http_options=types.HttpOptions(retry_options=retry_for(agent)),
         # How much the model may think, from the registry. Thinking counts toward the output cap,
         # so an agent with long answers thinks less. Not set: the model's own default.
-        thinking_config=types.ThinkingConfig(thinking_level=level.upper()) if (level := thinking_for(agent)) else None,
+        thinking_config=types.ThinkingConfig(thinking_level=level.upper()) if (level := governance.thinking(agent)) else None,
     )
     contents = [types.Content(role="user", parts=parts)]
 
@@ -208,8 +204,3 @@ async def generate_json(
         raise CutOff(f"The answer was cut off at {agent}'s output limit "
                      f"({governance.limit(agent, 'max_output_tokens')} tokens, thinking included).")
     return schema.model_validate_json(response.text or "{}")
-
-
-def thinking_for(agent: str) -> str | None:
-    """The agent's thinking level from its policy, if it sets one."""
-    return governance.thinking(agent)
