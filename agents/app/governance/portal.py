@@ -830,17 +830,28 @@ def list_blocked(agent: str | None = None, kind: str | None = None, pq: PageQuer
         "choices": {"agent": paging.counts(scoped, "agent"), "kind": paging.counts(scoped, "kind")}}
 
 
+ApprovalStatus = Literal["pending", "active", "approved", "rejected"]
+
+
 @router.get("/approvals/requests")
-def list_approvals(status: str | None = None, pq: PageQuery = Depends(page_query),
+def list_approvals(status: ApprovalStatus | None = None, pq: PageQuery = Depends(page_query),
                    who: Actor = Depends(actor)) -> dict:
-    """Budget requests, newest first; a demo admin sees only their own copy's. Search covers the
-    copy's key, the agent and the status, not what a person wrote."""
+    """Budget requests, newest first; a demo admin sees only their own copy's. status "active" means
+    approved and not expired yet. Search covers the hashed key, kind, tenant and status, not what a
+    person wrote."""
+    ensure_current()
     scoped = sorted(store.list("budget_requests"), key=lambda r: -r["at"])
     if who.role == "demo_admin":
         scoped = _hide_deciders([r for r in scoped if r.get("copy_id") == who.key], who)
-    rows = paging.where(scoped, status=status)
-    rows = paging.search(paging.dated(rows, pq), pq.q, ("copy_id", "agent", "status"))
-    return paging.page(rows, pq) | {"choices": {"status": paging.counts(scoped, "status")}}
+    now = time.time()
+
+    def active(r: dict) -> bool:
+        return r["status"] == "approved" and r.get("expires_at", 0) > now
+    rows = paging.where(scoped, status=active if status == "active" else status)
+    rows = paging.search(paging.dated(rows, pq), pq.q, ("user_key", "kind", "tenant", "status"))
+    return paging.page(rows, pq) | {
+        "counts": {"pending": sum(r["status"] == "pending" for r in scoped), "active": sum(map(active, scoped))},
+        "choices": {"status": paging.counts(scoped, "status")}}
 
 
 @router.get("/demos/copies")

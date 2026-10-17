@@ -198,7 +198,14 @@ type GraphLink = { source: string; target: string; kind: string };
 export type FraudGraph = { nodes: GraphNode[]; links: GraphLink[]; guides: { id: string; title: string }[] };
 export type GraphEvent = { at: string; action: string; version?: number; reason?: string };
 
+/** One page of a list (governance/paging.py): the rows, where the page sits, and the filter choices
+ *  with how many rows have each. Counts come from the viewer's own rows only. */
+export type PageInfo = { page: number; size: number; total: number; pages: number };
+export type Paged<T, X = object> = { items: T[]; page: PageInfo; choices?: Record<string, Record<string, number>>;
+  counts?: Record<string, number> } & X;
+
 const p = (path: string) => `/platform${path}`;
+const list = <T, X = object>(path: string) => (q: URLSearchParams) => request<Paged<T, X>>(p(`${path}?${q}`));
 
 export const platform = {
   me: () => request<Me>(p("/me")),
@@ -239,6 +246,17 @@ export const platform = {
     request<{ kill_switch: KillSwitchState }>(p("/kill-switch"), json({ state, reason })),
   audit: () => request<{ entries: AuditEntry[] }>(p("/audit")),
   modelKeys: () => request<ModelKeys>(p("/model-keys")),
+  // Paged lists: page, size (20, at most 100), q, from and to (YYYY-MM-DD), and each list's filters.
+  guardianEvents: list<GuardianEvent>("/guardian/events"),
+  guardianTrails: list<ChainRow>("/guardian/trails"),
+  fraudScenarios: list<Scenario>("/fraud/scenarios"),
+  fraudAdded: list<Added>("/fraud/added"),
+  fraudDrafts: list<Draft>("/fraud/drafts"),
+  fraudRuns: list<Run>("/fraud/runs"),
+  auditEntries: list<AuditEntry>("/audit/entries"),
+  blockedCalls: list<Blocked>("/agents/blocked"),
+  approvalRequests: list<BudgetRequest>("/approvals/requests"),
+  demoCopies: list<DemoCopy, { cleanup_after_days: number; nicknames_visible: boolean }>("/demos/copies"),
   setKeyDefault: (enabled: boolean, kinds: KeyKind[], reason: string) =>
     request<KeyPolicy>(p("/model-keys/default"), json({ enabled, kinds, reason })),
   setKeyPolicy: (userKey: string, enabled: boolean, kinds: KeyKind[], reason: string) =>

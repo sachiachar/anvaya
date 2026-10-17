@@ -6,6 +6,7 @@ import {
   type Spend, type Use, type KeyPerson, type KeyPolicy, type KeySource, type KeyUse,
 } from "./api";
 import type { KeyFeature, KeyKind } from "../api";
+import { type FilterDef, ListView, useList } from "./listControls";
 import { LoopMap } from "./loopMap";
 import { POLL_MS, usePoll } from "./usePoll";
 
@@ -332,7 +333,7 @@ export function OverviewPage({ me, fresh }: { me: Me; fresh: boolean }) {
 // ---- Agents ----------------------------------------------------------------------
 
 export function AgentsPage() {
-  const load = useCallback(() => platform.agents(), []);
+  const load = useCallback(() => platform.agents(), []);  // the registry table; blocked calls page on their own
   const { data, error } = useLoad(load);
   if (!data) return <Loading error={error} />;
   return (
@@ -373,16 +374,29 @@ export function AgentsPage() {
           </table>
         </div>
       </Section>
-      <Section title="Blocked calls">
-        <table>
-          <thead><tr><th>When</th><th>Agent</th><th>Kind</th><th>Attempted</th><th>Why</th></tr></thead>
-          <tbody>{data.blocked.map((b: Blocked) => (
-            <tr key={b.id}><td>{fmt.when(b.at)}</td><td className="pa-mono">{b.agent}</td><td>{fmt.label(b.kind)}</td>
-              <td className="pa-mono">{b.attempted}</td><td>{b.reason}</td></tr>
-          ))}</tbody>
-        </table>
-      </Section>
+      <BlockedCalls />
     </>
+  );
+}
+
+/** Calls the gateway refused, a page at a time. */
+function BlockedCalls() {
+  const list = useList<Blocked>("bl", platform.blockedCalls);
+  return (
+    <Section title="Blocked calls">
+      <ListView list={list} search="Search agent, kind or reason" empty="No blocked calls. The gateway records each call it refuses here."
+        filters={[{ key: "agent", label: "Agent", show: (v) => v }, { key: "kind", label: "Kind" }]}>
+        {(items) => (
+          <table>
+            <thead><tr><th>When</th><th>Agent</th><th>Kind</th><th>Attempted</th><th>Why</th></tr></thead>
+            <tbody>{items.map((b) => (
+              <tr key={b.id}><td>{fmt.when(b.at)}</td><td className="pa-mono">{b.agent}</td><td>{fmt.label(b.kind)}</td>
+                <td className="pa-mono">{b.attempted}</td><td>{b.reason}</td></tr>
+            ))}</tbody>
+          </table>
+        )}
+      </ListView>
+    </Section>
   );
 }
 
@@ -424,53 +438,57 @@ function RecentSteps() {
 
 // ---- Approvals -------------------------------------------------------------------
 
+const APPROVAL_STATUS: [string, string][] = [["pending", "Waiting"], ["active", "Active grant"], ["approved", "Approved"], ["rejected", "Rejected"]];
+
 export function ApprovalsPage({ me }: { me: Me }) {
-  const load = useCallback(() => platform.approvals(), []);
-  const { data, error, reload } = useLoad(load);
-  if (!data) return <Loading error={error} />;
+  const [version, setVersion] = useState(0);
+  const decided = () => setVersion((n) => n + 1);
+  const pending = useList<BudgetRequest>("wait", platform.approvalRequests, { status: "pending" }, version);
+  const all = useList<BudgetRequest>("req", platform.approvalRequests, {}, version);
   const row = (r: BudgetRequest) => (
     <>
       <td>{fmt.when(r.at)}</td><td>{fmt.label(r.tenant)}</td><td className="pa-mono">{r.user_key}</td>
       <td>{fmt.label(r.kind)}: +{r.amount}</td><td>{r.hours} h</td><td>{r.reason}</td>
     </>
   );
+  const waiting = pending.data?.page.total;
   return (
     <>
       <p className="pa-lede">Extra allowance needs a person's approval. Grants are time-limited, and nobody can approve their own request.</p>
       {me.role === "demo_admin" && (
         <p className="pa-note">You're the platform admin of your own demo copy: you can approve or reject its requests. In the app, ask for more as Vikram, then decide here.</p>
       )}
-      <Section title={`Waiting for a decision (${data.pending.length})`}>
-        {data.pending.length === 0 ? <p className="pa-muted">Nothing waiting.</p> : (
-          <ul className="pa-list">
-            {data.pending.map((r) => (
-              <li key={r.id}>
-                <table><tbody><tr>{row(r)}</tr></tbody></table>
-                {can(me, "approve_budget") ? (
-                  <DecisionForm withHours defaultHours={r.hours}
-                    actions={[{ value: "approve", label: "Approve" }, { value: "reject", label: "Reject", tone: "danger" }]}
-                    onDecide={(v, reason, hours) => platform.decideApproval(r.id, v as "approve" | "reject", reason, hours).then(reload)} />
-                ) : <p className="pa-muted">Your role can view requests but not decide them.</p>}
-              </li>
-            ))}
-          </ul>
-        )}
+      <Section title={waiting === undefined ? "Waiting for a decision" : `Waiting for a decision (${waiting})`}>
+        <ListView list={pending} search="Search key, kind or tenant" empty="Nothing waiting." filters={[]}>
+          {(items) => (
+            <ul className="pa-list">
+              {items.map((r) => (
+                <li key={r.id}>
+                  <table><tbody><tr>{row(r)}</tr></tbody></table>
+                  {can(me, "approve_budget") ? (
+                    <DecisionForm withHours defaultHours={r.hours}
+                      actions={[{ value: "approve", label: "Approve" }, { value: "reject", label: "Reject", tone: "danger" }]}
+                      onDecide={(v, reason, hours) => platform.decideApproval(r.id, v as "approve" | "reject", reason, hours).then(decided)} />
+                  ) : <p className="pa-muted">Your role can view requests but not decide them.</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </ListView>
       </Section>
-      <Section title="Active grants">
-        {data.active.length === 0 ? <p className="pa-muted">No active grants.</p> : (
-          <table>
-            <thead><tr><th>Requested</th><th>Tenant</th><th>User</th><th>What</th><th>For</th><th>Why</th><th>Expires</th></tr></thead>
-            <tbody>{data.active.map((r) => <tr key={r.id}>{row(r)}<td>{r.expires_at ? fmt.when(r.expires_at) : "—"}</td></tr>)}</tbody>
-          </table>
-        )}
-      </Section>
-      <Section title="History">
-        {data.history.length === 0 ? <Empty>No decisions yet.</Empty> : <table>
-          <thead><tr><th>Requested</th><th>Tenant</th><th>User</th><th>What</th><th>For</th><th>Why</th><th>Decision</th><th>By</th><th>Reason</th></tr></thead>
-          <tbody>{data.history.map((r) => (
-            <tr key={r.id}>{row(r)}<td><Status value={r.status} /></td><td>{r.decided_by}</td><td>{r.decision_reason}</td></tr>
-          ))}</tbody>
-        </table>}
+      <Section title="All requests">
+        <ListView list={all} search="Search key, kind or tenant" empty="No requests yet."
+          filters={[{ key: "status", label: "Status", options: APPROVAL_STATUS }]}>
+          {(items) => (
+            <table>
+              <thead><tr><th>Requested</th><th>Tenant</th><th>User</th><th>What</th><th>For</th><th>Why</th><th>Decision</th><th>By</th><th>Reason</th><th>Expires</th></tr></thead>
+              <tbody>{items.map((r) => (
+                <tr key={r.id}>{row(r)}<td><Status value={r.status} /></td><td>{r.decided_by ?? "—"}</td><td>{r.decision_reason ?? "—"}</td>
+                  <td>{r.expires_at ? fmt.when(r.expires_at) : "—"}</td></tr>
+              ))}</tbody>
+            </table>
+          )}
+        </ListView>
       </Section>
     </>
   );
@@ -517,63 +535,79 @@ function ChainView({ chain, onClose }: { chain: Chain; onClose: () => void }) {
   );
 }
 
+const GUARDIAN_STATUS: [string, string][] = [["open", "Open"], ["decided", "Decided"], ["confirmed", "Confirmed"], ["reversed", "Reversed"]];
+
 export function GuardianPage({ me }: { me: Me }) {
-  const load = useCallback(() => Promise.all([platform.guardian(), platform.conversations()])
-    .then(([g, c]) => ({ ...g, conversations: c.conversations })), []);
-  const { data, error, reload } = useLoad(load);
+  const [version, setVersion] = useState(0);
+  const events = useList<GuardianEvent>("ev", platform.guardianEvents, {}, version);
+  const trails = useList<ChainRow>("tr", platform.guardianTrails);
   const [chain, setChain] = useState<Chain | null>(null);
   const [chainError, setChainError] = useState<string | null>(null);
   const follow = (get: Promise<Chain>) => {
     setChainError(null);
     get.then(setChain).catch((e) => setChainError(String(e.message ?? e)));
   };
-  if (!data) return <Loading error={error} />;
+  // The numbers cover all of the viewer's interventions, whatever the filters.
+  const byResponse = events.data?.choices?.response ?? {};
+  const counts = events.data?.counts;
   return (
     <>
       <p className="pa-lede">The guardian watches every agent step and can add a check, reduce autonomy, pause or block. It never approves or rejects a case: people review every intervention here.</p>
-      <div className="pa-kpis">
-        {Object.entries(data.by_response).map(([k, v]) => <div className="pa-kpi" key={k}><span>{fmt.label(k)}</span><strong>{v}</strong></div>)}
-        <div className="pa-kpi"><span>False alarms</span><strong>{data.false_alarm_rate === null ? "—" : fmt.pct(data.false_alarm_rate)}</strong><em>Reversed after review</em></div>
-      </div>
+      {counts && (
+        <div className="pa-kpis">
+          {Object.entries(byResponse).map(([k, v]) => <div className="pa-kpi" key={k}><span>{fmt.label(k)}</span><strong>{v}</strong></div>)}
+          <div className="pa-kpi"><span>False alarms</span><strong>{counts.decided ? fmt.pct(counts.mistake / counts.decided) : "—"}</strong><em>Reversed after review</em></div>
+        </div>
+      )}
       {chainError && <p className="pa-error" role="alert">{chainError}</p>}
       {chain && <ChainView chain={chain} onClose={() => setChain(null)} />}
       <Section title="Follow a conversation">
-        {data.conversations.length === 0 && <Empty>No conversation turns yet. Each turn the guardian decides on appears here.</Empty>}
-        <ul className="pa-list">
-          {data.conversations.map((c: ChainRow) => (
-            <li key={c.turn} className="pa-row">
-              <span className="pa-muted">{fmt.when(c.at)}</span>
-              <span className="pa-mono">{c.user_key ?? "unknown"}</span>
-              <span>{c.decisions} decision{c.decisions === 1 ? "" : "s"}{c.held ? `, ${c.held} held back` : ""}</span>
-              <button type="button" className="pa-link" onClick={() => follow(platform.chain(c.turn))}>Follow</button>
-            </li>
-          ))}
-        </ul>
+        <ListView list={trails} search="Search key or turn id" empty="No conversation turns yet. Each turn the guardian decides on appears here."
+          filters={[{ key: "held", label: "Held back", options: [["true", "Something held back"], ["false", "Nothing held back"]] }]}>
+          {(items) => (
+            <ul className="pa-list">
+              {items.map((c) => (
+                <li key={c.turn} className="pa-row">
+                  <span className="pa-muted">{fmt.when(c.at)}</span>
+                  <span className="pa-mono">{c.user_key ?? "unknown"}</span>
+                  <span>{c.decisions} decision{c.decisions === 1 ? "" : "s"}{c.held ? `, ${c.held} held back` : ""}</span>
+                  <button type="button" className="pa-link" onClick={() => follow(platform.chain(c.turn))}>Follow</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </ListView>
       </Section>
       <Section title="Interventions">
-        {data.events.length === 0 && <Empty>No interventions yet. They appear here when the guardian adds a check, reduces autonomy, pauses or blocks a step.</Empty>}
-        <ul className="pa-list">
-          {data.events.map((e: GuardianEvent) => (
-            <li key={e.id}>
-              <div className="pa-row">
-                <Status value={e.status} />
-                <strong>{fmt.label(e.response)}</strong>
-                <span className="pa-mono">{e.agent}</span>
-                <span className="pa-muted">{fmt.when(e.at)}{e.case_key ? ` · case ${e.case_key}` : ""}</span>
-              </div>
-              <p>{e.reason}</p>
-              {e.id.startsWith("gev_st_") && (
-                <button type="button" className="pa-link" onClick={() => follow(platform.eventChain(e.id))}>Follow this conversation</button>
-              )}
-              {e.status === "open" ? (
-                can(me, "review_guardian") ? (
-                  <DecisionForm actions={[{ value: "confirm", label: "Confirm" }, { value: "reverse", label: "Reverse", tone: "danger" }]}
-                    onDecide={(v, reason) => platform.decideGuardian(e.id, v as "confirm" | "reverse", reason).then(reload)} />
-                ) : <p className="pa-muted">A risk reviewer decides this.</p>
-              ) : <p className="pa-muted">{fmt.label(e.status)} by {e.decided_by}{e.decision_reason ? `: ${e.decision_reason}` : ""}</p>}
-            </li>
-          ))}
-        </ul>
+        <ListView list={events} search="Search reason, agent or case"
+          empty="No interventions yet. They appear here when the guardian adds a check, reduces autonomy, pauses or blocks a step."
+          filters={[{ key: "status", label: "Status", options: GUARDIAN_STATUS },
+            { key: "response", label: "Response" }, { key: "agent", label: "Agent", show: (v) => v }]}>
+          {(items) => (
+            <ul className="pa-list">
+              {items.map((e) => (
+                <li key={e.id}>
+                  <div className="pa-row">
+                    <Status value={e.status} />
+                    <strong>{fmt.label(e.response)}</strong>
+                    <span className="pa-mono">{e.agent}</span>
+                    <span className="pa-muted">{fmt.when(e.at)}{e.case_key ? ` · case ${e.case_key}` : ""}</span>
+                  </div>
+                  <p>{e.reason}</p>
+                  {e.id.startsWith("gev_st_") && (
+                    <button type="button" className="pa-link" onClick={() => follow(platform.eventChain(e.id))}>Follow this conversation</button>
+                  )}
+                  {e.status === "open" ? (
+                    can(me, "review_guardian") ? (
+                      <DecisionForm actions={[{ value: "confirm", label: "Confirm" }, { value: "reverse", label: "Reverse", tone: "danger" }]}
+                        onDecide={(v, reason) => platform.decideGuardian(e.id, v as "confirm" | "reverse", reason).then(() => setVersion((n) => n + 1))} />
+                    ) : <p className="pa-muted">A risk reviewer decides this.</p>
+                  ) : <p className="pa-muted">{fmt.label(e.status)} by {e.decided_by}{e.decision_reason ? `: ${e.decision_reason}` : ""}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </ListView>
       </Section>
     </>
   );
@@ -698,17 +732,27 @@ function CuePrivacySection({ privacy, canChange, onChange }: { privacy: CuePriva
 
 export function FraudPage({ me }: { me: Me }) {
   const load = useCallback(() => platform.fraud(), []);
-  const { data, error, reload } = useLoad(load);
+  const { data, error, reload: reloadSummary } = useLoad(load);
   const [note, setNote] = useState<string | null>(null);
+  // The four lists page on their own; a new version loads the page each one shows again.
+  const [version, setVersion] = useState(0);
+  const [tick, setTick] = useState(0);
+  const reload = useCallback(() => { reloadSummary(); setVersion((n) => n + 1); }, [reloadSummary]);
+  const scenarios = useList<Scenario>("sc", platform.fraudScenarios, {}, version + tick);
+  const added = useList<Added>("ad", platform.fraudAdded, {}, version);
+  const drafts = useList<Draft>("dr", platform.fraudDrafts, {}, version);
+  const runs = useList<Run>("run", platform.fraudRuns, {}, version + tick);
   const running = data?.runs.some((r) => r.status === "running" || r.status === "queued") ?? false;
   // Live mode: while a run is going, check every 2 seconds, so each step and each new
-  // scenario appears as it happens.
+  // scenario appears as it happens. Only the run and its scenarios change while it runs.
   useEffect(() => {
     if (!running) return;
-    const t = window.setInterval(reload, 2000);
+    const t = window.setInterval(() => { reloadSummary(); setTick((n) => n + 1); }, 2000);
     return () => window.clearInterval(t);
-  }, [running, reload]);
+  }, [running, reloadSummary]);
   if (!data) return <Loading error={error} />;
+  const guideTitle = (id: string) => data.guides.find((g) => g.id === id)?.title ?? id;
+  const guideFilter: FilterDef = { key: "guide", label: "Guide", show: guideTitle };
   const start = (call: Promise<{ message: string }>) =>
     call.then((r) => setNote(r.message)).catch((e) => setNote(String(e.message ?? e))).finally(reload);
   const reviewer = can(me, "review_fraud");
@@ -748,36 +792,42 @@ export function FraudPage({ me }: { me: Me }) {
         </Suspense>
       </Section>
       <Section title="Safeguard coverage map">
-        {data.scenarios.length === 0 && <Empty>No scenarios yet. "Dream now" adds them.</Empty>}
-        <ul className="pa-list">
-          {data.scenarios.map((s: Scenario) => (
-            <li key={s.id} className={live && s.run_id === live.id ? "is-new" : undefined}>
-              <div className="pa-row">
-                {live && s.run_id === live.id && <Status value="new" />}
-                <Status value={s.coverage} />
-                <Status value={s.review === "unconfirmed" ? "unconfirmed" : s.status} />
-                {s.variant === "far" && <Status value="far-fetched" />}
-                <span className="pa-muted">Aims at: {s.safeguard}</span>
-              </div>
-              <p><strong>{s.scenario}</strong></p>
-              {s.steps && s.steps.length > 0 && <ol className="pa-muted">{s.steps.map((x) => <li key={x}>{x}</li>)}</ol>}
-              <p className="pa-muted">{s.caught_by ? `Caught by: ${s.caught_by}` : "Not caught by any safeguard yet."}{s.coverage_reason ? ` ${s.coverage_reason}` : ""}</p>
-              {s.cue && <p className="pa-muted">Starts from a common gap: {s.cue.owners} owners have {s.cue.means} (counted, never read).</p>}
-              {s.document_sign && s.review === "pending" && <SignPreview sign={s.document_sign} />}
-              {s.source_note && <p className="pa-muted">What sources say: {s.source_note}</p>}
-              <Sources sources={s.sources} />
-              {s.review === "pending" || s.review === "unconfirmed" ? (
-                reviewer ? (
-                  <DecisionForm
-                    actions={s.review === "pending"
-                      ? [{ value: "approve", label: "Approve scenario" }, { value: "discard", label: "Discard", tone: "danger" }]
-                      : [{ value: "discard", label: "Discard", tone: "danger" }]}
-                    onDecide={(v, reason) => platform.decideScenario(s.id, v as "approve" | "discard", reason).then(reload)} />
-                ) : <p className="pa-muted">{s.review === "pending" ? "Waiting for a risk reviewer." : "No source confirms it yet."}</p>
-              ) : <p className="pa-muted">Review: {fmt.label(s.review)}</p>}
-            </li>
-          ))}
-        </ul>
+        <ListView list={scenarios} search="Search scenario, steps or safeguard" empty={'No scenarios yet. "Dream now" adds them.'}
+          filters={[{ key: "coverage", label: "Coverage" },
+            { key: "review", label: "Review", show: (v) => (v === "faded" ? "Faded (no source after 3 runs)" : fmt.label(v)) },
+            { key: "safeguard", label: "Aims at", show: (v) => v }, guideFilter]}>
+          {(items) => (
+            <ul className="pa-list">
+              {items.map((s) => (
+                <li key={s.id} className={live && s.run_id === live.id ? "is-new" : undefined}>
+                  <div className="pa-row">
+                    {live && s.run_id === live.id && <Status value="new" />}
+                    <Status value={s.coverage} />
+                    <Status value={s.review === "unconfirmed" ? "unconfirmed" : s.status} />
+                    {s.variant === "far" && <Status value="far-fetched" />}
+                    <span className="pa-muted">Aims at: {s.safeguard}</span>
+                  </div>
+                  <p><strong>{s.scenario}</strong></p>
+                  {s.steps && s.steps.length > 0 && <ol className="pa-muted">{s.steps.map((x) => <li key={x}>{x}</li>)}</ol>}
+                  <p className="pa-muted">{s.caught_by ? `Caught by: ${s.caught_by}` : "Not caught by any safeguard yet."}{s.coverage_reason ? ` ${s.coverage_reason}` : ""}</p>
+                  {s.cue && <p className="pa-muted">Starts from a common gap: {s.cue.owners} owners have {s.cue.means} (counted, never read).</p>}
+                  {s.document_sign && s.review === "pending" && <SignPreview sign={s.document_sign} />}
+                  {s.source_note && <p className="pa-muted">What sources say: {s.source_note}</p>}
+                  <Sources sources={s.sources} />
+                  {s.review === "pending" || s.review === "unconfirmed" ? (
+                    reviewer ? (
+                      <DecisionForm
+                        actions={s.review === "pending"
+                          ? [{ value: "approve", label: "Approve scenario" }, { value: "discard", label: "Discard", tone: "danger" }]
+                          : [{ value: "discard", label: "Discard", tone: "danger" }]}
+                        onDecide={(v, reason) => platform.decideScenario(s.id, v as "approve" | "discard", reason).then(reload)} />
+                    ) : <p className="pa-muted">{s.review === "pending" ? "Waiting for a risk reviewer." : "No source confirms it yet."}</p>
+                  ) : <p className="pa-muted">Review: {fmt.label(s.review)}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </ListView>
       </Section>
       <Section title="Added on its own" aside={data.adding_paused?.length ? <Status value="paused" /> : undefined}>
         {(data.adding_paused ?? []).map((g) => (
@@ -787,49 +837,65 @@ export function FraudPage({ me }: { me: Me }) {
               onDecide={(_, reason) => platform.resumeAdding(g, reason).then(reload)} />}
           </div>
         ))}
-        {!data.added?.length && <Empty>Nothing yet. Tactics and scenarios two independent websites confirm appear here, added to the guide.</Empty>}
-        <ul className="pa-list">
-          {(data.added ?? []).map((a: Added) => (
-            <li key={a.id}>
-              <p><strong>{a.name}</strong> {a.spot_check && <Status value="spot_check" />}</p>
-              <p className="pa-muted">{fmt.label(a.kind)} · {a.sources} independent sources · added {fmt.when(a.at)}</p>
-              {reviewer && <DecisionForm actions={[
-                ...(a.spot_check ? [{ value: "keep", label: "Looks right" }] : []),
-                { value: "remove", label: "Remove from the guide", tone: "danger" as const }]}
-                onDecide={(v, reason) => (v === "keep" ? platform.keepAdded(a.id, reason) : platform.removeAdded(a.id, reason)).then(reload)} />}
-            </li>
-          ))}
-        </ul>
+        <ListView list={added} search="Search name" empty="Nothing yet. Tactics and scenarios two independent websites confirm appear here, added to the guide."
+          filters={[guideFilter, { key: "kind", label: "Kind" },
+            { key: "spot_check", label: "Spot check", options: [["true", "Spot checks only"], ["false", "No spot check"]] }]}>
+          {(items) => (
+            <ul className="pa-list">
+              {items.map((a) => (
+                <li key={a.id}>
+                  <p><strong>{a.name}</strong> {a.spot_check && <Status value="spot_check" />}</p>
+                  <p className="pa-muted">{fmt.label(a.kind)} · {guideTitle(a.guide_key)} · {a.sources} independent sources · added {fmt.when(a.at)}</p>
+                  {reviewer && <DecisionForm actions={[
+                    ...(a.spot_check ? [{ value: "keep", label: "Looks right" }] : []),
+                    { value: "remove", label: "Remove from the guide", tone: "danger" as const }]}
+                    onDecide={(v, reason) => (v === "keep" ? platform.keepAdded(a.id, reason) : platform.removeAdded(a.id, reason)).then(reload)} />}
+                </li>
+              ))}
+            </ul>
+          )}
+        </ListView>
       </Section>
       <Section title="New tactics and warning signs to review">
-        {data.drafts.length === 0 && <Empty>None waiting. Tactics only one website confirms, and the warning signs of tactics added on their own, appear here.</Empty>}
-        <ul className="pa-list">
-          {data.drafts.map((d: Draft) => (
-            <li key={d.id}>
-              <p><strong>{d.kind === "sign" ? `Warning sign for “${d.tactic}”` : d.tactic}</strong></p>
-              {d.kind === "sign" && <p className="pa-muted">The tactic is already in the guide. Adding this sign puts it into every certificate check.</p>}
-              <ol className="pa-muted">{d.steps.map((x) => <li key={x.step}>{x.step} <em>(caught by: {x.caught_by})</em></li>)}</ol>
-              {d.sign && <SignPreview sign={d.sign} />}
-              {d.source_note && <p className="pa-muted">What sources say: {d.source_note}</p>}
-              <Sources sources={d.sources} />
-              {reviewer ? (
-                <DecisionForm actions={[{ value: "approve", label: d.kind === "sign" ? "Add the sign" : "Add to the guide" }, { value: "discard", label: "Discard", tone: "danger" }]}
-                  onDecide={(v, reason) => platform.decideDraft(d.id, v as "approve" | "discard", reason).then(reload)} />
-              ) : <p className="pa-muted">Waiting for a risk reviewer.</p>}
-            </li>
-          ))}
-        </ul>
+        <ListView list={drafts} search="Search tactic, steps or sign"
+          empty="None waiting. Tactics only one website confirms, and the warning signs of tactics added on their own, appear here."
+          filters={[guideFilter, { key: "kind", label: "Kind", show: (v) => (v === "sign" ? "Warning sign" : fmt.label(v)) }]}>
+          {(items) => (
+            <ul className="pa-list">
+              {items.map((d) => (
+                <li key={d.id}>
+                  <p><strong>{d.kind === "sign" ? `Warning sign for “${d.tactic}”` : d.tactic}</strong></p>
+                  {d.kind === "sign" && <p className="pa-muted">The tactic is already in the guide. Adding this sign puts it into every certificate check.</p>}
+                  <ol className="pa-muted">{d.steps.map((x) => <li key={x.step}>{x.step} <em>(caught by: {x.caught_by})</em></li>)}</ol>
+                  {d.sign && <SignPreview sign={d.sign} />}
+                  {d.source_note && <p className="pa-muted">What sources say: {d.source_note}</p>}
+                  <Sources sources={d.sources} />
+                  {reviewer ? (
+                    <DecisionForm actions={[{ value: "approve", label: d.kind === "sign" ? "Add the sign" : "Add to the guide" }, { value: "discard", label: "Discard", tone: "danger" }]}
+                      onDecide={(v, reason) => platform.decideDraft(d.id, v as "approve" | "discard", reason).then(reload)} />
+                  ) : <p className="pa-muted">Waiting for a risk reviewer.</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </ListView>
       </Section>
       <Section title="Runs">
-        {data.runs.length === 0 ? <Empty>No runs yet.</Empty> : <table>
-          <thead><tr><th>Run</th><th>Started</th><th>Status</th><th>What happened</th></tr></thead>
-          <tbody>{data.runs.map((r: Run) => (
-            <tr key={r.id}>
-              <td>{RUN_KIND[r.kind]}</td><td>{fmt.when(r.started_at)}</td><td><Status value={r.status} /></td>
-              <td>{r.error ? `Failed: ${r.error}` : r.stopped_reason ? `Stopped: ${r.stopped_reason}` : Object.entries(r.counts).map(([k, v]) => `${fmt.label(k)} ${v}`).join(" · ")}</td>
-            </tr>
-          ))}</tbody>
-        </table>}
+        <ListView list={runs} search="Search kind, status or guide" empty="No runs yet."
+          filters={[{ key: "kind", label: "Kind", show: (v) => RUN_KIND[v as Run["kind"]] ?? v },
+            { key: "status", label: "Status" }, guideFilter]}>
+          {(items) => (
+            <table>
+              <thead><tr><th>Run</th><th>Guide</th><th>Started</th><th>Status</th><th>What happened</th></tr></thead>
+              <tbody>{items.map((r) => (
+                <tr key={r.id}>
+                  <td>{RUN_KIND[r.kind]}</td><td>{guideTitle(r.guide_key)}</td><td>{fmt.when(r.started_at)}</td><td><Status value={r.status} /></td>
+                  <td>{r.error ? `Failed: ${r.error}` : r.stopped_reason ? `Stopped: ${r.stopped_reason}` : Object.entries(r.counts).map(([k, v]) => `${fmt.label(k)} ${v}`).join(" · ")}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+        </ListView>
       </Section>
     </>
   );
@@ -838,33 +904,39 @@ export function FraudPage({ me }: { me: Me }) {
 // ---- Demos ---------------------------------------------------------------------------
 
 export function DemosPage({ me }: { me: Me }) {
-  const load = useCallback(() => platform.demos(), []);
-  const { data, error, reload } = useLoad(load);
+  const [version, setVersion] = useState(0);
+  const list = useList<DemoCopy, { cleanup_after_days: number; nicknames_visible: boolean }>("demo", platform.demoCopies, {}, version);
   const [resetting, setResetting] = useState<string | null>(null);
-  if (!data) return <Loading error={error} />;
+  const data = list.data;
+  if (!data) return <Loading error={list.error} />;
   return (
     <>
       <p className="pa-lede">Everyone who signs in gets their own private copy of the demo, shown here without names.
         {data.nicknames_visible ? " A nickname appears when the visitor chose one." : ""} Unused copies are removed after {data.cleanup_after_days} days.</p>
-      <Section title={`Demo copies (${data.copies.length})`}>
-        {data.copies.length === 0 ? <Empty>Nobody has opened the demo yet.</Empty> : <table>
-          <thead><tr><th>Copy</th><th>Created</th><th>Last used</th><th className="num">Allowance used today</th><th></th></tr></thead>
-          <tbody>{data.copies.map((c: DemoCopy) => (
-            <tr key={c.id}>
-              <td>
-                {c.nickname ? <strong>{c.nickname}</strong> : <span className="pa-mono">{c.user_key}</span>}
-                {c.is_you && <span className="pa-tag">You</span>}
-                {c.nickname && <div className="pa-sub pa-mono">{c.user_key}</div>}
-              </td>
-              <td>{fmt.when(c.created_at)}</td><td>{fmt.when(c.last_used_at)}</td>
-              <td className="num">{fmt.pct(c.allowance_used)}</td>
-              <td>{can(me, "manage_demos") && (resetting === c.id ? (
-                <DecisionForm actions={[{ value: "reset", label: "Restore this copy to the start", tone: "danger" }]}
-                  onDecide={(_, reason) => platform.resetDemo(c.id, reason).then(() => { setResetting(null); reload(); })} />
-              ) : <button className="pa-small" onClick={() => setResetting(c.id)}>Reset…</button>)}</td>
-            </tr>
-          ))}</tbody>
-        </table>}
+      <Section title="Demo copies">
+        <ListView list={list} search={data.nicknames_visible ? "Search key or nickname" : "Search key"}
+          empty="Nobody has opened the demo yet." filters={[{ key: "status", label: "Status" }]}>
+          {(items) => (
+            <table>
+              <thead><tr><th>Copy</th><th>Created</th><th>Last used</th><th className="num">Allowance used today</th><th></th></tr></thead>
+              <tbody>{items.map((c) => (
+                <tr key={c.id}>
+                  <td>
+                    {c.nickname ? <strong>{c.nickname}</strong> : <span className="pa-mono">{c.user_key}</span>}
+                    {c.is_you && <span className="pa-tag">You</span>}
+                    {c.nickname && <div className="pa-sub pa-mono">{c.user_key}</div>}
+                  </td>
+                  <td>{fmt.when(c.created_at)}</td><td>{fmt.when(c.last_used_at)}</td>
+                  <td className="num">{fmt.pct(c.allowance_used)}</td>
+                  <td>{can(me, "manage_demos") && (resetting === c.id ? (
+                    <DecisionForm actions={[{ value: "reset", label: "Restore this copy to the start", tone: "danger" }]}
+                      onDecide={(_, reason) => platform.resetDemo(c.id, reason).then(() => { setResetting(null); setVersion((n) => n + 1); })} />
+                  ) : <button className="pa-small" onClick={() => setResetting(c.id)}>Reset…</button>)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+        </ListView>
       </Section>
     </>
   );
@@ -1009,22 +1081,23 @@ export function ModelKeysPage({ me }: { me: Me }) {
 // ---- Audit log -------------------------------------------------------------------------
 
 export function AuditPage() {
-  const load = useCallback(() => platform.audit(), []);
-  const { data, error } = useLoad(load);
-  if (!data) return <Loading error={error} />;
+  const list = useList<AuditEntry>("log", platform.auditEntries);
   return (
     <>
       <p className="pa-lede">Every decision in this portal: who, what, when and why.</p>
       <Section title="Audit log">
-        {data.entries.length === 0 ? <p className="pa-muted">No decisions recorded yet.</p> : (
-          <table>
-            <thead><tr><th>When</th><th>Who</th><th>Role</th><th>Action</th><th>Target</th><th>Reason</th></tr></thead>
-            <tbody>{data.entries.map((e: AuditEntry) => (
-              <tr key={e.id}><td>{fmt.when(e.at)}</td><td>{e.actor}</td><td>{fmt.label(e.role)}</td>
-                <td className="pa-mono">{e.action}</td><td className="pa-mono">{e.target}</td><td>{e.reason ?? "—"}</td></tr>
-            ))}</tbody>
-          </table>
-        )}
+        <ListView list={list} search="Search action, target or key" empty="No decisions recorded yet."
+          filters={[{ key: "action", label: "Action", show: (v) => v }, { key: "role", label: "Role" }]}>
+          {(items) => (
+            <table>
+              <thead><tr><th>When</th><th>Who</th><th>Role</th><th>Action</th><th>Target</th><th>Reason</th></tr></thead>
+              <tbody>{items.map((e) => (
+                <tr key={e.id}><td>{fmt.when(e.at)}</td><td>{e.actor}</td><td>{fmt.label(e.role)}</td>
+                  <td className="pa-mono">{e.action}</td><td className="pa-mono">{e.target}</td><td>{e.reason ?? "—"}</td></tr>
+              ))}</tbody>
+            </table>
+          )}
+        </ListView>
       </Section>
     </>
   );

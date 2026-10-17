@@ -17,8 +17,9 @@ const PAGES = {
 
 type Page = keyof typeof PAGES;
 
+// "#/guardian?ev.q=voice": the page, then its lists' search, filters and page (listControls.tsx).
 const pageFromHash = (): Page => {
-  const h = location.hash.replace("#/", "") as Page;
+  const h = location.hash.replace("#/", "").split("?")[0] as Page;
   return h in PAGES ? h : "overview";
 };
 
