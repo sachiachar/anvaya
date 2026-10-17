@@ -157,3 +157,16 @@ def test_a_judge_pages_and_counts_only_their_own_copy(judge):
     assert judge.get("/api/platform/guardian/events", params={"q": "someone else"}).json()["page"]["total"] == 0
     assert judge.get("/api/platform/audit/entries", params={"action": "pager.scope"}).json()["page"]["total"] == 0
     assert judge.get("/api/platform/demos/copies").json()["nicknames_visible"] is False
+
+
+def test_approvals_filter_active_grants_and_search_by_kind(team):
+    now = time.time()
+    base = {"tenant": "demo", "user_key": "u_pg_req", "copy_id": "u_pg_req", "amount": 5, "hours": 2, "reason": "r"}
+    store.put("budget_requests", {"id": "req_pg_live", "at": now, "kind": "pager_kind", "status": "approved",
+                                  "expires_at": now + 3600, **base})
+    store.put("budget_requests", {"id": "req_pg_old", "at": now - 1, "kind": "pager_kind", "status": "approved",
+                                  "expires_at": now - 60, **base})
+    active = team.get("/api/platform/approvals/requests", params={"status": "active", "q": "pager_kind"}).json()
+    assert [r["id"] for r in active["items"]] == ["req_pg_live"] and active["counts"]["active"] >= 1
+    both = team.get("/api/platform/approvals/requests", params={"status": "approved", "q": "u_pg_req"}).json()
+    assert {r["id"] for r in both["items"]} == {"req_pg_live", "req_pg_old"}

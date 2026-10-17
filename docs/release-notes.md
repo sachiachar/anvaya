@@ -162,6 +162,7 @@
   - the fraud coverage map and reference guides;
   - every private demo copy, with when it was last used and today's allowance used; your own is marked, and a platform admin can restore any copy to the start;
   - an audit log of every decision.
+- **Long lists in the portal come one page at a time,** 20 rows to a page (or 50 or 100). Each list has a search box, filters with how many rows each has, and From and To dates. "Showing 21–40 of 312" says where you are. The search and filters stay in the address, so a filtered list survives a refresh and can be shared. This covers the guardian's interventions and conversations, the fraud coverage map, what was added on its own, reviews and runs, budget requests, refused calls, demo copies and the audit log. The audit log now shows every decision, not only the last 200. Search covers only what the portal already shows, never conversation text, and a judge's totals and filter counts include only their own copy.
 - The portal works on a phone: a compact top bar, sections you swipe between, and tables that scroll inside their card. Every page has a Refresh button, and the agents table fits on a laptop screen.
 - Roles in the portal (platform admin, budget approver, risk reviewer, viewer) are checked on the server. Anyone else who signs in can only view.
 - The portal never shows conversation text or names. People appear as anonymous keys, and counts under 5 are hidden.

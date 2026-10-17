@@ -428,3 +428,24 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .fg-link { color: var(--pa-gold); }
 }
+
+/* ---- Paged lists: filter bar and pager (listControls.tsx) ---- */
+.pa-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin: 0 0 12px; }
+.pa-filters label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; min-width: 0; }
+.pa-filters .pa-filter-q { flex: 1 1 200px; }
+.pa-dates { display: flex; gap: 10px; }
+.pa-filters .pa-filter-q input { width: 100%; }
+.pa-filters select { max-width: 260px; }
+.pa-pager { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between;
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--pa-line); font-variant-numeric: tabular-nums; }
+.pa-pages { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.pa-pages button { background: var(--pa-surface); color: var(--pa-text); border-color: var(--pa-line); min-width: 36px; }
+.pa-pages button.is-current { background: var(--pa-navy); color: #f7f5ef; border-color: var(--pa-navy); }
+.pa-size { display: flex; gap: 6px; align-items: center; font-size: 0.85rem; }
+.pa-size select { min-height: 32px; padding: 2px 8px; }
+@media (max-width: 720px) {
+  .pa-filters label { flex: 1 1 100%; }
+  .pa-dates { flex: 1 1 100%; }
+  .pa-dates label { flex: 1 1 0; }
+  .pa-filters select { max-width: none; width: 100%; }
+}
