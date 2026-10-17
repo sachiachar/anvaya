@@ -118,7 +118,7 @@ All of these are Google's proprietary managed services. We use them under the Go
 | **Cloud Scheduler** | Calls the hourly fraud cycle (research, then dreaming) as its own service account, `fraud-scheduler`, with an ID token the API checks. The run happens inside that call, so Cloud Run keeps the CPU on. The release workflow keeps the job (`fraud-foresight-hourly`); "Run now" in the admin portal asks it to run at once | `agents/app/scheduler.py`, the release workflow, `infra/setup-github-actions.sh` |
 | **Cloud Billing Budget API** | A monthly budget alert by email at 50%, 90% and 100% of spend, and at a forecast of 100%: a backstop to the daily service ceiling (PR-15.1). A person sets it up once | `infra/budget-alert.sh` |
 | **Cloud KMS** | Two keys: `vault-escrow` wraps the vault escrow blob; `model-keys` encrypts the Gemini keys people add themselves (PR-10.10), with the person's user key bound in | `agents/app/escrow.py`, `agents/app/governance/keys.py` |
-| **Secret Manager** | Holds the Gemini API key for Cloud Run | `infra/deploy.sh` |
+| **Secret Manager** | Holds the Gemini API key (`gemini-api-key`) and the Exa key (`exa-api-key`) for Cloud Run | `infra/deploy.sh`, `.github/workflows/deploy.yml` |
 | **Cloud Build, Artifact Registry** | Build and store the API container on each deploy | `gcloud run deploy --source` |
 | **IAM, Workload Identity Federation** (IAM Credentials, STS) | Least-privilege service accounts; GitHub Actions deploys without stored keys | `infra/setup-github-actions.sh` |
 | **Firebase Hosting** | Serves the app (`anvaya-saathi`), the admin portal (`anvaya-admin`) and the old address's redirect | `firebase.json` |
@@ -132,6 +132,6 @@ These are services from other companies. Each one needs the product owner's agre
 
 | Service | Purpose | What's sent | Key | Where in the code |
 | --- | --- | --- | --- | --- |
-| **Exa** (exa.ai), search API | Web search for the fraud research agent: finds pages that report fraud tactics, so a scenario or tactic can be checked against a quoted source. Replaced Google Search grounding on 3 October 2026, whose quota the free tier didn't cover. Paid per search, with free starting credit. | Fraud research queries only: a document type, a country, a claimed tactic. Never owner data (a test checks this). | `EXA_API_KEY`: the GitHub secret of that name (environment "production"), set on Cloud Run with each API deploy | `agents/app/web_search.py` |
+| **Exa** (exa.ai), search API | Web search for the fraud research agent: finds pages that report fraud tactics, so a scenario or tactic can be checked against a quoted source. Replaced Google Search grounding on 3 October 2026, whose quota the free tier didn't cover. Paid per search, with free starting credit. | Fraud research queries only: a document type, a country, a claimed tactic. Never owner data (a test checks this). | `EXA_API_KEY`: on Cloud Run, from the Secret Manager secret `exa-api-key` | `agents/app/web_search.py` |
 
 **Data use.** On the Gemini API's free tier, Google may use prompts and responses to improve its products. On the paid tier, it doesn't. Keep billing on for any environment that handles more than synthetic demo data.
