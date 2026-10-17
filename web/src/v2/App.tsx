@@ -6,11 +6,12 @@ import { ROLE_TEXT, friendlyError } from "./copy";
 import { ShowHow } from "./demo";
 import { ADMIN_URL, KNOWLEDGE_MAP_URL, Nav, type OwnerTab, personLabel, personRole } from "./nav";
 import Tour, { forgetTour, reopenTour, tourWanted } from "./Tour";
-import { Book as BookIcon, Check, Chevron, Close, Lock, Mic, People, ThreadMark } from "./icons";
+import { Book as BookIcon, Check, Chevron, Close, Gear, Lock, Mic, People, ThreadMark } from "./icons";
 import KnowledgeMap from "./KnowledgeMap";
 import { ModelKey } from "./ModelKey";
 import Book from "./owner/Book";
 import FamilyTab from "./owner/FamilyTab";
+import Settings from "./owner/Settings";
 import Talk from "./owner/Talk";
 import VaultTab from "./owner/VaultTab";
 import Journey from "./family/Journey";
@@ -34,6 +35,7 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [drawer, setDrawer] = useState(false);
+  const [settings, setSettings] = useState(false); // the owner's Settings: the voice check
   const [tour, setTour] = useState(false); // "Start here" (PR-14.1), once the copy is known
   const [tourVisit, setTourVisit] = useState(0); // reopening starts it fresh, from step 1
   useEffect(() => { if (ready) setTour(tourWanted()); }, [ready]);
@@ -57,7 +59,13 @@ export default function App() {
     if (ownerTab) setTab(ownerTab);
     window.scrollTo({ top: 0 });
   }, []);
-  const nav = useMemo(() => ({ people, acting, switchTo }), [people, acting, switchTo]);
+  const ownerId = people.find((p) => p.role === "owner")?.id;
+  const openSettings = useCallback(() => {
+    if (!ownerId) return;
+    switchTo(ownerId);
+    setSettings(true);
+  }, [ownerId, switchTo]);
+  const nav = useMemo(() => ({ people, acting, switchTo, openSettings }), [people, acting, switchTo, openSettings]);
 
   // Sign-in: "checking" until Firebase answers, then "signed-out", "denied" or "in".
   const [session, setSession] = useState<"checking" | "signed-out" | "denied" | "in">(authEnabled ? "checking" : "in");
@@ -106,6 +114,11 @@ export default function App() {
             <ThreadMark />
             <b>Anvaya</b>
           </a>
+          {ready && person?.role === "owner" && (
+            <button className="v2-settings-btn" onClick={() => setSettings(true)} aria-haspopup="dialog" aria-label="Settings">
+              <Gear />
+            </button>
+          )}
           <button className="v2-demo-pill" onClick={() => setDrawer(true)} aria-haspopup="dialog">
             <i aria-hidden="true" />
             Demo
@@ -132,6 +145,8 @@ export default function App() {
             </div>
           </nav>
         )}
+
+        {settings && person?.role === "owner" && <Settings owner={person.name} onClose={() => setSettings(false)} />}
 
         {drawer && (
           <DemoDrawer people={people} acting={acting} onSwitch={switchTo} onClose={() => setDrawer(false)}

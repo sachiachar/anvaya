@@ -120,6 +120,8 @@ export type Proposal = (Moment | InventoryItem | Person) & {
   looks_like?: { id: string; title: string };
   /** Another voice was heard when this was said (PR-2.13.2): how many voices, never whose. */
   another_voice?: boolean;
+  /** The voice check: this didn't sound like the owner's voice, so Keep waits until they say it was them. */
+  voice_mismatch?: boolean;
   /** How much the helper that made it may do on its own, from its policy (PR-15.7). */
   autonomy?: Autonomy;
 };
@@ -162,6 +164,11 @@ export type Allowance = { pools: Record<string, Record<string, AllowanceMeasure>
   requests?: MoreRequest[]; limits?: Record<MoreKind, number> };
 
 export type AccessRequest = { id: string; name: string; relationship: string; contact: string; note: string; at: number };
+
+/** The owner's voice check: whether it's on and how many recordings it has, never the voiceprint. */
+export type VoiceCheck = { set_up: boolean; on: boolean; samples: number; needed: number };
+/** One recording added: kept, or not because it sounded like a different voice; and how close it was. */
+export type VoiceSample = VoiceCheck & { kept: boolean; consistency: "good" | "fair" | "different" | null };
 
 export type VaultItem = { id: string; category: string; iv: string; ciphertext: string; ai_label: string | null };
 
@@ -286,9 +293,18 @@ export const api = {
     request(`/access-requests/${id}/decision`, json({ decision, decided_by })),
 
   review: () => request<{ moments: Moment[]; inventory: InventoryItem[] }>(o("/review")),
-  /** replace: keep the card as a new version of the kept item it looks like ("Replace it"). */
-  decide: (id: string, collection: "moments" | "inventory" | "people", decision: "approve" | "reject", replace = false) =>
-    request(`/proposals/${id}/decision`, json({ collection, decision, replace })),
+  /** replace: keep the card as a new version of the kept item it looks like ("Replace it").
+   *  voiceConfirmed: "Yes, this was me" for a card the voice check held. */
+  decide: (id: string, collection: "moments" | "inventory" | "people", decision: "approve" | "reject", replace = false,
+    voiceConfirmed = false) =>
+    request(`/proposals/${id}/decision`, json({ collection, decision, replace, voice_confirmed: voiceConfirmed })),
+
+  voiceCheck: () => request<VoiceCheck>(o("/voiceprint")),
+  /** One recording of the owner reading a sentence: 16 kHz mono 16-bit PCM. */
+  addVoiceSample: (pcm: ArrayBuffer) =>
+    request<VoiceSample>(o("/voiceprint/samples"), { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: pcm }),
+  /** Turn the voice check off: the voiceprint is deleted. */
+  forgetVoiceCheck: () => request<VoiceCheck>(o("/voiceprint"), { method: "DELETE" }),
 
   readiness: () => request<{ score: number; tasks: Task[] }>(o("/readiness"), { method: "POST" }),
   tasks: () => request<{ score: number | null; tasks: Task[] }>(o("/tasks")),

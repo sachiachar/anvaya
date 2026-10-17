@@ -23,6 +23,9 @@ class Settings:
     # development): "Run now" runs in the background on this machine, and the cycle endpoint is off.
     fraud_scheduler_job: str = os.getenv("FRAUD_SCHEDULER_JOB", "")
     fraud_scheduler_sa: str = os.getenv("FRAUD_SCHEDULER_SA", "")
+    # The voice check (voiceprint.py): the speaker model's base URL, which turns a recording into a
+    # speaker embedding (POST /embed). Empty: the voice check is off and its screens say so.
+    voice_model_url: str = os.getenv("VOICE_MODEL_URL", "").rstrip("/")
 
     # Sign-in (Firebase Auth) and the demo allowlist; see auth.py.
     auth_required: bool = os.getenv("AUTH_REQUIRED", "false").lower() == "true"

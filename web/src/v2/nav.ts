@@ -15,7 +15,9 @@ export const Nav = createContext<{
   acting: PersonId;
   /** Show the app as this person; for the owner, optionally on this tab. */
   switchTo: (person: PersonId, tab?: OwnerTab) => void;
-}>({ people: [], acting: "vikram", switchTo: () => {} });
+  /** Open the owner's Settings (the voice check), as the owner. */
+  openSettings: () => void;
+}>({ people: [], acting: "vikram", switchTo: () => {}, openSettings: () => {} });
 
 /** The same person by name, as the server compares reviewers for the two-person rule (strip, casefold). */
 export const samePerson = (a: string | null | undefined, b: string | null | undefined) =>

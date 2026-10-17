@@ -159,6 +159,13 @@ a { color: inherit; text-decoration-color: var(--gold); text-underline-offset: 3
   border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font: 500 var(--step--1) var(--sans); cursor: pointer;
 }
 .v2-demo-pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); }
+/* The owner's Settings, beside the Demo pill (voice fingerprinting) */
+.v2-settings-btn {
+  margin-left: auto; width: 40px; height: 40px; flex: none; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink-2); display: grid; place-items: center; cursor: pointer;
+}
+.v2-settings-btn svg { width: 20px; height: 20px; }
+.v2-settings-btn + .v2-demo-pill { margin-left: -4px; }
 /* Who is acting, always in view (PR-14.2). A second line of the header; it scrolls sideways on a
    narrow phone. Hidden during a live call: switching would end it, and the call's layout expects
    the one-line header. */
@@ -172,6 +179,7 @@ a { color: inherit; text-decoration-color: var(--gold); text-underline-offset: 3
 }
 .v2-person[aria-pressed="true"] { background: var(--action); border-color: var(--action); color: var(--action-ink); }
 .v2-app:has(.v2-talk.is-live) .v2-people { display: none; }
+.v2-app:has(.v2-talk.is-live) .v2-settings-btn { display: none; } /* a recording would share the call's microphone */
 @media (max-width: 420px) { .v2-people-label { display: none; } } /* all five names fit on a phone */
 /* How much a helper may do on its own (PR-14.6), with "Show how Saathi works" on. */
 /* One neutral look for all three, so a label never reads as a verdict or a warning. */
@@ -776,3 +784,18 @@ textarea.v2-input { min-height: 88px; resize: vertical; }
 }.v2-map-wait { padding: 24px; }
 .kmap h1 { font-family: var(--serif); }
 .kmap-side section { color: var(--ink); }
+
+/* ==== The voice check (voice fingerprinting): Settings, and cards it holds ============================ */
+.v2-voice-state { display: flex; align-items: center; gap: 8px; }
+.v2-voice-state svg { width: 20px; height: 20px; color: var(--ok); }
+.v2-voice-points { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; color: var(--ink-2); }
+.v2-voice-sentence { padding: 12px 14px; border-radius: 12px; background: var(--sunk); }
+.v2-voice-meter { display: grid; grid-template-columns: 1fr auto; gap: 6px; font-size: var(--step--1); color: var(--muted); }
+.v2-voice-bar { grid-column: 1 / -1; display: block; height: 6px; border-radius: 3px; background: var(--gold-ink); transform-origin: left; transition: transform 0.1s linear; }
+.v2-voice-result { font-size: var(--step--1); padding: 6px 10px; border-radius: 8px; background: var(--sunk); }
+.v2-voice-result.is-different { color: var(--danger); }
+.v2-voice-check .v2-btn svg { width: 18px; height: 18px; }
+.v2-review-held { margin: 6px 0 0; font-size: var(--step--1); line-height: 1.5; padding: 6px 10px; border-left: 3px solid var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); border-radius: 6px; }
+.v2-review-held label { display: flex; gap: 10px; align-items: center; margin-top: 6px; font-weight: 500; color: var(--ink); }
+.v2-review-held input { width: 20px; height: 20px; flex: none; margin: 0; accent-color: var(--night); }
+.v2-review-held p { margin: 0; }

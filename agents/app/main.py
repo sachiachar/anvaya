@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from . import (auth, demo, escrow, fraud_guides, fraud_pipeline, gaps, grounding, guardian_inputs, knowledge,
                knowledge_map, live, loops, media, model_access, planner, proposals, release, scheduler, speech, step_guard,
-               tasks, tone)
+               tasks, tone, voiceprint)
 from .config import settings
 from . import executor_agent
 from .executor_agent import UnknownSession, ask
@@ -421,6 +421,8 @@ class Decision(BaseModel):
     edits: dict | None = None
     # "Replace it" on a card that looks like a kept item: keep it as that item's new version.
     replace: bool = False
+    # "Yes, this was me" on a card the voice check held: the owner confirms the voice was theirs.
+    voice_confirmed: bool = False
 
 
 @api.post("/proposals/{doc_id}/decision", dependencies=[Depends(demo.only("owner"))])
@@ -431,9 +433,15 @@ def decide(doc_id: str, body: Decision) -> dict:
     if body.decision == "reject":
         store.delete(body.collection, doc_id)
         return {"id": doc_id, "status": "rejected"}
-    # Edits change what a card says, never what it is or where it came from.
+    # The voice check: a card from an exchange whose voice didn't match the owner's voiceprint waits
+    # until the owner confirms it was them. Checked before anything is saved.
+    held_by_voice = bool(doc.get("voice_mismatch"))
+    if held_by_voice and not body.voice_confirmed:
+        raise HTTPException(409, "This didn't sound like your voice. Confirm it was you to keep it.")
+    # Edits change what a card says, never what it is, where it came from, or the voice check's hold.
     safe_edits = {k: v for k, v in (body.edits or {}).items()
-                  if k not in ("id", "owner_id", "status", "updates", "looks_like", "recording", "document")}
+                  if k not in ("id", "owner_id", "status", "updates", "looks_like", "recording", "document",
+                               "voice_mismatch", "voice_confirmed")}
     replaces = None
     if body.replace:  # checked before any edit is saved, so a refused Replace changes nothing
         target = (doc.get("looks_like") or {}).get("id")
@@ -456,6 +464,9 @@ def decide(doc_id: str, body: Decision) -> dict:
         doc = store.update(body.collection, doc_id, safe_edits)
     if replaces:
         doc = store.update(body.collection, doc_id, {"updates": replaces})
+    # The voice check's hold belongs to the card, not to what's kept: the Keep decision's audit refs
+    # record that the owner confirmed, and later versions of the item don't inherit the mark.
+    doc = {k: v for k, v in doc.items() if k not in ("voice_mismatch", "voice_confirmed")}
     try:
         kept = proposals.approve(body.collection, doc)
     except knowledge.Removed as e:
@@ -463,7 +474,8 @@ def decide(doc_id: str, body: Decision) -> dict:
     # The audit chain (PR-2.12.5): the card is gone now, so the Keep decision remembers the decision
     # that allowed the card and the item it became.
     store.update("guardian_actions", decision.action_id, {"refs": {"card": doc_id, "kept": kept["id"],
-                 **({"statement": doc["guardian_action"]} if doc.get("guardian_action") else {})}})
+                 **({"statement": doc["guardian_action"]} if doc.get("guardian_action") else {}),
+                 **({"voice": "confirmed_by_owner"} if held_by_voice else {})}})
     planner.refresh(doc["owner_id"], {"kind": "keep", "ref": doc_id})  # a kept item can finish a step
     return kept
 
@@ -914,6 +926,44 @@ def add_vault_item(owner_id: str, body: VaultItem) -> dict:
 @api.get("/owners/{owner_id}/vault/items")
 def list_vault_items(owner_id: str) -> dict:
     return {"items": store.list("vault_items", owner_id=owner_id)}
+
+
+# ---- Voice check (voice fingerprinting): does the voice on a call sound like the owner's? ---------
+
+
+@api.get("/owners/{owner_id}/voiceprint", dependencies=[Depends(demo.only("owner"))])
+def voiceprint_status(owner_id: str) -> dict:
+    """Whether the check is on and how many samples it has; never the voiceprint itself."""
+    owner_or_404(owner_id)
+    return voiceprint.status(owner_id)
+
+
+@api.post("/owners/{owner_id}/voiceprint/samples", dependencies=[Depends(demo.only("owner"))])
+async def add_voiceprint_sample(owner_id: str, request: Request) -> dict:
+    """One registration sample: the owner reading a sentence, as 16 kHz mono 16-bit PCM. The audio
+    goes to the speaker model and is then dropped; only the numbers that describe the voice are kept."""
+    await asyncio.to_thread(owner_or_404, owner_id)
+    cap = voiceprint.MAX_UPLOAD_SECONDS * voiceprint.BYTES_PER_SECOND
+    pcm = bytearray()
+    async for chunk in request.stream():  # read up to the cap, never the whole of a longer upload
+        pcm.extend(chunk)
+        if len(pcm) > cap:
+            raise HTTPException(413, "That recording is too long. Read one sentence at a time.")
+    try:
+        return await voiceprint.add_sample(owner_id, bytes(pcm))
+    except voiceprint.TooShort as e:
+        raise HTTPException(400, str(e)) from None
+    except voiceprint.NotSetUp as e:
+        raise HTTPException(503, str(e)) from None
+    except voiceprint.Unavailable as e:
+        raise HTTPException(502, str(e)) from None
+
+
+@api.delete("/owners/{owner_id}/voiceprint", dependencies=[Depends(demo.only("owner"))])
+def forget_voiceprint(owner_id: str) -> dict:
+    """Turn the check off: the voiceprint is deleted."""
+    owner_or_404(owner_id)
+    return voiceprint.forget(owner_id)
 
 
 # The owner's data key, kept in the cloud locked with his recovery code, so a new phone or a
