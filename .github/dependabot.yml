@@ -32,3 +32,14 @@ updates:
     groups:
       npm-minor:
         update-types: [minor, patch]
+
+  # The API's container images (agents/Dockerfile). This watches the uv image. The python image is
+  # left out: Python moves by hand only, in every place at once (.python-version, pyproject.toml and
+  # the Dockerfile; a test checks they agree).
+  - package-ecosystem: docker
+    directory: /agents
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 2
+    ignore:
+      - dependency-name: python
