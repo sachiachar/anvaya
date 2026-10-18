@@ -1,19 +1,52 @@
 // After release (v2): the vault, opened on this phone only; Ask about Papa, answered only from what
 // was kept, with where each answer came from; and the claims checklist with draft letters.
 import { useState } from "react";
-import { api } from "../../api";
+import { api, type KeptDocument } from "../../api";
 import { useAction } from "../../ui";
 import { decryptSecret, unwrapAsRecipient } from "../../vaultCrypto";
 import { friendlyError } from "../copy";
 import { Book as BookIcon, Lock, Send } from "../icons";
+import OpenDocument from "../OpenDocument";
 
 export default function After({ parent }: { parent: string }) {
   return (
     <>
       <OpenVault parent={parent} />
       <Ask parent={parent} />
+      <Documents parent={parent} />
       <Claims parent={parent} />
     </>
+  );
+}
+
+/** The photos and documents {parent} kept, with what they said about each: only after the handover. */
+function Documents({ parent }: { parent: string }) {
+  const [docs, setDocs] = useState<KeptDocument[] | null>(null);
+  const { busy, error, run } = useAction();
+  return (
+    <section className="v2-panel" aria-labelledby="docs-title">
+      <h2 id="docs-title">Documents {parent} kept</h2>
+      {docs === null ? (
+        <button className="v2-btn" disabled={busy} onClick={() => run(async () => setDocs((await api.documents()).documents))}>
+          {busy ? "Opening…" : "Show the documents"}
+        </button>
+      ) : docs.length === 0 ? (
+        <p className="v2-muted">{parent} didn't keep any photos or documents.</p>
+      ) : (
+        <ul className="v2-pages">
+          {docs.map((d) => (
+            <li key={d.id}>
+              <div>
+                <p className="v2-page-title">{d.title}</p>
+                {d.comment && <p className="v2-page-desc">In {parent}'s words: “{d.comment}”</p>}
+                <OpenDocument id={d.id} title={d.title} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <p className="v2-error" role="alert">{friendlyError(new Error(error))}</p>}
+    </section>
   );
 }
 

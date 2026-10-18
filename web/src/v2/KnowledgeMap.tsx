@@ -21,6 +21,7 @@ const LEGEND: { group: MapNode["group"]; label: string }[] = [
   { group: "wish", label: "Wish" },
   { group: "account", label: "Account or policy" },
   { group: "institution", label: "Bank or insurer" },
+  { group: "document", label: "Photo or document" },
 ];
 
 type Body = { x: number; y: number; vx: number; vy: number; held?: boolean };

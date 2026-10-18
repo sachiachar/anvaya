@@ -1,5 +1,5 @@
 // What Saathi picked up in a conversation, described in words a person recognises.
-import type { InventoryItem, Moment, Person, Proposal } from "../../api";
+import type { InventoryItem, Moment, Person, Proposal, SharedDocument } from "../../api";
 
 const MOMENT_KIND: Record<Moment["kind"], string> = {
   story: "A story", advice: "Advice", practical: "Something practical", wish: "A wish",
@@ -21,6 +21,11 @@ type Described = { kind: string; title: string; detail: string | null; missing: 
 
 export function describe(p: Proposal): Described {
   const update = p.updates ? " · an update" : "";
+  if (p.collection === "documents") {
+    const d = p as SharedDocument;
+    return { kind: d.mime?.startsWith("image/") ? "A photo you shared" : "A document you shared", title: d.title,
+      detail: d.description || null, missing: null };
+  }
   if (p.collection === "people") {
     const person = p as Person;
     return { kind: `Family${update}`, title: `${person.name}, ${person.relationship}`, detail: null, missing: null };

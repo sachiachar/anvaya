@@ -127,6 +127,19 @@ def delete(owner_id: str, name: str) -> None:
     _local(path).unlink(missing_ok=True)
 
 
+def _owned_name(owner_id: str, path: str) -> str:
+    """The file name inside this owner's folder for a path save() returned, or "" if it isn't theirs."""
+    marker = f"/{owner_id}/"
+    name = path.split(marker, 1)[1] if marker in path else ""
+    return "" if not name or ".." in name.split("/") else name
+
+
+def load_path(owner_id: str, path: str) -> bytes | None:
+    """Read a file by the path save() returned, only if it is one of this owner's files."""
+    name = _owned_name(owner_id, path)
+    return load(owner_id, name) if name else None
+
+
 def delete_path(owner_id: str, path: str) -> None:
     """Delete a file by the path save() returned, only if it is one of this owner's files."""
     marker = f"/{owner_id}/"

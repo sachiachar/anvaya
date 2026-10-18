@@ -16,7 +16,7 @@ export const setActingAs = (person: PersonId) => {
 
 export type Autonomy = "assist" | "propose" | "act_within_limits";
 
-export type KeptItem = { id: string; collection: "moments" | "inventory" | "people"; type: string; title: string;
+export type KeptItem = { id: string; collection: "moments" | "inventory" | "people" | "documents"; type: string; title: string;
   description: string;
   /** When the owner kept it: UTC, ISO 8601 (PR-2.13.1). */
   kept_at?: string | null };
@@ -27,7 +27,7 @@ export type Gap = { key: string; kind: "nominee" | "conflict" | "heir" | "relati
   about: string; text: string };
 
 export type MapNode = { id: string; label: string; type: string;
-  group: "owner" | "person" | "mentioned" | "story" | "wish" | "account" | "institution";
+  group: "owner" | "person" | "mentioned" | "story" | "wish" | "account" | "institution" | "document";
   description?: string; kept_at?: string | null; verified?: boolean };
 /** derived: implied by the cards' fields; typed links (PR-7.9) have derived false. */
 type MapEdge = { from: string; to: string; label: string; derived: boolean };
@@ -112,8 +112,14 @@ export type Case = {
 
 export type Person = { id: string; name: string; relationship: string };
 
-export type Proposal = (Moment | InventoryItem | Person) & {
-  collection: "moments" | "inventory" | "people";
+/** A photo or document the owner shared, as a card to keep: their comment says what it is. */
+export type SharedDocument = { id: string; title: string; description: string; comment?: string; file_name?: string | null;
+  mime?: string; found?: string[] };
+/** A kept document, for the owner (and the family after the handover). */
+export type KeptDocument = SharedDocument & { kept_at?: string | null };
+
+export type Proposal = (Moment | InventoryItem | Person | SharedDocument) & {
+  collection: "moments" | "inventory" | "people" | "documents";
   status: "pending" | "approved";
   updates?: string;
   /** A kept story or wish this card may be a reworded update of: the card asks Replace or Keep both. */
@@ -260,6 +266,14 @@ export const api = {
   knowledgeMap: () => request<KnowledgeMap>(o("/knowledge-map")),
   /** Everything kept, current versions only, so the owner can remove a mistake. */
   kept: () => request<{ items: KeptItem[] }>(o("/kept")),
+  /** The photos and documents the owner kept: theirs, or the family's after the handover. */
+  documents: () => request<{ documents: KeptDocument[] }>(o("/documents")),
+  /** One kept document's file, from the owner's private storage (never cached). */
+  documentFile: async (id: string): Promise<Blob> => {
+    const res = await fetch(`/api${o(`/documents/${encodeURIComponent(id)}/file`)}`, await withAuth());
+    if (!res.ok) throw new Error(res.status === 403 ? "You can't open this document." : "Couldn't open the document.");
+    return res.blob();
+  },
   /** Deletes the item and every earlier version from the kept knowledge, for good. */
   removeKept: (id: string) => request<{ removed: number; items: KeptItem[] }>(o(`/kept/${encodeURIComponent(id)}`), { method: "DELETE" }),
   /** What's missing, found by fixed rules (PR-7.10), most harmful first. */
@@ -298,7 +312,7 @@ export const api = {
   review: () => request<{ moments: Moment[]; inventory: InventoryItem[] }>(o("/review")),
   /** replace: keep the card as a new version of the kept item it looks like ("Replace it").
    *  voiceConfirmed: "Yes, this was me" for a card the voice check held. */
-  decide: (id: string, collection: "moments" | "inventory" | "people", decision: "approve" | "reject", replace = false,
+  decide: (id: string, collection: Proposal["collection"], decision: "approve" | "reject", replace = false,
     voiceConfirmed = false) =>
     request(`/proposals/${id}/decision`, json({ collection, decision, replace, voice_confirmed: voiceConfirmed })),
 

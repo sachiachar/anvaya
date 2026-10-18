@@ -120,8 +120,8 @@ FIRST_STEPS = ("safe_route", "voice", "shared")  # added for this conversation, 
 NOMINEE_KINDS = ("bank_account", "investment", "retirement", "insurance")
 
 
-def shared_step(turn_id: str, inventory: list[dict], moments: list[dict], *, comment: bool) -> dict:
-    """The step for a shared photo or document, from the cards made from it (already screened)."""
+def found_labels(inventory: list[dict], moments: list[dict]) -> list[str]:
+    """What was found in a shared photo or document, from its cards: at most three short labels."""
     found = []
     for i in inventory:
         hint = (i.get("account_hint") or "").strip()
@@ -129,7 +129,12 @@ def shared_step(turn_id: str, inventory: list[dict], moments: list[dict], *, com
         if name:
             found.append(f"{name}, ending {hint.lstrip('.')}" if hint else name)
     found += [m["title"] for m in moments if m.get("title")]
-    found = found[:3]
+    return found[:3]
+
+
+def shared_step(turn_id: str, inventory: list[dict], moments: list[dict], *, comment: bool) -> dict:
+    """The step for a shared photo or document, from the cards made from it (already screened)."""
+    found = found_labels(inventory, moments)
     missing = None
     for i in inventory:
         name = (i.get("product") or i.get("institution") or "this").strip()

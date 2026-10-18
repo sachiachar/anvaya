@@ -64,7 +64,7 @@ def _same_item(a: dict, b: dict) -> bool:
     )
 
 
-_ID_PREFIX = {"moments": "m", "inventory": "inv", "people": "p"}  # m_/inv_ are cited as sources
+_ID_PREFIX = {"moments": "m", "inventory": "inv", "people": "p", "documents": "doc"}  # m_/inv_ are cited as sources
 
 
 def _pending(collection: str, owner_id: str, fields: dict, **extra: Any) -> dict:
@@ -245,6 +245,25 @@ def save_screened(owner_id: str, screened, source: dict[str, Any]) -> tuple[list
     inventory = [linked("inventory", i, save_inventory(owner_id, i.model_dump(), source)) for i in screened.inventory]
     people = [d for p in screened.people if (d := linked("people", p, save_person(owner_id, p.model_dump())))]
     return moments, inventory, people
+
+
+def save_document(owner_id: str, *, path: str, mime: str, file_name: str | None, comment: str | None,
+                  found: list[str], cards: list[tuple[str, dict]]) -> dict:
+    """A card for the shared photo or document itself, so the owner can keep it: their comment says
+    what it is; what was found in it is listed. The cards made from it point to it (document_id), so
+    once kept they link both ways in the bundle."""
+    comment = (comment or "").strip()
+    title = (comment.split(".")[0][:60].strip() if comment else "") or (found[0] if found else "") \
+        or (file_name or "Shared document")
+    description = " ".join(filter(None, [comment, f"What Saathi found in it: {'; '.join(found)}." if found else ""])) \
+        or "A photo or document you shared."
+    doc = _pending("documents", owner_id, {"title": title, "description": description, "comment": comment,
+                                           "file_name": file_name, "mime": mime, "document": path, "found": found})
+    for collection, card in cards:
+        if store.get(collection, card["id"]):
+            store.update(collection, card["id"], {"document_id": doc["id"]})
+            card["document_id"] = doc["id"]
+    return doc
 
 
 def approve(collection: str, doc: dict) -> dict:

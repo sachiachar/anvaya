@@ -24,8 +24,11 @@ from . import knowledge
 
 NOMINEE_EXPECTED = {"Bank Account", "Insurance Policy", "Investment", "Retirement Account"}
 # Typed link names (knowledge.links_for) as the map labels them, matching its own derived links.
-TYPED_LABELS = {"people": "mentions", "intended_for": "meant for"}
-GROUPS = {"Story": "story", "Advice": "story", "Practical Fact": "story", "Wish": "wish", "Person": "person"}
+TYPED_LABELS = {"people": "mentions", "intended_for": "meant for", "contains": "found in it"}
+GROUPS = {"Story": "story", "Advice": "story", "Practical Fact": "story", "Wish": "wish", "Person": "person",
+          "Document": "document"}
+# A document and what was found in it link both ways in the bundle; the map draws it once.
+ONE_WAY_ONLY = {"evidence"}
 
 
 def _key(name: str) -> str:
@@ -119,6 +122,8 @@ def build(owner_id: str, owner_name: str) -> dict:
                       "verified": c.get("verified", False)})
         typed = c["graph"].get("links") or {}
         for name, targets in typed.items():  # PR-7.9: bundle paths, e.g. "/people/p_1.md"
+            if name in ONE_WAY_ONLY:
+                continue
             label = TYPED_LABELS.get(name, name)
             for target in targets if isinstance(targets, list) else [targets]:
                 target = by_path.get(target, target)
@@ -137,6 +142,8 @@ def build(owner_id: str, owner_name: str) -> dict:
                 if target:
                     link(cid, target, "mentions")
             moments.append((cid, f"{c['title']} {c.get('description', '')} {record.get('summary', '')}"))
+        elif c["collection"] == "documents":
+            link(cid, "owner", "shared")  # what was found in it links to it through "found in it"
         elif c["collection"] == "inventory":
             inst = (record.get("institution") or "").strip()
             if inst:
