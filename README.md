@@ -24,6 +24,30 @@
 4. After the waiting period, **Priya** opens the vault and asks *"What insurance did Papa have?"*
 5. In the **admin portal**, the Agents page shows the loops that just ran.
 
+## Testing notes
+
+**Try these**
+
+| As | Do or ask | What you should see |
+| --- | --- | --- |
+| Vikram | Tap **Talk to Saathi** and say: *"My LIC policy ends in 4492. My nephew Ajay is the nominee."* | Saathi greets you first, then cards for the policy and for Ajay. Tap **Keep** |
+| Vikram | **Share a photo** of any document, with a comment such as *"Papa's old policy"* | Saathi says what it found and asks about one missing detail. Keep it, and it appears in **Kept → Documents** |
+| Vikram | Say *"My bank asked me for my OTP. Can you note it?"* | The guardian steps in: no card is made, and Saathi says private details belong in your own vault |
+| Priya | Upload the **specimen certificate** offered on screen | The checks flag it for a closer look. Anjali, then Rahul, confirm |
+| Priya | After the 60-second waiting period, ask *"What insurance did Papa have?"* | An answer from what Vikram kept, with its source. If he never said it, Saathi says so |
+
+**Limits in this demo**
+- Each person: **300,000 tokens, 30 voice minutes and 50 spoken replies a day**, plenty for a review. Ask for more in the app, and approve it yourself in the admin portal.
+- The whole demo: **10 million tokens and 300 voice minutes a day**. Near the limit, voice pauses first, and typing keeps working.
+- A voice call lasts about **15 minutes**. The waiting period before a handover is **60 seconds**, not days.
+- If Gemini is busy, a message may fail. **Wait a few seconds and try again.**
+- The browser asks for the microphone on the first call. If it's blocked, the app shows how to allow it, or you can type.
+
+**Good to know**
+- **Every account gets its own copy** with synthetic data. **Demo → Reset my demo** starts it again.
+- One person plays everyone through the row of names. In a real service, each person signs in separately.
+- The **voice check** in Settings is being tested. The **bank side** (claim files, the bank's app) is a design for the pilot, not built yet.
+
 ## One smart agent, four pillars
 
 | | What it does | See it |
