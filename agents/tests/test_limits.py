@@ -198,3 +198,39 @@ def test_both_models_busy_is_said_plainly(monkeypatch):
                                          agent="fraud.researcher"))
     day = store.list("usage_days")[0]  # the fallback's failed call is in the ledger
     assert day["agents"]["fraud.researcher"]["errors"] == 1 and "gemini-3.5-flash-lite" in day["model_use"]
+
+
+def test_saathi_speaks_first_introducing_itself_once_then_greeting(monkeypatch):
+    texts = []
+
+    class FakeWS:
+        async def accept(self): pass
+        async def send_json(self, data): pass
+        async def send_bytes(self, data): pass
+        async def receive(self):
+            await asyncio.sleep(3600)
+        async def close(self): pass
+
+    class FakeSession:
+        async def send_realtime_input(self, **kw):
+            texts.append(kw.get("text"))
+
+        async def receive(self):
+            await asyncio.sleep(3600)
+            yield
+
+    @contextlib.asynccontextmanager
+    async def connect(**_):
+        yield FakeSession()
+
+    monkeypatch.setattr(live, "client_for",
+                        lambda kind, key: SimpleNamespace(aio=SimpleNamespace(live=SimpleNamespace(connect=connect))))
+    original = core.limit
+    monkeypatch.setattr(core, "limit", lambda a, k, d=None: 0.001 if k == "max_call_minutes" else original(a, k, d))
+    monkeypatch.setattr(live.loops, "live_instructions", lambda *a, **k: "")
+    store.put("owners", {"id": "o_intro", "name": "Vikram"})
+    asyncio.run(live.call(FakeWS(), store.get("owners", "o_intro"), lambda t: t))
+    asyncio.run(live.call(FakeWS(), store.get("owners", "o_intro"), lambda t: t))
+    assert texts == [live.INTRODUCE, live.GREET]
+    assert "Keep" in live.INTRODUCE and "current_step" in live.GREET  # the plan still decides what comes next
+    assert store.get("owners", "o_intro")["introduced_at"]

@@ -83,6 +83,18 @@ CORRECTED = "A spoken reply broke a conversation rule; Saathi was told to correc
 # now, not at its next answer (PR-2.13.2). A note from the app, never shown or stored.
 VOICE_NOTE = ("Note from the app, not from the person: the plan has changed. Call current_step now, and carry "
               "out its step when they finish speaking. Don't reply to this note.")
+# When the owner taps "Talk to Saathi", Saathi speaks first: Gemini Live would otherwise wait for
+# their voice. On their first call ever Saathi introduces itself; on later calls it greets them. Either
+# way it then reads the plan, which decides what comes next. A note from the app, never shown or stored.
+INTRODUCE = ("Note from the app, not from the person: they have just started their first call with you. Speak "
+             "first. Greet them warmly by name, then introduce yourself in two or three short sentences: you are "
+             "Saathi, their companion in Anvaya; you help them gather what their family will one day need, such as "
+             "the people who matter, their stories, where money matters are kept and their wishes; nothing is kept "
+             "until they tap Keep, and they can stop at any time. Then call current_step: carry out its step if it "
+             "opens with you; if it waits for them, invite them to share whatever they like. Don't mention this note.")
+GREET = ("Note from the app, not from the person: they have just started a call with you. Speak first, with one "
+         "short, warm greeting by name. Then call current_step: carry out its step if it opens with you; if it "
+         "waits for them, invite them to share whatever they like. Don't mention this note.")
 # The owner's side of each exchange, as audio, so the extractor can tell whether another voice spoke
 # (PR-2.13.2). Held in memory only for that exchange, capped, and never stored.
 MAX_EXCHANGE_AUDIO = 16000 * 2 * 90  # 90 seconds of 16 kHz 16-bit mono
@@ -160,6 +172,7 @@ async def call(ws: WebSocket, owner: dict, expand: Callable[[dict], dict], *, ac
             started = time.time()
             open_call = governance.call_started(AGENT)  # the agents map shows the call while it lasts
             await ws.send_json({"type": "ready"})
+            await _open_call(session, owner)
             upstream = asyncio.create_task(_from_browser(ws, session, heard_audio))
             downstream = asyncio.create_task(_to_browser(ws, session, owner, expand, reply_tokens, saves, plan_state,
                                                          heard_audio))
@@ -281,6 +294,17 @@ def _step_for_saathi(owner_id: str, plan_state: dict, plan: dict | None = None) 
         out["correct"] = plan_state["correct"]
         plan_state["correct"] = None
     return out
+
+
+async def _open_call(session, owner: dict) -> None:
+    """Saathi speaks first: an introduction on the owner's first call ever, a greeting after that."""
+    first = not owner.get("introduced_at")
+    try:
+        await session.send_realtime_input(text=INTRODUCE if first else GREET)
+    except Exception:
+        return  # the call may have ended; the owner can still start talking
+    if first and await asyncio.to_thread(store.get, "owners", owner["id"]):
+        await asyncio.to_thread(store.update, "owners", owner["id"], {"introduced_at": time.time()})
 
 
 async def _tell_saathi(session, plan_state: dict) -> None:
