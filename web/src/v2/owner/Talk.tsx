@@ -598,7 +598,8 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
           <button className="v2-alt" onClick={() => input.current?.focus()}>Type instead</button>
           <label className="v2-alt">
             <Camera /> Share a photo
-            <input type="file" accept="image/*" capture="environment" hidden
+            {/* No "capture": phones then offer the photo library as well as the camera. */}
+            <input type="file" accept="image/*" hidden
               onChange={(e) => { const f = e.target.files?.[0]; if (f) void send(null, f, f.name); e.target.value = ""; }} />
           </label>
           <label className="v2-alt">
