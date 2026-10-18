@@ -180,6 +180,8 @@ sequenceDiagram
     Note over API: no valid token in 10 s → close 4401
     App->>API: 16 kHz audio
     API->>Live: Saathi persona + kept items + tools
+    API->>Live: opening note: introduce (first call) or greet, then read the plan
+    Live-->>App: Saathi speaks first
     loop each exchange
         Live->>API: current_step (the plan's step and tone)
         Live-->>App: voice (24 kHz) + captions
