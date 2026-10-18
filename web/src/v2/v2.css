@@ -269,7 +269,8 @@ a.v2-switch { text-decoration: none; }
 .v2-signin .v2-btn { min-width: 240px; }
 
 /* ---- Demo sheet: a phone bottom sheet with a fixed header and a scrolling body ------------------ */
-/* A native <dialog>; clicking the dimmed page closes it. */
+/* A native <dialog>; clicking the dimmed page closes it.
+   The body grows from its content height ("1 1 auto"): Safari collapses a "flex: 1" body to 0 here. */
 .v2-sheet {
   width: 100%; max-width: 560px; max-height: calc(100dvh - 32px); margin: auto auto 0; padding: 0; border: 0;
   display: flex; flex-direction: column; overflow: hidden;
@@ -291,7 +292,7 @@ a.v2-switch { text-decoration: none; }
 .v2-close { width: 40px; height: 40px; flex: none; border-radius: 50%; border: 0; background: var(--sunk); color: var(--ink); display: grid; place-items: center; cursor: pointer; }
 .v2-close svg { width: 18px; height: 18px; }
 .v2-sheet-scroll {
-  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 18px; align-content: start;
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 18px; align-content: start;
   padding: 14px 16px calc(20px + env(safe-area-inset-bottom, 0px));
 }
 .v2-sheet-scroll section { display: grid; gap: 6px; }
