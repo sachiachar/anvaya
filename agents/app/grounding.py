@@ -5,9 +5,10 @@ said, for example the example in its own instructions ("blue folder, bedroom cup
 card is saved, code checks it against what was actually said:
 
 - A card's quote must be the owner's own words from this turn. If it isn't, the card is dropped.
-- A card with the title of a saved moment adds to that moment. The owner's words or Saathi's last
-  message must name it (a word of its title). If not, the card is dropped: "the papers are in the
-  cupboard" never becomes a detail of a kept "LIC policy details" the owner didn't mention.
+- A card with the title of a kept moment adds to that moment. The owner's words or Saathi's last
+  message must name it: a name in its title ("LIC"), or else a word of it. If not, the card is
+  dropped: "the papers are in the cupboard" never becomes a detail of a kept "LIC policy details"
+  the owner didn't mention. A card waiting for Keep isn't checked, so "it" can follow it up.
 - A fact the family relies on later (where the papers are, the nominee, who it's for, the last 4
   digits, a place, a new person's name) must be supported by the owner's words, Saathi's last
   message (so "Yes" can confirm a question) or what is already kept. If it isn't, the field is
@@ -25,6 +26,8 @@ import logging
 import re
 import unicodedata
 from difflib import SequenceMatcher
+
+from . import tasks
 
 log = logging.getLogger(__name__)
 
@@ -115,7 +118,7 @@ class _Support:
         return not (mine and self.script and mine != self.script)
 
     def supports(self, value: str | None) -> bool:
-        specific = [w for w in _words(value) if len(w) >= 3 and w not in _STOP and not w.isdigit()]
+        specific = _specific(value)
         if not specific:
             return True  # nothing specific to check
         return sum(self.has_word(w) for w in specific) / len(specific) >= FIELD_SUPPORT
@@ -125,13 +128,21 @@ class _Support:
         return not last4 or any(d.endswith(last4) or last4 in d for d in self.digits)
 
 
-def _names_saved(title: str | None, turn: _Support, saved_titles: set[str]) -> bool:
-    """Whether a card reusing a saved moment's title is about that moment: a specific word of the
-    title is in what was said this turn. A title in another script than the owner's words can't be
-    checked word by word, so it passes."""
-    if " ".join(_words(title)) not in saved_titles or not turn.checkable(title or ""):
+def _specific(text: str | None) -> list[str]:
+    """The words of a value that say something: not short, not a stop word, not a number."""
+    return [w for w in _words(text) if len(w) >= 3 and w not in _STOP and not w.isdigit()]
+
+
+def _names_kept(title: str | None, turn: _Support, kept_titles: set[str], counts: "_Counts") -> bool:
+    """Whether a card reusing a kept moment's title is about that moment: a name in the title ("LIC",
+    "Bangalore"), or if it has none a specific word of it, is in what was said this turn."""
+    if " ".join(_words(title)) not in kept_titles:
         return True
-    return any(turn.has_word(w) for w in _words(title) if len(w) >= 3 and w not in _STOP and not w.isdigit())
+    if not turn.checkable(title or ""):
+        counts.unchecked += 1
+        return True
+    words = sorted(tasks.names(title or "")) or _specific(title)
+    return not words or any(turn.has_word(w) for w in words)
 
 
 class _Counts:
@@ -169,14 +180,16 @@ def ground(result, *, owner_words: str, saathi_words: str = "", known: dict | No
         json.dumps({k: kept.get(k) for k in ("family", "inventory")}, ensure_ascii=False),
     ]), owner_words)
     turn = _Support(" \n".join([owner_words or "", saathi_words or ""]), owner_words)  # without what's kept
-    saved_titles = {" ".join(_words(m.get("title"))) for m in kept.get("moments") or [] if isinstance(m, dict)}
+    kept_titles = set() if from_document else {  # a shared document names its own subject
+        " ".join(_words(m.get("title"))) for m in kept.get("moments") or []
+        if isinstance(m, dict) and not m.get("waiting_for_keep")}
     counts = _Counts()
     update: dict = {}
 
     if hasattr(result, "moments"):
         moments = []
         for m in result.moments:
-            if not said(m.quote, owner_words) or not _names_saved(m.title, turn, saved_titles):
+            if not said(m.quote, owner_words) or not _names_kept(m.title, turn, kept_titles, counts):
                 counts.dropped += 1
                 continue
             moments.append(m.model_copy(update={
@@ -207,7 +220,7 @@ def ground(result, *, owner_words: str, saathi_words: str = "", known: dict | No
         update["people"] = [p for p in result.people if _check_text(p.name, people_support, counts)]
 
     if counts.dropped or counts.cleared or counts.unchecked:
-        log.info("grounding: dropped %d cards with a quote the owner didn't say or a saved title nobody named, "
+        log.info("grounding: dropped %d cards with a quote the owner didn't say or a kept title nobody named, "
                  "cleared %d values nobody said, %d values in another script not checked",
                  counts.dropped, counts.cleared, counts.unchecked)
     return result.model_copy(update=update)

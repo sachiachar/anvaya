@@ -265,3 +265,35 @@ def test_two_details_about_one_kept_moment_make_one_update_card(client):
                                            "summary": "His wife has the keys to the cupboard with the LIC papers."}, {})
     assert first["updates"] and second["id"] == first["id"]
     assert "keys" in second["summary"] and "cupboard" in second["summary"]
+
+
+def test_another_insurer_or_a_generic_word_does_not_name_a_kept_moment(client):
+    _keep_lic()
+    for said_now in ("My HDFC policy papers are in the cupboard.", "Here are the details: the papers are in the cupboard."):
+        card = Moment(kind="practical", title="LIC policy details", quote=said_now, summary="Papers in the cupboard.")
+        assert not grounding.ground(_turn(moments=[card]), owner_words=said_now, known=proposals.known(OWNER)).moments
+
+
+def test_a_card_waiting_for_keep_can_be_followed_up_with_it(client):
+    said_first = "My grandfather built our house in Udupi."
+    proposals.save_moment(OWNER, {"kind": "story", "title": "Grandfather's house", "quote": said_first,
+                                  "summary": "His grandfather built the family house in Udupi."}, {})
+    more = Moment(kind="story", title="Grandfather's house", quote="He planted mango trees around it.",
+                  summary="His grandfather built the house in Udupi and planted mango trees around it.")
+    assert grounding.ground(_turn(moments=[more]), owner_words=more.quote,
+                            saathi_words="What do you remember about it?", known=proposals.known(OWNER)).moments
+
+
+def test_a_kept_title_with_only_common_words_is_not_checked(client):
+    proposals.approve("moments", proposals.save_moment(OWNER, {"kind": "wish", "title": "My will", "quote": "I made a will.",
+                                                               "summary": "Vikram Rao has made a will."}, {}))
+    card = Moment(kind="wish", title="My will", quote="It is with the lawyer.", summary="His will is with the lawyer.")
+    assert grounding.ground(_turn(moments=[card]), owner_words=card.quote, known=proposals.known(OWNER)).moments
+
+
+def test_saying_a_kept_moment_again_does_not_grow_its_waiting_update(client):
+    _keep_lic()
+    update = proposals.save_moment(OWNER, {**KEPT_LIC, "quote": "The LIC papers are in the cupboard.",
+                                           "summary": "The LIC papers are in the cupboard."}, {})
+    assert proposals.save_moment(OWNER, dict(KEPT_LIC), {}) is None  # already kept
+    assert proposals.store.get("moments", update["id"])["summary"] == update["summary"]

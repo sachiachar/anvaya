@@ -85,7 +85,9 @@ def known(owner_id: str) -> dict:
         "family": knowledge.family(owner_id) + [
             f"{p['name']} ({p['relationship']}), waiting for confirmation"
             for p in store.list("people", owner_id=owner_id, status="pending")],
-        "moments": [{"title": m["title"], "summary": m["summary"]} for m in _all("moments", owner_id)],
+        "moments": [{"title": m["title"], "summary": m["summary"],
+                     **({"waiting_for_keep": True} if m.get("status") == "pending" else {})}
+                    for m in _all("moments", owner_id)],
         "inventory": [f"{i['institution']} {i['product']} {i['account_hint']} (nominee: "
                       f"{i.get('nominee_or_beneficiary') or 'not recorded'})" for i in _all("inventory", owner_id)],
     }
@@ -96,7 +98,8 @@ def save_moment(owner_id: str, moment: dict, source: dict[str, Any]) -> dict | N
     said_kind = moment.get("kind")
     if is_wish(moment.get("statements")):
         moment = {**moment, "kind": "wish"}  # something the owner wants is a wish, decided in code (PR-13.1)
-    for existing in _all("moments", owner_id):
+    saved = _all("moments", owner_id)
+    for existing in saved:  # a repeat first, so something already kept is never added again
         if _similar(existing["quote"], moment["quote"]) or _similar(existing["summary"], moment["summary"], 0.85):
             if existing["status"] == "pending":
                 statements = _statements(existing, moment)
@@ -104,6 +107,7 @@ def save_moment(owner_id: str, moment: dict, source: dict[str, Any]) -> dict | N
                                                                 "statements": statements,
                                                                 "kind": _kind(existing, moment, statements)})
             return None  # already kept
+    for existing in saved:
         if _norm(existing["title"]) == _norm(moment["title"]):
             quote = existing["quote"] if _norm(moment["quote"]) in _norm(existing["quote"]) \
                 else f"{existing['quote']} … {moment['quote']}"

@@ -53,7 +53,7 @@ flowchart LR
 | --- | --- | --- |
 | Saathi | `loops.py`, `live.py` | Typed chat, photos, documents and live voice. One persona everywhere. |
 | Conversation planner | `planner.py` | The only source of what Saathi talks about. Each step has a tone and says who starts it. The owner's mood changes the plan, in code. |
-| Grounding | `grounding.py` | Drops a card whose quote the owner didn't say, and a card that reuses a saved title nobody named in the turn. Clears any value with no support. |
+| Grounding | `grounding.py` | Drops a card whose quote the owner didn't say, and a card that reuses a kept title nobody named in the turn. Clears any value with no support. |
 | Cards and Keep | `proposals.py` | Suggestions become cards. Only the owner's Keep saves them. |
 | Kept knowledge | `knowledge.py` | Each owner's knowledge as an open, portable bundle (OKF v0.2), with typed links between people, accounts and wishes. |
 | Gaps | `gaps.py` | Fixed rules find what's missing (a nominee, a will, where papers are) and rank it by harm to the family. |

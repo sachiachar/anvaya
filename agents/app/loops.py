@@ -183,7 +183,7 @@ def reply_problems(owner_message: str, reply: str, earlier: list[str] | None = N
 # Field descriptions in the schemas give formats, not values to copy. Code checks cards too (grounding.py).
 NO_INVENTED = ("Fill a field only with what was said. Never copy an example from these instructions, and "
                "leave a field empty if they didn't say it. ")
-# Code checks this too (grounding.py): a saved title reused for something not named this turn is dropped.
+# Code checks this too (grounding.py): a kept title reused for something not named this turn is dropped.
 ONLY_NAMED_FOLLOW_UPS = ("Return a saved moment again only if the owner, or Saathi's last message, names what it is "
                          "about (the LIC policy, the Bangalore flat). A detail that only sounds alike (papers in "
                          "a cupboard, a key) is about whatever they named in this turn, never about a saved "
