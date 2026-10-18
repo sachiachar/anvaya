@@ -6,6 +6,7 @@ import { api, type Gap, type KeptItem, type Task } from "../../api";
 import { useAction } from "../../ui";
 import { friendlyError } from "../copy";
 import AutonomyTag from "../Autonomy";
+import OpenDocument from "../OpenDocument";
 import { Chevron, Close } from "../icons";
 import { KNOWLEDGE_MAP_URL } from "../nav";
 
@@ -22,6 +23,8 @@ const CHAPTERS: Chapter[] = [
     match: (i) => i.collection === "inventory" },
   { key: "wishes", title: "Wishes", empty: "Write a wish below, or tell Saathi.", match: (i) => i.collection === "moments" && i.type === "Wish" },
   { key: "people", title: "People", empty: "The family members you mention appear here.", match: (i) => i.collection === "people" },
+  { key: "documents", title: "Documents", empty: "Photos and documents you share with Saathi, and keep, appear here.",
+    match: (i) => i.collection === "documents" },
 ];
 
 const LEGAL_PARTNER = "Demo Legal Partner";
@@ -120,6 +123,7 @@ export default function Book({ onTalkAbout, onReview }: { onTalkAbout: (question
                           <p className="v2-page-title">{i.title}</p>
                           {i.description && <p className="v2-page-desc">{i.description}</p>}
                           {i.kept_at && <p className="v2-page-kept">Kept on {keptOn(i.kept_at)}</p>}
+                          {i.collection === "documents" && <OpenDocument id={i.id} title={i.title} />}
                         </div>
                         <button className="v2-remove" disabled={busy} onClick={() => setConfirm(i)} aria-label={`Remove “${i.title}”`}><Close /></button>
                       </li>

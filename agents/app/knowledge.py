@@ -56,10 +56,13 @@ ACCOUNT_TYPES = {
     "other": ("Account", "accounts"),
 }
 PERSON_TYPE = ("Person", "people")
+# A photo or document the owner shared and kept: the file stays in their private storage; the
+# concept holds what it is (their comment) and links to the items found in it.
+DOCUMENT_TYPE = ("Document", "documents")
 SECTIONS = [("stories", "Stories"), ("advice", "Advice"), ("practical", "Practical facts"), ("wishes", "Wishes"),
             ("people", "People"), ("accounts", "Accounts"), ("policies", "Insurance policies"),
-            ("property", "Property")]
-COLLECTIONS = ("moments", "inventory", "people")
+            ("property", "Property"), ("documents", "Documents")]
+COLLECTIONS = ("moments", "inventory", "people", "documents")
 # Fields of a card that are workflow, not knowledge.
 WORKFLOW_FIELDS = {"owner_id", "status", "updates", "missing_fields", "looks_like"}
 UNMASKED = {"id", "recording", "document"}
@@ -112,10 +115,14 @@ def kind_of(collection: str, item: dict) -> tuple[str, str]:
         return ACCOUNT_TYPES.get(item.get("category", ""), ("Account", "accounts"))
     if collection == "people":
         return PERSON_TYPE
+    if collection == "documents":
+        return DOCUMENT_TYPE
     raise NotKnowledge(collection)
 
 
 def _title(collection: str, item: dict) -> str:
+    if collection == "documents":
+        return item.get("title") or item.get("file_name") or "Shared document"
     if collection == "moments":
         return item.get("title") or "Untitled"
     if collection == "inventory":
@@ -124,6 +131,8 @@ def _title(collection: str, item: dict) -> str:
 
 
 def _description(collection: str, item: dict) -> str:
+    if collection == "documents":
+        return item.get("description", "")
     if collection == "moments":
         return item.get("summary", "")
     if collection == "inventory":
@@ -144,6 +153,7 @@ def _description(collection: str, item: dict) -> str:
 # exactly one kept person has it. Unmatched names stay in the card, just without a link.
 
 LINK_LABELS = {"nominee": "Nominee", "holder": "Holder", "intended_for": "Meant for", "people": "Mentions",
+               "evidence": "From the document", "contains": "Found in it",
                "wants": "Wants", "promised_to": "Promised to", "worries_about": "Worries about"}
 # Statements (PR-13.1) that link a kept wish or worry to the people in it, by predicate.
 STATEMENT_LINKS = {**{p: "wants" for p in WISH_PREDICATES if p != "promised_to"},
@@ -207,6 +217,15 @@ def links_for(collection: str, record: dict, cat: dict) -> dict[str, list[str]]:
         paths = sorted({p for n in _names(record.get(field_name)) if (p := _resolve(n, people))})
         if paths:
             links[link] = paths
+    # A shared document and the items found in it link both ways, whichever is kept first.
+    concepts = cat.get("concepts", {})
+    if (doc_id := record.get("document_id")) and (doc := concepts.get(doc_id)) and doc["graph"]["status"] == "stable":
+        links["evidence"] = [f"/{doc['path']}"]
+    if collection == "documents" and record.get("id"):
+        found = sorted(f"/{c['path']}" for c in concepts.values()
+                       if c["graph"]["status"] == "stable" and c["record"].get("document_id") == record["id"])
+        if found:
+            links["contains"] = found
     if collection == "moments":
         for s in record.get("statements") or []:
             if link := STATEMENT_LINKS.get(s.get("predicate")):
@@ -444,8 +463,8 @@ def commit(collection: str, item: dict, owner_id: str, *, replaces: str | None =
             if f"-{front['id']}-" in name or (replaces and f"-{replaces}-" in name):
                 media.delete(owner_id, name)
         raise
-    if collection == "people":
-        relink(owner_id)  # items that name this person (or an earlier version of them) link to it now
+    if collection in ("people", "documents") or item.get("document_id"):
+        relink(owner_id)  # items that name this person, or a document and what was found in it, link now
     write_indexes(owner_id)
     return as_item(front["id"], _entry(front, path), owner_id)
 

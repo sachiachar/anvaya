@@ -337,6 +337,34 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       tags:
       - Owner
+    get:
+      summary: List Documents
+      description: The photos and documents the owner kept, with what they said about each (newest first).
+      operationId: list_documents_api_owners__owner_id__documents_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Documents Api Owners  Owner Id  Documents Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
   /api/owners/{owner_id}/wishes:
     post:
       summary: Add Wish
@@ -522,6 +550,40 @@ paths:
                 type: object
                 additionalProperties: true
                 title: Response Remove Kept Api Owners  Owner Id  Kept  Item Id  Delete
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      tags:
+      - Owner
+  /api/owners/{owner_id}/documents/{doc_id}/file:
+    get:
+      summary: Document File
+      description: |-
+        One kept document's file, streamed from the owner's private storage. Only a kept document:
+        a waiting card's file can't be opened here. Never cached by the browser or anything between.
+      operationId: document_file_api_owners__owner_id__documents__doc_id__file_get
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      - name: doc_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Doc Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
         '422':
           description: Validation Error
           content:
@@ -4392,6 +4454,7 @@ components:
           - moments
           - inventory
           - people
+          - documents
           title: Collection
         decision:
           type: string

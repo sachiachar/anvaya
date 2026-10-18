@@ -137,6 +137,7 @@ flowchart LR
 | **Cloud Storage: owner bundle** (OKF v0.2) | Each owner's kept knowledge: one Markdown file per item, typed links, a history per change | Open and portable. Keep is the commit, so only owner-confirmed knowledge enters. |
 | **Cloud Storage: platform fraud bundle** (OKF v0.2) | Fraud guides, scenarios, drafts and reviewer decisions | Open format with a history per item. Holds no owner data. |
 | **Firestore** | Workflow only: pending cards, cases, guardian records, plans, next steps, run logs | Needs fast atomic updates. Never holds kept knowledge or fraud knowledge. |
+| **Cloud Storage: shared files** | The photos and documents the owner shares, in their own folder | Kept as a **Document** item in the bundle only after the owner's Keep, with their comment, and linked both ways to the items found in it. Deleted on Discard, on removal, and on reset. |
 | **Vault** | Ciphertext only | The phone encrypts. See section 6. |
 | **Firestore: voiceprints** | One per owner who turns on the voice check: the numbers that describe the voice (192 per sample, up to 10 samples), under the owner's ID | Only the server compares voices. No audio and no name. The screen sees only whether the check is on. Deleted when the owner turns the check off or resets the demo. |
 
@@ -161,6 +162,7 @@ flowchart LR
 | A server that starts open on Google Cloud | On Cloud Run or with Firestore, the service refuses to start without sign-in, a Firebase project, an allowlist or open sign-in, and a KMS key (`config.production_problems`). Dev-mode escrow is refused with Firestore. |
 | Personal data in the admin portal or logs | Users appear only as hashed keys. No conversation text or names. |
 | Someone else speaking for the owner on a call | The voice check, if the owner turns it on: a voice that doesn't match the owner's voiceprint holds that exchange's cards until the owner confirms it was them. |
+| Someone opening the owner's photos or documents | Only a **kept** document can be opened (`GET /owners/{id}/documents/{doc}/file`): by the owner, or by the family once the handover is complete. Reviewers, the admin and anyone else get 403. A path outside the owner's folder is never read. Served with `no-store`. |
 | A person's own model key leaking | Encrypted with its own KMS key, bound to its owner, never returned or logged. |
 | Deploys from the wrong place | Workload Identity Federation lets only the deploy workflow on `main` deploy. The deployer has no broad roles. A ruleset protects `main`: changes come only through reviewed pull requests that pass the `api` and `web` checks. The release job may write only releases and tags. The Gemini and Exa keys come from Secret Manager. |
 

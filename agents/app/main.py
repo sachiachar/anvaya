@@ -11,6 +11,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import re
 import time
 from typing import Literal
 
@@ -232,7 +233,8 @@ def _expand(turn: dict) -> dict:
         return turn
     # A draft is in Firestore; once kept it's in the owner's bundle, under the same id.
     label = governance_core.autonomy(CARDS)
-    items = [{**doc, "collection": c, "autonomy": label} for c in ("people", "moments", "inventory")
+    # The shared document first, so a Keep of everything keeps it before the items that link to it.
+    items = [{**doc, "collection": c, "autonomy": label} for c in ("documents", "people", "moments", "inventory")
              for doc in (store.get(c, i) or knowledge.get(turn["owner_id"], i) for i in ids.get(c, [])) if doc]
     return {**turn, "proposals": items, "discarded": sum(len(v) for v in ids.values()) - len(items)}
 
@@ -312,6 +314,12 @@ def _take_in(owner_id: str, text: str | None, result, attachment: dict | None, p
         # A photo or document gets its own step: Saathi says what it found and asks (planner.shared_step).
         shared = planner.shared_step(owner_turn_id, inventory, moments, comment=bool((text or "").strip())) \
             if attachment and attachment["kind"] != "voice" else None
+        # And its own card, so the owner can keep the file itself, linked to what was found in it.
+        documents = [proposals.save_document(
+            owner_id, path=path, mime=attachment["mime"], file_name=attachment.get("name"), comment=text,
+            found=planner.found_labels(inventory, moments),
+            cards=[*[("moments", d) for d in moments], *[("inventory", d) for d in inventory]])] \
+            if attachment and attachment["kind"] != "voice" and path else []
         plan = planner.after_turn(owner_id, owner_turn_id, screened.outcomes, mood=result.owner_mood,
                                   answered_step=(last_said or {}).get("step"), outcome=result.step_outcome,
                                   another_voice=voices, shared=shared)
@@ -321,7 +329,7 @@ def _take_in(owner_id: str, text: str | None, result, attachment: dict | None, p
                                          "guardian": screened.decisions, "held_back": screened.held_back})
     return {"owner_turn": owner_turn, "at": now, "step": planner.view(plan)["current"],
             "proposals": {"moments": [m["id"] for m in moments], "inventory": [i["id"] for i in inventory],
-                          "people": [p["id"] for p in people]}}
+                          "people": [p["id"] for p in people], "documents": [d["id"] for d in documents]}}
 
 
 def _answer(owner_id: str, taken: dict, result, reply, last_said: dict | None) -> dict:
@@ -456,7 +464,7 @@ def review_queue(owner_id: str) -> dict:
 
 
 class Decision(BaseModel):
-    collection: Literal["moments", "inventory", "people"]
+    collection: Literal["moments", "inventory", "people", "documents"]
     decision: Literal["approve", "reject"]
     edits: dict | None = None
     # "Replace it" on a card that looks like a kept item: keep it as that item's new version.
@@ -564,7 +572,52 @@ def remove_kept(owner_id: str, item_id: str) -> dict:
     if item.get("concept", "").startswith("people/") and owner.get("vault_recipient_name") and \
             proposals.same_name(item.get("name"), owner["vault_recipient_name"]):
         raise HTTPException(409, "This person receives your vault. Choose someone else first.")
-    return {"removed": knowledge.remove(owner_id, item["id"]), **list_kept(owner_id)}
+    is_document = any(d["id"] == item["id"] for d in knowledge.items(owner_id, "documents"))
+    removed = knowledge.remove(owner_id, item["id"])
+    path = item.get("document")
+    # A removed document's file goes too, unless another kept document is the same file. Turns and
+    # other kept items only name it as their source; they can't open it.
+    if is_document and isinstance(path, str) and not any(d.get("document") == path
+                                                          for d in knowledge.items(owner_id, "documents")):
+        media.delete_path(owner_id, path)
+    return {"removed": removed, **list_kept(owner_id)}
+
+
+# ---- Kept documents: the owner's, and the family's after the handover ------------------------
+
+
+def _documents_reader(owner_id: str) -> None:
+    """The owner, or the family once the handover is complete. Nobody else, and never before."""
+    if demo.person()["role"] == "family":
+        require_handover(owner_id)
+
+
+@api.get("/owners/{owner_id}/documents", dependencies=[Depends(demo.only("owner", "family"))])
+def list_documents(owner_id: str) -> dict:
+    """The photos and documents the owner kept, with what they said about each (newest first)."""
+    owner_or_404(owner_id)
+    _documents_reader(owner_id)
+    docs = knowledge.items(owner_id, "documents")
+    return {"documents": sorted(({k: d.get(k) for k in ("id", "title", "description", "comment", "file_name", "mime",
+                                                        "found", "kept_at")} for d in docs),
+                                key=lambda d: d.get("kept_at") or "", reverse=True)}
+
+
+@api.get("/owners/{owner_id}/documents/{doc_id}/file", dependencies=[Depends(demo.only("owner", "family"))])
+def document_file(owner_id: str, doc_id: str) -> Response:
+    """One kept document's file, streamed from the owner's private storage. Only a kept document:
+    a waiting card's file can't be opened here. Never cached by the browser or anything between."""
+    owner_or_404(owner_id)
+    _documents_reader(owner_id)
+    doc = next((d for d in knowledge.items(owner_id, "documents") if d["id"] == doc_id), None)
+    path = (doc or {}).get("document")
+    data = media.load_path(owner_id, path) if isinstance(path, str) else None
+    if not data:
+        raise HTTPException(404, "No kept document with that id.")
+    name = re.sub(r"[^\w .-]", "_", doc.get("file_name") or doc_id)[:80]
+    return Response(data, media_type=doc.get("mime") or "application/octet-stream",
+                    headers={"Cache-Control": "private, no-store", "Content-Disposition": f'inline; filename="{name}"',
+                             "X-Content-Type-Options": "nosniff"})
 
 
 @api.get("/owners/{owner_id}/knowledge-map", dependencies=[Depends(demo.only("owner"))])
@@ -724,6 +777,17 @@ async def summarize_conversation(owner_id: str, body: TurnIds) -> dict:
     return {"autonomy": "assist", "summary": knowledge.mask(result.summary.strip())}
 
 
+def _delete_unused_files(owner_id: str, files: set[str]) -> None:
+    """Delete shared photos and documents that nothing uses any more: no kept item, no waiting card
+    and no remaining turn."""
+    in_use = json.dumps([store.list(c, owner_id=owner_id) for c in ("moments", "inventory", "documents", "turns")]
+                        + [knowledge.items(owner_id, c) for c in ("moments", "inventory", "documents")],
+                        ensure_ascii=False, default=str)
+    for path in files:
+        if json.dumps(path)[1:-1] not in in_use:
+            media.delete_path(owner_id, path)
+
+
 @api.post("/owners/{owner_id}/conversation/forget", dependencies=[Depends(demo.only("owner"))])
 def forget_conversation(owner_id: str, body: TurnIds) -> dict:
     """The owner discards a conversation: its turns are deleted, with every card from it still
@@ -738,7 +802,7 @@ def forget_conversation(owner_id: str, body: TurnIds) -> dict:
     items, files = 0, {t["media"] for t in turns if t.get("media")}
     for turn in turns:
         for collection, ids in (turn.get("proposals") or {}).items():
-            if collection not in ("moments", "inventory", "people"):
+            if collection not in ("moments", "inventory", "people", "documents"):
                 continue
             for doc_id in ids:
                 doc = demo.mine(collection, doc_id) if doc_id not in elsewhere else None
@@ -750,11 +814,7 @@ def forget_conversation(owner_id: str, body: TurnIds) -> dict:
     gaps.forget_turns(owner_id, gone)  # its questions no longer count as asked
     # The shared photos and documents, and Saathi's cached spoken replies, go too, unless
     # something still uses them: a kept item, another waiting card, or a reply with the same words.
-    in_use = json.dumps([store.list(c, owner_id=owner_id) for c in ("moments", "inventory", "turns")]
-                        + [knowledge.items(owner_id, c) for c in ("moments", "inventory")], ensure_ascii=False, default=str)
-    for path in files:
-        if json.dumps(path)[1:-1] not in in_use:
-            media.delete_path(owner_id, path)
+    _delete_unused_files(owner_id, files)
     spoken = {t["text"] for t in store.list("turns", owner_id=owner_id) if t.get("role") == "assistant"}
     for turn in turns:
         if turn.get("role") == "assistant" and turn.get("text") and turn["text"] not in spoken:

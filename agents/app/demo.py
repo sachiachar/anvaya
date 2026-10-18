@@ -26,7 +26,7 @@ from .store import new_id, store
 PERSONA = pathlib.Path(__file__).resolve().parents[1] / "demo_data" / "persona.json"
 LOCAL = "local"
 # Collections whose documents belong to one owner (by owner_id); reset clears them all.
-OWNED = ("moments", "inventory", "people", "vault_items", "cases", "legal_documents", "turns",
+OWNED = ("moments", "inventory", "people", "documents", "vault_items", "cases", "legal_documents", "turns",
          "access_requests", "handoffs", "tasks", "loop_cache", "gap_skips", "gap_asks", "handover_turns",
          "handover_conversations", "owner_key_backups", "voiceprints")
 # Version of how a copy keeps knowledge. 1: kept items live in the owner's OKF bundle (PR-7);

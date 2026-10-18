@@ -56,7 +56,8 @@ def for_turn(turn_id: str) -> dict | None:
     replies = [t for t in store.list("turns", owner_id=turn["owner_id"], role="assistant") if t["at"] > turn["at"]]
     reply = min(replies, key=lambda t: t["at"]) if replies else None
     proposals = (reply or {}).get("proposals") or {}
-    cards_in = [(collection, cid) for collection in ("moments", "inventory", "people") for cid in proposals.get(collection, [])]
+    cards_in = [(collection, cid) for collection in ("moments", "inventory", "people", "documents")
+                for cid in proposals.get(collection, [])]
     card_ids = {cid for _, cid in cards_in}
     keeps = {a["refs"]["card"]: a for a in store.list("guardian_actions", action="keep_card")
              if (a.get("refs") or {}).get("card") in card_ids}

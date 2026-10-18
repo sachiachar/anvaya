@@ -740,7 +740,7 @@ textarea.v2-input { min-height: 88px; resize: vertical; }
 .kmap {
   --g-bg: #0b132b; --g-line: #26324f; --g-edge: #3a4a72; --g-text: #e9edf5; --g-muted: #95a1bc;
   --g-accent: #d4af37; --g-owner: #f6e7c1; --g-person: #88a0c4; --g-story: #c9b6e8; --g-wish: #e3be5c;
-  --g-account: #8fd1ac; --g-institution: #95a1bc; --g-gap: #f0907f; --g-new: #f5d76e;
+  --g-account: #8fd1ac; --g-institution: #95a1bc; --g-gap: #f0907f; --g-new: #f5d76e; --g-document: #f2a65a;
   min-height: 100vh; padding: 16px clamp(16px, 3vw, 32px); background: var(--ground); color: var(--ink); font-family: var(--sans);
 }
 .kmap-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
@@ -770,6 +770,7 @@ textarea.v2-input { min-height: 88px; resize: vertical; }
 .is-wish .kmap-dot { fill: var(--g-wish); }
 .is-account .kmap-dot { fill: var(--g-account); }
 .is-institution .kmap-dot { fill: var(--g-institution); }
+.is-document .kmap-dot { fill: var(--g-document); }
 .is-mentioned .kmap-dot { fill: var(--g-bg); stroke: var(--g-person); stroke-width: 1.5; stroke-dasharray: 2 2; }
 .kmap-node.is-focus .kmap-dot, .kmap-node:hover .kmap-dot { fill: var(--g-accent); }
 .kmap-gap { fill: none; stroke: var(--g-gap); stroke-width: 1.5; stroke-dasharray: 3 3; }
