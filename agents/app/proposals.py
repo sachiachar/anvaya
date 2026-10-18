@@ -73,8 +73,9 @@ def _pending(collection: str, owner_id: str, fields: dict, **extra: Any) -> dict
 
 
 def _all(collection: str, owner_id: str) -> list[dict]:
-    """Kept items (from the bundle) and drafts (from Firestore) together."""
-    return knowledge.items(owner_id, collection) + store.list(collection, owner_id=owner_id)
+    """Drafts (from Firestore), then kept items (from the bundle). Drafts first: a second detail about a
+    kept item goes into the update card already waiting for Keep, not into a second update card."""
+    return store.list(collection, owner_id=owner_id) + knowledge.items(owner_id, collection)
 
 
 def known(owner_id: str) -> dict:

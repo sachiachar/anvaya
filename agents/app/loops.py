@@ -183,6 +183,11 @@ def reply_problems(owner_message: str, reply: str, earlier: list[str] | None = N
 # Field descriptions in the schemas give formats, not values to copy. Code checks cards too (grounding.py).
 NO_INVENTED = ("Fill a field only with what was said. Never copy an example from these instructions, and "
                "leave a field empty if they didn't say it. ")
+# Code checks this too (grounding.py): a saved title reused for something not named this turn is dropped.
+ONLY_NAMED_FOLLOW_UPS = ("Return a saved moment again only if the owner, or Saathi's last message, names what it is "
+                         "about (the LIC policy, the Bangalore flat). A detail that only sounds alike (papers in "
+                         "a cupboard, a key) is about whatever they named in this turn, never about a saved "
+                         "moment they didn't name. If they named nothing, make a new moment. ")
 
 
 async def understand(owner: dict, last_said: dict | None, text: str | None,
@@ -220,7 +225,7 @@ async def understand(owner: dict, last_said: dict | None, text: str | None,
             "moment its statements (subject, predicate, object), with predicates only from the list; anything they "
             "want, plan or promised is a wish statement. Say how they seem (owner_mood), how they answered "
             "Saathi's last question (step_outcome), and for a voice note whether more than one person speaks "
-            "(voices), never who. " + NO_INVENTED + PRIVACY_RULES
+            "(voices), never who. " + NO_INVENTED + ONLY_NAMED_FOLLOW_UPS + PRIVACY_RULES
         ),
         prompt=prompt,
     )
@@ -308,7 +313,7 @@ async def extract_from_exchange(owner: dict, heard: str, said: str, known: dict,
             "predicates only from the list; anything they want, plan or promised is a wish statement. "
             "Return empty lists if nothing new. Also say how the owner seems (owner_mood), how they "
             "answered the assistant's question (step_outcome), and, if audio is attached, whether more than one "
-            "person speaks in it (voices), never who. " + NO_INVENTED + PRIVACY_RULES
+            "person speaks in it (voices), never who. " + NO_INVENTED + ONLY_NAMED_FOLLOW_UPS + PRIVACY_RULES
         ),
         prompt=json.dumps({"owner": owner["name"], "owner_said": heard, "assistant_said": said,
                            "already_saved": known}, ensure_ascii=False),

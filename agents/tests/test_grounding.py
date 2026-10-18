@@ -222,3 +222,46 @@ def test_a_claim_letter_to_nobody_is_dropped(monkeypatch):
     monkeypatch.setattr(loops, "generate_json", fake)
     plan = asyncio.run(loops.plan_settlement({"name": "Vikram Rao"}, [], []))
     assert [letter.institution for letter in plan.letters] == ["LIC"]
+
+
+# The case from the demo (18 Oct 2026): the owner spoke about property papers and the cupboard keys,
+# and two cards came back as updates of a kept "LIC policy details" he never mentioned.
+KEPT_LIC = {"kind": "practical", "title": "LIC policy details", "quote": "My LIC policy matures next year.",
+            "summary": "Vikram Rao has an LIC policy that matures next year."}
+PROPERTY = "The property papers are in the cupboard, and my wife has the keys."
+
+
+def _keep_lic():
+    proposals.approve("moments", proposals.save_moment(OWNER, Moment(**KEPT_LIC).model_dump(), {}))
+
+
+def test_a_saved_title_nobody_named_is_not_an_update(client, monkeypatch):
+    _keep_lic()
+    wrong = Moment(kind="practical", title="LIC policy details", quote=PROPERTY,
+                   summary="The LIC policy documents are in the cupboard; his wife has the keys.")
+    cards = _chat(client, monkeypatch, PROPERTY, _turn(moments=[wrong]))
+    assert not [c for c in cards if c["collection"] == "moments"]
+
+
+def test_a_saved_title_the_owner_or_saathi_named_is_an_update(client, monkeypatch):
+    _keep_lic()
+    detail = Moment(kind="practical", title="LIC policy details", quote="My wife has the keys.",
+                    summary="The LIC policy papers are in the cupboard; his wife has the keys.")
+    found = grounding.ground(_turn(moments=[detail]), owner_words="My wife has the keys.",
+                             saathi_words="Who has the keys to the cupboard with the LIC papers?",
+                             known=proposals.known(OWNER))
+    assert found.moments  # Saathi's question named the policy
+    named = detail.model_copy(update={"quote": "For the LIC policy, my wife has the keys."})
+    assert grounding.ground(_turn(moments=[named]), owner_words=named.quote, known=proposals.known(OWNER)).moments
+    new = Moment(kind="practical", title="Property papers", quote=PROPERTY, summary="The property papers are in the cupboard.")
+    assert grounding.ground(_turn(moments=[new]), owner_words=PROPERTY, known=proposals.known(OWNER)).moments
+
+
+def test_two_details_about_one_kept_moment_make_one_update_card(client):
+    _keep_lic()
+    first = proposals.save_moment(OWNER, {**KEPT_LIC, "quote": "The LIC papers are in the cupboard.",
+                                          "summary": "The LIC papers are in the cupboard."}, {})
+    second = proposals.save_moment(OWNER, {**KEPT_LIC, "quote": "My wife has the keys to the LIC cupboard.",
+                                           "summary": "His wife has the keys to the cupboard with the LIC papers."}, {})
+    assert first["updates"] and second["id"] == first["id"]
+    assert "keys" in second["summary"] and "cupboard" in second["summary"]
