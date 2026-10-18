@@ -3,7 +3,7 @@
 // for a decision mid-conversation: at the end Saathi sums it up, everything it picked up is marked
 // to save, and the owner removes what they don't want, saves the rest in one tap, or discards the
 // whole conversation. Typing and photos use the same screen and the same review.
-import { useEffect, useRef, useState } from "react";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { MORE, requestText, useAskForMore } from "../../allowance";
 import { type Allowance, api, currentOwnerId, type MoreKind, type Turn } from "../../api";
 import { LiveCall, MicError, type CallEvent } from "../../liveCall";
@@ -89,6 +89,24 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
   const [topic, setTopic] = useState<string | null>(chosen);
   const [opens, setOpens] = useState<"saathi" | "owner">("saathi");
   const [ask, setAsk] = useState<string | null>(null); // how Saathi opens the plan's step
+  // A photo or document waiting to be sent, with the owner's optional comment: what it is, why it
+  // matters. Saathi then says what it found in it, and asks about what it doesn't show.
+  const [sharing, setSharing] = useState<{ file: File; preview: string | null } | null>(null);
+  const [comment, setComment] = useState("");
+  useEffect(() => () => { if (sharing?.preview) URL.revokeObjectURL(sharing.preview); }, [sharing]);
+  const pick = (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    setComment("");
+    setSharing({ file: f, preview: f.type.startsWith("image/") ? URL.createObjectURL(f) : null });
+  };
+  const shareNow = () => {
+    if (!sharing) return;
+    const { file } = sharing;
+    setSharing(null);
+    void send(comment.trim() || null, file, file.name);
+  };
   const [stepId, setStepId] = useState<string | null>(null);
   const [allowance, setAllowance] = useState<Allowance | null>(null);
   const [text, setText] = useState("");
@@ -593,19 +611,34 @@ export default function Talk({ topic: chosen = null, onTopicUsed }: { topic?: st
       {!baseline && error && <button className="v2-btn quiet" onClick={loadConversation}>Try again</button>}
       {retryReview && !live && <button className="v2-btn quiet" onClick={() => { setError(null); void afterCall(); }}>Review the call</button>}
 
-      {!live && phase === "talk" && baseline && session.length === 0 && (
+      {!live && phase === "talk" && sharing && (
+        <fieldset className="v2-share">
+          <legend className="v2-visually-hidden">Share with Saathi</legend>
+          {sharing.preview
+            ? <img src={sharing.preview} alt={`Chosen: ${sharing.file.name}`} className="v2-share-thumb" />
+            : <p className="v2-share-doc"><Doc /> <span>{sharing.file.name}</span></p>}
+          <label htmlFor="v2-share-comment">Tell Saathi what this is <span className="v2-muted">(optional)</span></label>
+          <textarea id="v2-share-comment" className="v2-share-comment" rows={2} maxLength={500} value={comment}
+            onChange={(e) => setComment(e.target.value)} disabled={thinking}
+            placeholder="For example: Papa's old LIC policy. Ajay should get it." />
+          <div className="v2-row">
+            <button className="v2-btn" disabled={thinking} onClick={shareNow}>Send to Saathi</button>
+            <button className="v2-btn quiet" disabled={thinking} onClick={() => setSharing(null)}>Cancel</button>
+          </div>
+        </fieldset>
+      )}
+
+      {!live && phase === "talk" && baseline && session.length === 0 && !sharing && (
         <div className="v2-alts">
           <button className="v2-alt" onClick={() => input.current?.focus()}>Type instead</button>
           <label className="v2-alt">
             <Camera /> Share a photo
             {/* No "capture": phones then offer the photo library as well as the camera. */}
-            <input type="file" accept="image/*" hidden
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) void send(null, f, f.name); e.target.value = ""; }} />
+            <input type="file" accept="image/*" hidden onChange={pick} />
           </label>
           <label className="v2-alt">
             <Doc /> Share a document
-            <input type="file" accept="application/pdf,image/*" hidden
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) void send(null, f, f.name); e.target.value = ""; }} />
+            <input type="file" accept="application/pdf,image/*" hidden onChange={pick} />
           </label>
         </div>
       )}

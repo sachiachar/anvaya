@@ -112,7 +112,44 @@ def check_plan() -> None:
 # When another voice is heard (PR-2.13.2): once a conversation, warmly, without suspicion.
 VOICE_STEP = ("Who's with you", "Warmly ask who else is there with them, without any suspicion, and carry on once they "
               "say.", "warm")
-FIRST_STEPS = ("safe_route", "voice")  # added for this conversation, kept first while it lasts
+FIRST_STEPS = ("safe_route", "voice", "shared")  # added for this conversation, kept first while it lasts
+
+# A photo or document the owner shared: Saathi says what was found in it, then asks about the one
+# most important thing it doesn't show, or asks what it is when nothing was found. What it names
+# comes from the cards the guardian allowed, never from the model's reading of the file.
+NOMINEE_KINDS = ("bank_account", "investment", "retirement", "insurance")
+
+
+def shared_step(turn_id: str, inventory: list[dict], moments: list[dict], *, comment: bool) -> dict:
+    """The step for a shared photo or document, from the cards made from it (already screened)."""
+    found = []
+    for i in inventory:
+        hint = (i.get("account_hint") or "").strip()
+        name = " ".join(filter(None, [(i.get("institution") or "").strip(), (i.get("product") or "").strip()]))
+        if name:
+            found.append(f"{name}, ending {hint.lstrip('.')}" if hint else name)
+    found += [m["title"] for m in moments if m.get("title")]
+    found = found[:3]
+    missing = None
+    for i in inventory:
+        name = (i.get("product") or i.get("institution") or "this").strip()
+        if i.get("category") in NOMINEE_KINDS and not (i.get("nominee_or_beneficiary") or "").strip():
+            missing = f"who the nominee is for {name}"
+            break
+        if i.get("category") == "property" and not (i.get("intended_for") or "").strip():
+            missing = f"who {name} should go to"
+            break
+    if found:
+        ask = f"In one sentence, tell them what you found in what they shared: {'; '.join(found)}. "
+        ask += (f"Then ask about one thing it doesn't show: {missing}." if missing else
+                "Then ask what they'd like their family to know about it." if not comment else
+                "Then carry on from what they said about it.")
+    elif comment:
+        ask = "Thank them for sharing it, and ask what they'd like their family to know about it."
+    else:
+        ask = ("Say honestly, in one sentence, that you couldn't find details to keep in what they shared, "
+               "and ask them what it is.")
+    return _step(f"shared:{turn_id}", "shared", "What they shared", ask, "saathi", "shared", "warm")
 
 MOOD_STEPS = {
     "sad": ("Listening", "Just listen. Acknowledge how they feel in a sentence, and ask nothing new unless they "
@@ -261,10 +298,11 @@ def view(plan: dict) -> dict:
 
 def after_turn(owner_id: str, turn_id: str, decisions: list[tuple[str, str, str | None]], *, mood: str = "calm",
                answered_step: str | None = None, outcome: str = "none", another_voice: bool = False,
-               now: float | None = None) -> dict:
+               shared: dict | None = None, now: float | None = None) -> dict:
     """Everything one turn changes, in one new version (PR-2.12.3): a deflected statement's safe
     route, a change in the owner's mood, and how they answered the step Saathi carried out. Without
-    any of these the plan stays as it is (still worked out again if it's stale)."""
+    any of these the plan stays as it is (still worked out again if it's stale). `shared` is the step
+    for a photo or document the owner shared in this turn (shared_step)."""
     now = time.time() if now is None else now
     plan = current(owner_id, now=now)
     cause: dict = {"kind": "turn", "turn": turn_id}
@@ -282,6 +320,9 @@ def after_turn(owner_id: str, turn_id: str, decisions: list[tuple[str, str, str 
         if not _recent_voice(plan, now):
             add.append(_voice_step(owner_id, turn_id, now))
         cause["voice"] = "another"
+    if shared:  # a photo or document: Saathi says what it found and asks, before anything else
+        add.insert(0, shared)
+        cause["shared"] = turn_id
     mood = mood if mood in MOODS else "calm"
     if mood != mood_now(plan, now):
         store.update("conversation_plans", owner_id, {"mood": {"label": mood, "at": now, "turn": turn_id}})
@@ -289,11 +330,17 @@ def after_turn(owner_id: str, turn_id: str, decisions: list[tuple[str, str, str 
     elif mood != "calm":  # the same mood again keeps it current for this conversation
         store.update("conversation_plans", owner_id, {"mood": {**plan.get("mood", {}), "at": now}})
     step = next((s for s in plan.get("steps", []) if s["id"] == answered_step), None) if answered_step else None
-    if step and outcome in OUTCOMES:
+    if step and step["source"] == "shared":
+        # Saying what was found in a photo or document happens once: done as soon as Saathi has said
+        # it, whatever the owner says next, so Saathi never repeats it.
+        fresh = store.get("conversation_plans", owner_id) or plan
+        store.update("conversation_plans", owner_id, {"finished": [*fresh.get("finished", []), step["id"]]})
+        cause["shared_done"] = step["id"]
+    elif step and outcome in OUTCOMES:
         cause.update(step=step["id"], outcome=outcome)
         # An answered safe-route or mood step has done its job; so has an initial step the owner
         # declined or put off (a kept item finishes one on its own).
-        done_once = step["source"] in ("safe_route", "mood", "voice")
+        done_once = step["source"] in ("safe_route", "mood", "voice", "shared")
         if done_once or (step["source"] == "initial" and outcome in ("not_now", "declined")):
             fresh = store.get("conversation_plans", owner_id) or plan
             store.update("conversation_plans", owner_id, {"finished": [*fresh.get("finished", []), step["id"]]})
