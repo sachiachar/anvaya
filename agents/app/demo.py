@@ -129,6 +129,7 @@ def reset(copy_id: str | None = None) -> dict:
         for doc in store.list(collection, owner_id=oid):
             store.delete(collection, doc["id"])
     media.delete_all(oid)
+    store.delete("conversation_plans", oid)  # the plan starts again too; its versions stay as the audit record
     key = copy_id or current()
     for doc in store.list("agent_steps", user_key=key):  # its trace for the agents panel
         store.delete("agent_steps", doc["id"])

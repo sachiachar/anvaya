@@ -411,6 +411,20 @@ a.v2-switch { text-decoration: none; }
 }
 .v2-mic-help h2 { font-size: var(--step-1); }
 .v2-mic-help ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--ink-2); font-size: var(--step--1); }
+/* A photo or document before it is sent, with the owner's optional comment. */
+.v2-share {
+  display: grid; gap: 10px; margin: 0; min-width: 0; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line);
+  background: var(--surface);
+}
+.v2-share-thumb { max-height: 180px; max-width: 100%; justify-self: start; border-radius: 10px; border: 1px solid var(--line); object-fit: contain; }
+.v2-share-doc { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.v2-share-doc svg { width: 20px; height: 20px; flex: none; color: var(--muted); }
+.v2-share label { font-weight: 500; color: var(--ink); }
+.v2-share-comment {
+  width: 100%; box-sizing: border-box; min-height: 56px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--paper, var(--surface)); color: var(--ink); font: inherit; resize: vertical;
+}
+.v2-share-comment:focus { outline: 2px solid var(--focus); outline-offset: 2px; }
 .v2-alts { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 10px; }
 .v2-alt {
   min-height: 56px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px; text-align: center;

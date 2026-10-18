@@ -309,9 +309,12 @@ def _take_in(owner_id: str, text: str | None, result, attachment: dict | None, p
         if voices:  # another voice in a voice note (PR-2.13.2)
             guardian_inputs.another_voice(owner_id, owner_turn_id, "saathi.chat", [
                 *[("moments", d) for d in moments], *[("inventory", d) for d in inventory], *[("people", d) for d in people]])
+        # A photo or document gets its own step: Saathi says what it found and asks (planner.shared_step).
+        shared = planner.shared_step(owner_turn_id, inventory, moments, comment=bool((text or "").strip())) \
+            if attachment and attachment["kind"] != "voice" else None
         plan = planner.after_turn(owner_id, owner_turn_id, screened.outcomes, mood=result.owner_mood,
                                   answered_step=(last_said or {}).get("step"), outcome=result.step_outcome,
-                                  another_voice=voices)
+                                  another_voice=voices, shared=shared)
         owner_turn = store.put("turns", {"id": owner_turn_id, "owner_id": owner_id, "at": now, "role": "owner",
                                          "text": (text or "").strip() or result.heard, "heard": result.heard,
                                          "attachment": attachment, **({"media": path} if path else {}),
