@@ -27,7 +27,7 @@ def _content(text: str) -> set[str]:
     return {w for w in re.findall(r"[a-z0-9]+", text.lower()) if w not in _STOP and len(w) > 2}
 
 
-def _names(title: str) -> set[str]:
+def names(title: str) -> set[str]:
     """Institutions, places and people in a title: 'LIC', 'SBI', 'Mysore'."""
     words = re.findall(r"[A-Za-z]+", title)
     return {w.lower() for i, w in enumerate(words) if (w.isupper() and len(w) > 1) or (i > 0 and w[0].isupper())}
@@ -40,7 +40,7 @@ def _overlap(a: set[str], b: set[str]) -> float:
 def _same(a: dict, b: dict) -> bool:
     """Same step if the titles share most key words, or the reasons are nearly the same,
     unless the titles name different things (LIC vs SBI)."""
-    names_a, names_b = _names(a.get("title", "")), _names(b.get("title", ""))
+    names_a, names_b = names(a.get("title", "")), names(b.get("title", ""))
     if names_a and names_b and not names_a & names_b:
         return False
     return (_overlap(_content(a.get("title", "")), _content(b.get("title", ""))) >= 0.5

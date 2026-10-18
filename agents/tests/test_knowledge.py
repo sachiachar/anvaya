@@ -197,13 +197,23 @@ def test_concepts_parse_as_plain_yaml():
     assert front["links"] == {} and front["record"]["institution"] == "LIC"
 
 
-def test_two_updates_to_the_same_item_keep_one_current_version_with_both():
+def test_a_second_detail_joins_the_update_card_already_waiting():
     account = {**POLICY, "category": "bank_account", "institution": "SBI", "product": "Savings",
                "account_hint": "••1187", "nominee_or_beneficiary": None}
     kept = _keep("inventory", account)
     nominee = proposals.save_inventory(OWNER, {**account, "nominee_or_beneficiary": "Priya"}, {})
     value = proposals.save_inventory(OWNER, {**account, "approximate_value": "4 lakh"}, {})
-    assert nominee["updates"] == value["updates"] == kept["id"]  # both cards point at the first version
+    assert value["id"] == nominee["id"] and value["updates"] == kept["id"]  # one card, not two
+    assert value["nominee_or_beneficiary"] == "Priya" and value["approximate_value"] == "4 lakh"
+
+
+def test_two_updates_to_the_same_item_keep_one_current_version_with_both():
+    account = {**POLICY, "category": "bank_account", "institution": "SBI", "product": "Savings",
+               "account_hint": "••1187", "nominee_or_beneficiary": None}
+    kept = _keep("inventory", account)
+    # Two update cards for one item (each made before the other was saved) still give one version.
+    nominee = proposals._pending("inventory", OWNER, {**account, "nominee_or_beneficiary": "Priya"}, updates=kept["id"])
+    value = proposals._pending("inventory", OWNER, {**account, "approximate_value": "4 lakh"}, updates=kept["id"])
     proposals.approve("inventory", nominee)
     proposals.approve("inventory", value)
     current = knowledge.items(OWNER, "inventory")
